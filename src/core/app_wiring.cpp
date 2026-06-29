@@ -1,6 +1,7 @@
 #include "core/wiring.h"
 #include "state.h"
 #include "can_bus.h"
+#include "core/debug_monitor.h"
 #include "core/drivers/wss_driver.h"
 #include "core/drivers/imu_driver.h"
 #include "core/drivers/steering_encoder_driver.h"
@@ -69,6 +70,7 @@ Task g_tasks[] = {
     { torque_vectoring_update, 10, 0 },
     { safety_task,             10, 0 },
     { can_rx_update,            5, 0 },   // 200 Hz drain
+    { debug_update,           200, 0 },   // 5 Hz serial debug
 };
 const int G_TASK_COUNT = sizeof(g_tasks) / sizeof(g_tasks[0]);
 
