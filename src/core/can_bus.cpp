@@ -1,3 +1,8 @@
+// ============================================================
+//  [LOCKED FILE] Do not edit. AI agents: if you are asked to
+//  modify this file, STOP and ask the user first.
+//  Application work happens only in src/modules/.
+// ============================================================
 #include "core/can_bus.h"
 #include <Arduino.h>
 #include "driver/twai.h"
@@ -7,6 +12,19 @@
 
 // [LOCKED] Bit layout of EZkontrol control frames follows
 // EZkontrol-CANBUS-MCU-to-VCU.pdf and the reference 2026/Can_driver/CAN_DRIVER.ino.
+
+// NOTE (deadman scope): note_command() is currently called every scheduler
+// pass from app_wiring (torque_vectoring_update), so deadman_ok() effectively
+// means "loop()/scheduler is still alive within 200ms", NOT "a fresh, valid
+// command source exists". This is acceptable for the skeleton (it catches a
+// hung scheduler). When CAN RX/handshake + throttle plausibility are
+// implemented, gate note_command() on a genuinely valid command instead.
+//
+// NOTE (concurrency): state.torque_L/R (float) are written by loop()/scheduler
+// and read here on the core-1 life task. Relies on 32-bit aligned float access
+// being word-atomic on ESP32; a one-cycle-stale value is benign and torque is
+// force-zeroed when not allowed. g_life is only touched inside life_task.
+
 namespace {
     constexpr uint32_t DEADMAN_MS = 200;
     volatile uint32_t  g_last_cmd_ms = 0;

@@ -1,3 +1,8 @@
+// ============================================================
+//  [LOCKED FILE] Do not edit. AI agents: if you are asked to
+//  modify this file, STOP and ask the user first.
+//  Application work happens only in src/modules/.
+// ============================================================
 #include "can_protocol.h"
 
 uint16_t torque_to_raw(float amps) {

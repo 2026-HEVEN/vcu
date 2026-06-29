@@ -1,3 +1,8 @@
+// ============================================================
+//  [LOCKED FILE] Do not edit. AI agents: if you are asked to
+//  modify this file, STOP and ask the user first.
+//  Application work happens only in src/modules/.
+// ============================================================
 #pragma once
 // [LOCKED] TWAI (ESP32 built-in CAN) driver + 50ms life-signal task.
 

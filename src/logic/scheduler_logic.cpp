@@ -1,3 +1,8 @@
+// ============================================================
+//  [LOCKED FILE] Do not edit. AI agents: if you are asked to
+//  modify this file, STOP and ask the user first.
+//  Application work happens only in src/modules/.
+// ============================================================
 #include "scheduler_logic.h"
 
 bool task_is_due(const Task &t, uint32_t now) {

@@ -1,3 +1,8 @@
+// ============================================================
+//  [LOCKED FILE] Do not edit. AI agents: if you are asked to
+//  modify this file, STOP and ask the user first.
+//  Application work happens only in src/modules/.
+// ============================================================
 #pragma once
 #include "modules/steering.h"   // for SteerRaw
 // [LOCKED] Absolute magnetic encoder. Default: AS5600 over I2C.

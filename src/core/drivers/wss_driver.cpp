@@ -1,3 +1,8 @@
+// ============================================================
+//  [LOCKED FILE] Do not edit. AI agents: if you are asked to
+//  modify this file, STOP and ask the user first.
+//  Application work happens only in src/modules/.
+// ============================================================
 #include "core/drivers/wss_driver.h"
 #include <Arduino.h>
 #include "driver/pcnt.h"

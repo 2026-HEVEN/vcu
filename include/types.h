@@ -1,3 +1,8 @@
+// ============================================================
+//  [LOCKED FILE] Do not edit. AI agents: if you are asked to
+//  modify this file, STOP and ask the user first.
+//  Application work happens only in src/modules/.
+// ============================================================
 #pragma once
 // [LOCKED] Domain types that enforce their own min/max at the type level.
 // Integer template bounds only (C++17 limitation). Do not edit casually.
