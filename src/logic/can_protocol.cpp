@@ -12,3 +12,8 @@ uint16_t torque_to_raw(float amps) {
 float raw_to_torque(uint16_t raw) {
     return (float)raw / 10.0f - 3200.0f;
 }
+
+float raw_to_voltage(uint16_t raw) { return (float)raw * 0.1f; }
+float raw_to_current(uint16_t raw) { return (float)raw * 0.1f - 3200.0f; }
+int   raw_to_temp(uint8_t raw)     { return (int)raw - 40; }
+int   raw_to_speed(uint16_t raw)   { return (int)raw - 32000; }
