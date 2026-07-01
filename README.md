@@ -32,6 +32,8 @@ pio run -e esp32dev -t upload
 pio device monitor
 ```
 
+> 🧪 **테스트가 처음이거나 Windows 사용자라면** → 노션 [펌웨어 테스트 실행 방법](https://www.notion.so/390913e532e68199a9b5e340b73e9e71) 참고. AI에 복붙할 프롬프트 + "이렇게 나오면 성공" 출력 예시 + Windows(WSL2/MinGW) 셋업까지 있습니다. (보드 업로드는 Windows도 그냥 되고, `native` 단위테스트만 host 컴파일러가 필요해요.)
+
 ## 어디서 작업하나
 
 | 폴더 | 내용 | 편집? |
