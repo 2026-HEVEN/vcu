@@ -154,15 +154,18 @@
 
 ### 5.7 Cluster → VCU : 커맨드  `0x1801D0C0` (신규 할당) · 100ms
 
-> 계기판 스위치로 주행모드/리셋 등을 VCU에 전달. **EZkontrol 표준이 아닌 HEVEN 자체 정의.**
+> 계기판 스위치(기어·주행모드·패독)를 VCU에 전달. **EZkontrol 표준이 아닌 HEVEN 자체 정의.**
 > PF=0x01, PS=0xD0(VCU), SA=0xC0(Cluster). MCU→VCU(0x1801D0EF)와 SA로 구분되어 충돌 없음.
+> 인코딩 구현: Cluster 펌웨어 `encode_cluster_command()`. 아래 레이아웃과 일치.
 
-| 바이트 | 항목 | 의미 (제안 — 팀 확정 필요) |
-|--------|------|----------------------------|
-| 0 | Command ID | 0:NOP, 1:주행모드 설정, 2:에러리셋, 3:캘리브레이션 |
-| 1 | Param | 예) 주행모드 0:Normal,1:Efficiency,2:Sport |
-| 2~6 | 예약 | 0 |
-| 7 | Life signal | 0~0xFF |
+| 바이트 | 항목 | 의미 |
+|--------|------|------|
+| 0 | Gear | 0:N, 1:R, 2:D |
+| 1 | Drive mode | 0:Normal, 1:Efficiency, 2:Sport |
+| 2 | bit0 = Paddock | 1 = 속도제한 **요청** (실제 제한은 VCU가 클램프) |
+| 3~7 | 예약 | 0 |
+
+> ⚠️ 패독은 **요청 신호**일 뿐. VCU가 토크/속도를 상한 이하로 클램프하고 CAN 끊김 시 fail-safe(제한 유지)를 결정해야 함.
 
 ---
 
