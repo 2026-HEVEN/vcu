@@ -16,7 +16,7 @@
 
 ```bash
 # 1. 이 레포를 깨끗한 위치에 클론
-git clone https://github.com/swallowlikeyoshi/vcu.git
+git clone https://github.com/2026-HEVEN/vcu.git
 cd vcu
 
 # 2. PlatformIO 설치 (한 번만) — VS Code면 PlatformIO IDE 확장 설치로 대체 가능
@@ -68,7 +68,7 @@ pio device monitor
 
 ## 버전 기록 (Changelog)
 
-> 각 버전은 git 태그로도 관리됩니다 → [GitHub Releases](https://github.com/swallowlikeyoshi/vcu/releases)
+> 각 버전은 git 태그로도 관리됩니다 → [GitHub Releases](https://github.com/2026-HEVEN/vcu/releases)
 > **새 버전 올릴 때:** 아래에 항목 추가 → `git tag vX.Y` → `git push origin vX.Y`.
 
 ### v1.1 (2026-06-29) — CAN 프로토콜 갱신
