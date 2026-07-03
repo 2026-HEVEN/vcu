@@ -65,3 +65,16 @@ pio device monitor
 - **`longitudinal` / `torque_vectoring`** — 안전한 기본 stub(선형 매핑·50:50). 토크벡터링팀이 실제 전략으로 채울 지점.
 
 > ⚠️ 안전: HV·토크가 걸리는 보드입니다. 첫 스탠드 테스트 전 잠긴 코어(특히 `safety`·`can_bus`)를 임의로 수정하지 마세요.
+
+## 버전 기록 (Changelog)
+
+> 각 버전은 git 태그로도 관리됩니다 → [GitHub Releases](https://github.com/swallowlikeyoshi/vcu/releases)
+> **새 버전 올릴 때:** 아래에 항목 추가 → `git tag vX.Y` → `git push origin vX.Y`.
+
+### v1.1 (2026-06-29) — CAN 프로토콜 갱신
+- Cluster→VCU 커맨드(`0x1801D0C0`) 레이아웃(`CAN_PROTOCOL.md` §5.7)을 **gear · drive_mode · paddock** 로 확정 (Cluster 재설계와 동기화)
+
+### v1.0 (2026-06-29) — VCU 펌웨어 베이스
+- 잠긴 코어(TWAI + **50ms 라이프 태스크** + 안전 FSM + 협력형 스케줄러) + 순수 모듈 7개(throttle · brake · steering · imu · wheel_speed · longitudinal · torque_vectoring)
+- `Clamped<>` 도메인 타입, PlatformIO native 테스트, 5Hz 시리얼 디버그 모니터
+- CAN 프로토콜 단일 출처(토크 스케일링 + 피드백/커맨드 ID + 디코더), ARCHITECTURE/ADDING_A_MODULE/CAN_PROTOCOL 문서, LOCKED/FILL-IN 배너
