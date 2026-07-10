@@ -1,0 +1,10 @@
+# HEVEN VCU — 코어(잠긴 계층) 보호
+# 아래 경로를 바꾸는 PR은 팀장(@swallowlikeyoshi) 리뷰가 반드시 있어야 머지됩니다.
+# 팀원은 src/modules/ 와 test/ 에서 작업하세요 (여기엔 소유자 지정 없음 = 누구 승인이든 OK).
+
+/include/          @swallowlikeyoshi
+/src/core/         @swallowlikeyoshi
+/src/logic/        @swallowlikeyoshi
+/src/main.cpp      @swallowlikeyoshi
+/platformio.ini    @swallowlikeyoshi
+/.github/          @swallowlikeyoshi
