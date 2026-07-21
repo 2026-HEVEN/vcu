@@ -30,7 +30,6 @@ namespace {
     constexpr int PIN_WSS          = 27;
     const WssCalib   WSS_CAL   { 45.0f };
     const SteerCalib STEER_CAL { 8192, 4096.0f, false };
-    ImuFilterState   imu_state{};
     DriveMode        drive_mode = DriveMode::Normal;
 }
 
@@ -45,7 +44,7 @@ static void steering_update() {
     state.steering_angle = steering_compute(steering_encoder_driver::read(), STEER_CAL);
 }
 static void imu_update() {
-    ImuOutput o = imu_compute(imu_driver::read(), imu_state);
+    ImuOutput o = imu_compute(imu_driver::read());
     state.yaw_rate = o.yaw_rate; state.accel_x = o.accel_x; state.accel_y = o.accel_y;
 }
 static void wheel_speed_update() {

@@ -5,9 +5,9 @@
 // ============================================================
 #pragma once
 #include "modules/imu.h"   // for ImuRaw
-// [LOCKED] MPU-6050 over I2C (VCU SDA=GPIO21, SCL=GPIO22).
+// [LOCKED] Xsens MTi-320 over UART2 (VCU RX=GPIO16, TX=GPIO17), Xbus/MTData2.
 
 namespace imu_driver {
-    bool   begin();        // returns false if device not found
-    ImuRaw read();         // scaled gyro (deg/s) + accel (g)
+    bool   begin();        // returns true once UART is configured
+    ImuRaw read();         // latest parsed sample: yaw_rate (deg/s) + accel (g)
 }

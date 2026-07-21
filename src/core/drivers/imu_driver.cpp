@@ -5,27 +5,116 @@
 // ============================================================
 #include "core/drivers/imu_driver.h"
 #include <Arduino.h>
-#include <MPU6050.h>
+#include <cstring>
 
-// [LOCKED] MPU-6050 wrapper.
+// [LOCKED] Xsens MTi-320 over UART2, Xbus / MTData2 binary protocol.
+//
+// Frame:  FA  BID  MID  LEN  payload...  CS
+//         sum(BID..CS) & 0xFF == 0
+//
+// MTData2 payload is a run of TLV groups: [DataID(2B,BE)][Len(1B)][Data(Len B)].
+// We only pull the three groups the vehicle state cares about; everything
+// else in the payload is skipped over using its own length.
+//
+// NOTE: LEN == 0xFF (Xbus "extended length", real length in next 2 bytes)
+// is not handled — our enabled output (Euler + Accel + RateOfTurn, ~45B)
+// never reaches it. A malformed/extended frame just fails the checksum
+// below and gets dropped; the parser resyncs on the next 0xFA.
 namespace {
-    MPU6050 mpu_;
-    constexpr float GYRO_LSB  = 131.0f;    // +-250 deg/s range
-    constexpr float ACCEL_LSB = 16384.0f;  // +-2 g range
+    constexpr uint32_t MTI_BAUD  = 115200;
+    constexpr int       PIN_RX   = 16;
+    constexpr int       PIN_TX   = 17;
+    HardwareSerial &mti = Serial2;
+
+    constexpr uint8_t  PREAMBLE    = 0xFA;
+    constexpr uint8_t  MID_MTDATA2 = 0x36;
+
+    constexpr uint16_t XDI_EULER_ANGLES = 0x2030;  // roll,pitch,yaw (deg)      - unused downstream
+    constexpr uint16_t XDI_ACCELERATION = 0x4020;  // x,y,z (m/s^2)
+    constexpr uint16_t XDI_RATE_OF_TURN = 0x8020;  // x,y,z (rad/s)
+
+    constexpr float MPS2_TO_G   = 1.0f / 9.80665f;
+    constexpr float RAD_TO_DEG  = 57.29578f;
+
+    enum class State { WAIT_PRE, WAIT_BID, WAIT_MID, WAIT_LEN, WAIT_PAYLOAD, WAIT_CS };
+
+    State   state_    = State::WAIT_PRE;
+    uint8_t mid_      = 0;
+    uint8_t len_      = 0;
+    uint8_t idx_      = 0;
+    uint8_t checksum_ = 0;
+    uint8_t payload_[254];
+
+    ImuRaw latest_{ 0.0f, 0.0f, 0.0f };
+
+    float be_float(const uint8_t *p) {
+        uint8_t sw[4] = { p[3], p[2], p[1], p[0] };  // MTi floats are big-endian
+        float f;
+        memcpy(&f, sw, 4);
+        return f;
+    }
+
+    void handle_mtdata2_payload() {
+        uint8_t i = 0;
+        while (i + 3 <= len_) {
+            uint16_t xdi  = (payload_[i] << 8) | payload_[i + 1];
+            uint8_t  dlen = payload_[i + 2];
+            const uint8_t *data = &payload_[i + 3];
+            if (i + 3 + dlen > len_) break;  // malformed group, stop
+
+            if (xdi == XDI_ACCELERATION && dlen == 12) {
+                latest_.accel_x = be_float(data) * MPS2_TO_G;
+                latest_.accel_y = be_float(data + 4) * MPS2_TO_G;
+            } else if (xdi == XDI_RATE_OF_TURN && dlen == 12) {
+                latest_.yaw_rate = be_float(data + 8) * RAD_TO_DEG;  // z axis
+            }
+            // XDI_EULER_ANGLES intentionally skipped: VehicleState has no
+            // attitude fields to put it in.
+
+            i += 3 + dlen;
+        }
+    }
+
+    void feed(uint8_t b) {
+        switch (state_) {
+            case State::WAIT_PRE:
+                if (b == PREAMBLE) state_ = State::WAIT_BID;
+                break;
+            case State::WAIT_BID:
+                checksum_ = b;
+                state_ = State::WAIT_MID;
+                break;
+            case State::WAIT_MID:
+                mid_ = b; checksum_ += b;
+                state_ = State::WAIT_LEN;
+                break;
+            case State::WAIT_LEN:
+                len_ = b; checksum_ += b; idx_ = 0;
+                state_ = (len_ == 0) ? State::WAIT_CS : State::WAIT_PAYLOAD;
+                break;
+            case State::WAIT_PAYLOAD:
+                payload_[idx_++] = b; checksum_ += b;
+                if (idx_ >= len_) state_ = State::WAIT_CS;
+                break;
+            case State::WAIT_CS:
+                checksum_ += b;
+                if (checksum_ == 0 && mid_ == MID_MTDATA2) handle_mtdata2_payload();
+                state_ = State::WAIT_PRE;
+                break;
+        }
+    }
 }
 
 namespace imu_driver {
 
 bool begin() {
-    Wire.begin(21, 22);
-    mpu_.initialize();
-    return mpu_.testConnection();
+    mti.begin(MTI_BAUD, SERIAL_8N1, PIN_RX, PIN_TX);
+    return true;
 }
 
 ImuRaw read() {
-    int16_t ax, ay, az, gx, gy, gz;
-    mpu_.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
-    return ImuRaw{ gz / GYRO_LSB, ax / ACCEL_LSB, ay / ACCEL_LSB };
+    while (mti.available()) feed((uint8_t)mti.read());
+    return latest_;  // most recent fully-validated MTData2 sample
 }
 
 } // namespace imu_driver
