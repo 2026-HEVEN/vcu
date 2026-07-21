@@ -17,9 +17,10 @@
 // else in the payload is skipped over using its own length.
 //
 // NOTE: LEN == 0xFF (Xbus "extended length", real length in next 2 bytes)
-// is not handled — our enabled output (Euler + Accel + RateOfTurn, ~45B)
-// never reaches it. A malformed/extended frame just fails the checksum
-// below and gets dropped; the parser resyncs on the next 0xFA.
+// is not supported — our enabled output (Euler + Accel + RateOfTurn, ~45B)
+// never legitimately reaches it. Rather than read past payload_[], any frame
+// reporting LEN == 0xFF is dropped immediately and the parser resyncs on the
+// next 0xFA (see feed()/WAIT_LEN).
 namespace {
     constexpr uint32_t MTI_BAUD  = 115200;
     constexpr int       PIN_RX   = 16;
@@ -36,16 +37,21 @@ namespace {
     constexpr float MPS2_TO_G   = 1.0f / 9.80665f;
     constexpr float RAD_TO_DEG  = 57.29578f;
 
+    // No valid MTData2 frame for this long -> treat the sample as stale
+    // (10x the 10ms imu_update() period; tolerates a few dropped frames).
+    constexpr uint32_t STALE_TIMEOUT_MS = 100;
+
     enum class State { WAIT_PRE, WAIT_BID, WAIT_MID, WAIT_LEN, WAIT_PAYLOAD, WAIT_CS };
 
-    State   state_    = State::WAIT_PRE;
-    uint8_t mid_      = 0;
-    uint8_t len_      = 0;
-    uint8_t idx_      = 0;
-    uint8_t checksum_ = 0;
-    uint8_t payload_[254];
+    State    state_        = State::WAIT_PRE;
+    uint8_t  mid_          = 0;
+    uint8_t  len_          = 0;
+    uint8_t  idx_          = 0;
+    uint8_t  checksum_     = 0;
+    uint8_t  payload_[254];
 
-    ImuRaw latest_{ 0.0f, 0.0f, 0.0f };
+    ImuRaw   latest_{ 0.0f, 0.0f, 0.0f };
+    uint32_t last_valid_ms_ = 0;  // millis() of last checksum-valid MTData2 frame; 0 = none yet
 
     float be_float(const uint8_t *p) {
         uint8_t sw[4] = { p[3], p[2], p[1], p[0] };  // MTi floats are big-endian
@@ -90,7 +96,9 @@ namespace {
                 break;
             case State::WAIT_LEN:
                 len_ = b; checksum_ += b; idx_ = 0;
-                state_ = (len_ == 0) ? State::WAIT_CS : State::WAIT_PAYLOAD;
+                if (len_ == 0)         state_ = State::WAIT_CS;
+                else if (len_ == 0xFF) state_ = State::WAIT_PRE;  // unsupported extended length; drop, resync
+                else                   state_ = State::WAIT_PAYLOAD;
                 break;
             case State::WAIT_PAYLOAD:
                 payload_[idx_++] = b; checksum_ += b;
@@ -98,7 +106,10 @@ namespace {
                 break;
             case State::WAIT_CS:
                 checksum_ += b;
-                if (checksum_ == 0 && mid_ == MID_MTDATA2) handle_mtdata2_payload();
+                if (checksum_ == 0 && mid_ == MID_MTDATA2) {
+                    handle_mtdata2_payload();
+                    last_valid_ms_ = millis();
+                }
                 state_ = State::WAIT_PRE;
                 break;
         }
@@ -115,6 +126,11 @@ bool begin() {
 ImuRaw read() {
     while (mti.available()) feed((uint8_t)mti.read());
     return latest_;  // most recent fully-validated MTData2 sample
+}
+
+bool stale() {
+    // last_valid_ms_ == 0 (no frame ever received) also reads as stale.
+    return millis() - last_valid_ms_ > STALE_TIMEOUT_MS;
 }
 
 } // namespace imu_driver
