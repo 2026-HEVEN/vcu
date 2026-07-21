@@ -1,13 +1,29 @@
+// 통합(오케스트레이터) 테스트 — tv_compute가 5개 stage를 올바로 조립하는지.
+// stage 알고리즘이 채워져도 유지되는 "불변식"만 검증한다.
 #include <unity.h>
 #include "modules/torque_vectoring.h"
 
+static TVInput straight() {
+    // total=20, 직진(조향0/yaw0/가속0), dt=10ms
+    return TVInput{ 20.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.01f };
+}
+
 void test_straight_is_symmetric(void) {
-    TVOutput o = tv_compute({20.0f, 0.0f, 0.0f, 0.0f});
+    TVYawState s{};
+    TVOutput o = tv_compute(straight(), s);
     TEST_ASSERT_FLOAT_WITHIN(0.01f, (float)o.torque_L, (float)o.torque_R);
 }
 void test_split_sums_to_demand(void) {
-    TVOutput o = tv_compute({20.0f, 0.0f, 0.0f, 0.0f});
+    TVYawState s{};
+    TVOutput o = tv_compute(straight(), s);
     TEST_ASSERT_FLOAT_WITHIN(0.1f, 20.0f, (float)o.torque_L + (float)o.torque_R);
+}
+void test_intermediates_are_populated(void) {
+    // 중간신호가 TVOutput에 실려 나오는지 (관측 경로 확인)
+    TVYawState s{};
+    TVOutput o = tv_compute(straight(), s);
+    TEST_ASSERT_TRUE(o.fz_L > 0.0f && o.fz_R > 0.0f);   // 정적하중은 양수
+    TEST_ASSERT_TRUE(o.max_torque_L > 0.0f);            // 트랙션 상한 존재
 }
 
 void setUp(void) {}
@@ -16,5 +32,6 @@ int main(int, char **) {
     UNITY_BEGIN();
     RUN_TEST(test_straight_is_symmetric);
     RUN_TEST(test_split_sums_to_demand);
+    RUN_TEST(test_intermediates_are_populated);
     return UNITY_END();
 }

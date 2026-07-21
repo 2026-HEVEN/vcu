@@ -278,7 +278,11 @@ ImuOutput imu_compute(const ImuRaw &raw, ImuFilterState &s);  // s에 이전값 
 
 - `can_bus.cpp::poll_rx()` — CAN RX 파싱/핸드셰이크 미구현 → 현재 FSM이 `Idle`에 머묾.
   실제 컨트롤러 연동 시 구현 필요.
-- `longitudinal_compute` / `tv_compute` — 안전한 stub(선형 매핑·50:50 분배).
-  토크벡터링팀이 실제 전략으로 채울 FILL-IN 지점.
+- `longitudinal_compute` — 안전한 stub(선형 매핑). 토크벡터링팀 FILL-IN 지점.
+- **토크벡터링**은 `tv_compute` 하나가 아니라 `src/modules/tv/` 5개 stage
+  (reference/yaw_control/load/traction/allocation)로 분리됨. 각 stage는 안전한 pass-through
+  stub(현재 거동 = 50:50 유지)이며 팀원이 하나씩 채운다. 온보딩·담당표는
+  [`TORQUE_VECTORING.md`](TORQUE_VECTORING.md). 중간신호(목표yaw·Mz·Fz·최대토크)는
+  `VehicleState`로 노출되어 debug monitor/Cluster에서 관측 가능.
 - deadman은 현재 "스케줄러 살아있음"을 추적(자세한 NOTE는 `can_bus.cpp` 참고).
   RX/handshake 구현 후 "명령 신선도"로 게이팅 예정.

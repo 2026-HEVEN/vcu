@@ -30,7 +30,9 @@ namespace {
     constexpr int PIN_WSS          = 27;
     const WssCalib   WSS_CAL   { 45.0f };
     const SteerCalib STEER_CAL { 8192, 4096.0f, false };
+    TVYawState       tv_yaw_state{};       // yaw 제어기 이력 (전역상태 아님, 여기서만 보유)
     DriveMode        drive_mode = DriveMode::Normal;
+    constexpr float  TV_DT_S = 0.01f;      // torque_vectoring_update 주기 (10ms task)
 }
 
 static void throttle_update() {
@@ -56,8 +58,14 @@ static void longitudinal_update() {
 }
 static void torque_vectoring_update() {
     TVOutput o = tv_compute({
-        state.total_torque, state.yaw_rate, state.steering_angle, state.wheel_speed });
+        state.total_torque, state.yaw_rate, state.steering_angle, state.wheel_speed,
+        state.accel_x, state.accel_y, TV_DT_S }, tv_yaw_state);
     state.torque_L = o.torque_L; state.torque_R = o.torque_R;
+    // 중간신호 관측용 복사 (debug_monitor / Cluster에서 튜닝에 사용)
+    state.desired_yaw_rate = o.desired_yaw_rate;
+    state.yaw_moment       = o.yaw_moment;
+    state.fz_L = o.fz_L; state.fz_R = o.fz_R;
+    state.max_torque_L = o.max_torque_L; state.max_torque_R = o.max_torque_R;
     can_bus::note_command();   // refresh deadman
 }
 static void can_rx_update()  { can_bus::poll_rx(); }

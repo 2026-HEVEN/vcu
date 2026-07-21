@@ -26,6 +26,11 @@ struct VehicleState {
     float     total_torque = 0.0f;   // signed A demand
     Percent   torque_L;
     Percent   torque_R;
+    // TV intermediate signals (관측/튜닝용; app_wiring이 TVOutput에서 복사)
+    float     desired_yaw_rate = 0.0f;   // reference stage
+    float     yaw_moment       = 0.0f;   // yaw_control stage (Mz)
+    float     fz_L = 0.0f, fz_R = 0.0f;  // load stage (바퀴별 수직하중)
+    float     max_torque_L = 0.0f, max_torque_R = 0.0f;  // traction stage
 };
 
 extern VehicleState state;   // defined in core/app_wiring.cpp
