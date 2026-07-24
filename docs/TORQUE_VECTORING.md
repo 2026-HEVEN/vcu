@@ -63,3 +63,32 @@
 
 reference/yaw/load/allocation이 **같은 좌표계·부호 규약**을 써야 합니다(예: 좌회전 = yaw +).
 개발 시작 전에 TV팀이 이 규약 하나를 못 박고 각 `.cpp` 주석에 적어두세요.
+
+## 참고자료 (초심자용 학습 로드맵)
+
+> 📌 이 섹션은 노션 자료 DB의 **[토크벡터링 입문 가이드 + 학습 자료 모음](https://app.notion.com/p/3a7913e532e6810995bbff35fee8912f)** 페이지와 **동일한 내용**입니다. (노션 = 팀 공용, 이 파일 = 코드 옆에서 바로 참고용) 링크 추가·수정은 편한 쪽에서 하고 다른 쪽에도 반영해 주세요.
+
+제어(PID)·차체 거동 모델링·타이어 마찰원·회생 제어를 처음 접하는 팀원용. **추천 학습 순서: Stage 2(PID) → Stage 1(reference) → Stage 3/4 → Stage 5.** PID를 이해하면 나머지가 "입력을 만들어주는 모델"로 보입니다.
+
+**0단계 — 전체 그림 (제일 먼저)**
+- MATLAB Tech Talks 영상 모음 (영어+한글 자막): https://www.mathworks.com/videos/
+- Politecnico di Torino 석사논문 「Yaw Control for 4WD FS EV」 — 우리와 거의 똑같은 구조(목표 yaw rate → PID → 요모멘트 → 토크배분): https://webthesis.biblio.polito.it/28820/1/tesi.pdf
+  - 더 쉬운 버전 「Design of TV for FSAE」: https://webthesis.biblio.polito.it/12157/1/tesi.pdf
+
+**Stage 2 (yaw PID) — 제어 초심자에게 가장 중요, 제일 먼저**
+- Brian Douglas 유튜브 채널 (제어 입문 최고 명강, 애니메이션 직관적): https://www.youtube.com/channel/UCq0imsn84ShAe9PBOFnoIrg
+- MATLAB 「Understanding PID Control」 1~4편 (Brian Douglas 제작, 한글자막) — P/I/D 역할 + anti-windup(`TVYawState.integral` 폭주 방지): https://www.mathworks.com/videos/understanding-pid-control-part-1-what-is-pid-control--1527089264373.html
+- 한국어 개념: [위키백과 PID 제어기](https://ko.wikipedia.org/wiki/PID_%EC%A0%9C%EC%96%B4%EA%B8%B0) → [velog PID 정리](https://velog.io/@sms6536/PID%EC%A0%9C%EC%96%B4%EC%97%90-%EA%B4%80%ED%95%9C-%EC%9D%B4%ED%95%B4)
+
+**Stage 1 (reference) & Stage 3 (load) — 차체 거동 모델링**
+- Rajesh Rajamani, 「Vehicle Dynamics and Control」 — 이 분야 표준 교과서. **2.3장 Bicycle Model**(=reference stage), 2.6장 yaw rate & slip angle이 핵심. 대학원 교재라 해당 챕터만 발췌해서 볼 것: https://www.academia.edu/31492223/
+- 바이시클 모델은 위 Torino 논문 2~3장에도 우리 코드 수준으로 그림+수식이 잘 정리돼 있음.
+
+**Stage 4 (traction) — 타이어 마찰원**
+- 마찰원(friction circle) + 하중이동은 Rajamani 타이어 챕터 + Torino 논문 트랙션 파트로 충분. 핵심 직관: **"수직하중 Fz × μ = 그 바퀴가 낼 수 있는 최대 힘"**.
+
+**회생 제어 (`longitudinal.cpp`)**
+- 개념 입문(한국어): [전기차 회생제동 원리(GM)](https://www.globalmotors.co.kr/view.php?ud=2021050311311245890d88486204_5) · [브런치: 회생제동의 제어원리와 에너지 회수율](https://brunch.co.kr/@1212ac31a500435/163)
+- 우리 코드에서 회생 = "음수 토크"일 뿐. 모터 내부제어(FOC)까지 몰라도 됨. `longitudinal_compute`가 brake_pct/SOC 보고 −토크를 얼마나 줄지 결정하는 전략 함수라는 것만 이해하면 충분.
+
+> 솔직한 한계: 토크벡터링을 처음부터 한국어로 다룬 영상 시리즈는 사실상 없습니다. 한국어 자료는 개념 잡기용(블로그/위키)이고, **실제 구현 감각은 Torino 논문 + Brian Douglas 영어 영상**에서 나옵니다. 영어 자막을 켜고 보는 걸 팀 기본으로 잡으세요.
