@@ -70,10 +70,12 @@ reference/yaw/load/allocation이 **같은 좌표계·부호 규약**을 써야 �
 
 제어(PID)·차체 거동 모델링·타이어 마찰원·회생 제어를 처음 접하는 팀원용. **추천 학습 순서: Stage 2(PID) → Stage 1(reference) → Stage 3/4 → Stage 5.** PID를 이해하면 나머지가 "입력을 만들어주는 모델"로 보입니다.
 
-**0단계 — 전체 그림 (제일 먼저)**
-- MATLAB Tech Talks 영상 모음 (영어+한글 자막): https://www.mathworks.com/videos/
-- Politecnico di Torino 석사논문 「Yaw Control for 4WD FS EV」 — 우리와 거의 똑같은 구조(목표 yaw rate → PID → 요모멘트 → 토크배분): https://webthesis.biblio.polito.it/28820/1/tesi.pdf
-  - 더 쉬운 버전 「Design of TV for FSAE」: https://webthesis.biblio.polito.it/12157/1/tesi.pdf
+**0단계 — 전체 그림 (제일 먼저, 쉬운 것부터)**
+- [한국어 기사] 오토카코리아 「매력적인 기술, 토크 벡터링의 세계」 — 가장 부담 없는 입문: https://www.iautocar.co.kr/news/articleView.html?idxno=31309
+- [유튜브·한국어] 「코너링이 자동으로 되는 트윈클러치의 마법 (feat. 토크 벡터링)」: https://www.youtube.com/watch?v=YAlVv9FbRws
+- [유튜브·영어, 애니메이션] Engineering Explained 「Torque Vectoring Differential - Explained」: https://www.youtube.com/watch?v=qwwFZAbYGW0
+  - ⚠️ 위 영상은 **기계식(클러치 디퍼렌셜)** 예시입니다. 직관("좌우 바퀴 토크 차이로 코너링을 돕는다")은 그대로 우리 것이지만, 우리는 클러치가 아니라 **좌우 독립 모터 2개**로 구현합니다(Stage 5 allocation).
+- [심화·준비되면] Politecnico di Torino 석사논문 「Yaw Control for 4WD FS EV」 — 우리와 거의 똑같은 제어 구조(목표 yaw rate → PID → 요모멘트 → 토크배분). 영어 논문이라 진입장벽은 있지만 **그림 위주로만 봐도** 우리 5-stage가 그대로 보입니다: https://webthesis.biblio.polito.it/28820/1/tesi.pdf
 
 **Stage 2 (yaw PID) — 제어 초심자에게 가장 중요, 제일 먼저**
 - Brian Douglas 유튜브 채널 (제어 입문 최고 명강, 애니메이션 직관적): https://www.youtube.com/channel/UCq0imsn84ShAe9PBOFnoIrg
