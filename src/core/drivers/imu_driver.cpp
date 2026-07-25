@@ -34,8 +34,10 @@ namespace {
     constexpr uint16_t XDI_ACCELERATION = 0x4020;  // x,y,z (m/s^2)
     constexpr uint16_t XDI_RATE_OF_TURN = 0x8020;  // x,y,z (rad/s)
 
-    constexpr float MPS2_TO_G   = 1.0f / 9.80665f;
-    constexpr float RAD_TO_DEG  = 57.29578f;
+    constexpr float MPS2_TO_G     = 1.0f / 9.80665f;
+    // Not RAD_TO_DEG: <Arduino.h> defines that as a macro and the expansion
+    // breaks this declaration.
+    constexpr float RADPS_TO_DEGPS = 57.29578f;
 
     // No valid MTData2 frame for this long -> treat the sample as stale
     // (10x the 10ms imu_update() period; tolerates a few dropped frames).
@@ -72,7 +74,7 @@ namespace {
                 latest_.accel_x = be_float(data) * MPS2_TO_G;
                 latest_.accel_y = be_float(data + 4) * MPS2_TO_G;
             } else if (xdi == XDI_RATE_OF_TURN && dlen == 12) {
-                latest_.yaw_rate = be_float(data + 8) * RAD_TO_DEG;  // z axis
+                latest_.yaw_rate = be_float(data + 8) * RADPS_TO_DEGPS;  // z axis
             }
             // XDI_EULER_ANGLES intentionally skipped: VehicleState has no
             // attitude fields to put it in.

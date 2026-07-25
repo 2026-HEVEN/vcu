@@ -18,3 +18,22 @@ jobs:
         run: pip install --upgrade platformio
       - name: Run native unit tests (pio test -e native)
         run: pio test -e native
+
+  esp32-build:
+    name: esp32-build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Cache PlatformIO toolchains
+        uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-esp32-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+          restore-keys: pio-esp32-${{ runner.os }}-
+      - name: Install PlatformIO
+        run: pip install --upgrade platformio
+      - name: Build firmware (pio run -e esp32dev)
+        run: pio run -e esp32dev
