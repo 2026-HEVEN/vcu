@@ -5,7 +5,7 @@
 
 void test_no_steer_no_target(void) {
     // 직진(조향 0)이면 목표 yaw rate는 0.
-    float dy = tv_reference_compute(Unit(0.0f), Rpm(1000.0f), TV_PARAMS);
+    float dy = tv_reference_compute(Unit(0.0f), 15.0f, TV_PARAMS);
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, dy);
 }
 

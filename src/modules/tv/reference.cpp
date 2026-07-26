@@ -7,7 +7,7 @@
 //
 // ── 구현 가이드 (정상원선회 바이시클 모델) ────────────────────────
 //   1) 조향각 환산:   delta = (float)steering * p.max_steer_rad          [rad]
-//   2) 차속 환산:     V = (float)speed  → m/s  (Rpm×타이어반경 등, 단위 확인!)
+//   2) 차속:          V = speed_mps  (환산 불필요 — vehicle_speed 모듈이 이미 함)
 //   3) 목표 yaw:      desired = V * delta / (p.wheelbase_m + p.understeer_grad * V*V)  [rad/s]
 //   4) 단위 통일:     rad/s → deg/s  (IMU yaw_rate가 deg/s이므로 맞춘다)
 //   5) 상한:          clamp(±p.desired_yaw_max)  — 저속/큰 조향에서 발산 방지
@@ -18,7 +18,7 @@
 //
 // ── SAFE STUB ────────────────────────────────────────────────────
 //   목표 yaw = 0  → yaw 모멘트 요청 없음 → 현재 차 거동과 100% 동일.
-float tv_reference_compute(Unit steering, Rpm speed, const TVParams &p) {
-    (void)steering; (void)speed; (void)p;
+float tv_reference_compute(Unit steering, float speed_mps, const TVParams &p) {
+    (void)steering; (void)speed_mps; (void)p;
     return 0.0f;
 }

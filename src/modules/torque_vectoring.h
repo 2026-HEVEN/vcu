@@ -10,7 +10,7 @@ struct TVInput {
     float total_torque;    // longitudinal 출력 (부호 있는 총 토크)
     float yaw_rate;        // IMU 실측 yaw rate [deg/s]
     float steering_angle;  // Unit(-1..+1)
-    float wheel_speed;     // Rpm
+    float vehicle_speed;   // 추정 차속 [m/s] (vehicle_speed 모듈 출력)
     float ax;              // 종가속도 [m/s^2]
     float ay;              // 횡가속도 [m/s^2]
     float dt;              // tick 간격 [s]

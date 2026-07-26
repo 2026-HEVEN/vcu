@@ -47,7 +47,7 @@ pio device monitor
 
 ## 모듈 목록 (FILL-IN)
 
-`throttle` · `brake` · `steering` · `imu` · `wheel_speed` · `longitudinal`(회생 전략) · `torque_vectoring`(좌우 분배)
+`throttle` · `brake` · `steering` · `imu` · `wheel_speed` · `vehicle_speed`(4륜→차속) · `longitudinal`(회생 전략) · `torque_vectoring`(좌우 분배)
 — 각 모듈은 `xxx_compute(입력) → 출력` 순수 함수. 하드웨어·전역상태를 모릅니다.
 
 ## 문서
@@ -75,6 +75,6 @@ pio device monitor
 - Cluster→VCU 커맨드(`0x1801D0C0`) 레이아웃(`CAN_PROTOCOL.md` §5.7)을 **gear · drive_mode · paddock** 로 확정 (Cluster 재설계와 동기화)
 
 ### v1.0 (2026-06-29) — VCU 펌웨어 베이스
-- 잠긴 코어(TWAI + **50ms 라이프 태스크** + 안전 FSM + 협력형 스케줄러) + 순수 모듈 7개(throttle · brake · steering · imu · wheel_speed · longitudinal · torque_vectoring)
+- 잠긴 코어(TWAI + **50ms 라이프 태스크** + 안전 FSM + 협력형 스케줄러) + 순수 모듈 8개(throttle · brake · steering · imu · wheel_speed · vehicle_speed · longitudinal · torque_vectoring)
 - `Clamped<>` 도메인 타입, PlatformIO native 테스트, 5Hz 시리얼 디버그 모니터
 - CAN 프로토콜 단일 출처(토크 스케일링 + 피드백/커맨드 ID + 디코더), ARCHITECTURE/ADDING_A_MODULE/CAN_PROTOCOL 문서, LOCKED/FILL-IN 배너

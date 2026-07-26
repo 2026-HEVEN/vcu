@@ -11,7 +11,7 @@
 
 TVOutput tv_compute(const TVInput &in, TVYawState &s) {
     // 1) 조향 의도 → 목표 yaw rate
-    float desired_yaw = tv_reference_compute(in.steering_angle, in.wheel_speed, TV_PARAMS);
+    float desired_yaw = tv_reference_compute(in.steering_angle, in.vehicle_speed, TV_PARAMS);
     // 2) yaw 오차 → 요 모멘트 Mz
     float mz = tv_yaw_compute(desired_yaw, in.yaw_rate, in.dt, TV_PARAMS, s);
     // 3) 가속도 → 바퀴별 수직하중 Fz
