@@ -36,7 +36,9 @@
  brake 핀    ──► brake_compute      ──► state.brake_pct    ─┤
  엔코더 I2C  ──► steering_compute   ──► state.steering_angle┤
  MPU6050     ──► imu_compute        ──► state.yaw_rate      ├─► longitudinal_compute ─► state.total_torque
- 휠 PCNT     ──► wheel_speed_compute ─► state.wheel_speed   ┘                                  │
+ 휠 PCNT ×4  ──► wheel_speed_compute ─► state.wheel_speed[4]┘                                  │
+                        │                                                                      │
+                        └──► vehicle_speed_compute ─► state.vehicle_speed_mps ─────────────────┤
                                                                                               ▼
                                                                 torque_vectoring ─► state.torque_L / torque_R
                                                                                               │
@@ -44,6 +46,8 @@
 ```
 
 - **센서 모듈 5개** (throttle/brake/steering/imu/wheel_speed): raw값 → 물리값 변환
+- **`vehicle_speed`**: 4륜 휠속 → **차속 1개**. 어느 바퀴를 믿을지 판단하는 곳도 여기다
+  (전륜 평균 기준, 구동륜은 슬립하므로 제외). 소비자는 바퀴를 고르지 않는다
 - **`longitudinal`**: throttle/brake/SOC/모드 → **부호 있는 총 토크 1개** (+ 구동 / − 회생)
 - **`torque_vectoring`**: 총 토크를 **좌우로 분배**
 - 모든 모듈은 `state`(공유 버스)를 통해서만 데이터를 주고받음
@@ -205,11 +209,14 @@ SafetyState safety_step(SafetyState cur, const SafetyInputs &in) {
 설정·상태가 있어 `src/core/drivers/`에 **잠긴 얇은 드라이버**로 분리한다.
 
 ```
-wss_driver (PCNT 설정·카운트) ──► {pulse_delta, dt_ms} ──► wheel_speed_compute ──► Rpm
-   [LOCKED 하드웨어]                    깔끔한 raw            [FILL-IN 순수 수학]
+wss_driver (PCNT 설정·카운트) ──► {pulse_delta, dt_ms} ──► wheel_speed_compute ──► Rpm ×4
+   [LOCKED 하드웨어, 4채널]              깔끔한 raw            [FILL-IN 순수 수학]        │
+                                                                                          ▼
+                                                            vehicle_speed_compute ──► 차속 [m/s]
 ```
 
 팀원은 `wheel_speed_compute`(펄스→속도, 캘리브레이션)만 손대고 PCNT 레지스터는 안 본다.
+채널 순서는 `WheelIdx`(FL/FR/RL/RR) 고정 — `app_wiring`의 GPIO 배정과 1:1로 맞춰야 한다.
 IMU·엔코더도 동일 구조.
 
 > 참고: PCNT 드라이버는 Arduino-ESP32가 ESP-IDF 4.4.7을 쓰는 관계로
