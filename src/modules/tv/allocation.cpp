@@ -15,7 +15,7 @@
 //   tR = clamp(tR, -limit.max_R, +limit.max_R);
 //   //  ★ 한쪽이 상한에 걸리면? 총토크 유지를 위해 반대쪽/전체를 스케일다운할지
 //   //    (yaw 우선 vs 총량 우선) 정책을 팀에서 정할 것.
-//   return { Percent(tL), Percent(tR) };               // Percent가 ±100 자동 clamp
+//   return { Amp(tL), Amp(tR) };                       // Amp가 ±300 자동 clamp
 //
 // ── 주의 ─────────────────────────────────────────────────────────
 //   * diff의 부호 규약을 reference/yaw/load와 하나로 통일(좌회전 + 등).
@@ -27,5 +27,5 @@
 TVAllocOutput tv_alloc_compute(float total_torque, float yaw_moment, MaxTorque limit) {
     (void)yaw_moment; (void)limit;
     float half = total_torque * 0.5f;
-    return { Percent(half), Percent(half) };
+    return { Amp(half), Amp(half) };
 }

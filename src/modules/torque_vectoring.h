@@ -18,8 +18,8 @@ struct TVInput {
 
 struct TVOutput {
     // 컨트롤러로 나가는 실제 명령
-    Percent torque_L;
-    Percent torque_R;
+    Amp torque_L;
+    Amp torque_R;
     // 관측용 중간신호 (app_wiring이 VehicleState로 복사 → debug/Cluster에서 보임)
     float desired_yaw_rate;
     float yaw_moment;

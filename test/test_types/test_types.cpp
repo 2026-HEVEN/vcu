@@ -15,6 +15,12 @@ void test_state_defaults_safe(void) {
     TEST_ASSERT_FALSE(s.brake_active);
 }
 
+// Amp — 토크 명령은 백분율이 아니라 상전류다. 범위는 모터 Max Phase Current.
+void test_amp_clamps_above_max(void) { Amp a = 400.0f;  TEST_ASSERT_EQUAL_FLOAT(300.0f, (float)a); }
+void test_amp_clamps_below_min(void) { Amp a = -400.0f; TEST_ASSERT_EQUAL_FLOAT(-300.0f, (float)a); }
+void test_amp_allows_rated(void)     { Amp a = 103.0f;  TEST_ASSERT_EQUAL_FLOAT(103.0f, (float)a); }
+void test_amp_allows_peak(void)      { Amp a = 300.0f;  TEST_ASSERT_EQUAL_FLOAT(300.0f, (float)a); }
+
 void setUp(void) {}
 void tearDown(void) {}
 int main(int, char **) {
@@ -22,6 +28,10 @@ int main(int, char **) {
     RUN_TEST(test_clamps_above_max);
     RUN_TEST(test_clamps_below_min);
     RUN_TEST(test_passes_in_range);
+    RUN_TEST(test_amp_clamps_above_max);
+    RUN_TEST(test_amp_clamps_below_min);
+    RUN_TEST(test_amp_allows_rated);
+    RUN_TEST(test_amp_allows_peak);
     RUN_TEST(test_assignment_clamps);
     RUN_TEST(test_default_is_zero);
     RUN_TEST(test_state_defaults_safe);
