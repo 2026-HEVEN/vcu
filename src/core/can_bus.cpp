@@ -31,6 +31,15 @@ namespace {
     volatile bool      g_handshaked  = false;
     uint8_t            g_life = 0;
 
+    void transmit_ext(uint32_t id, const uint8_t data[8]) {
+        twai_message_t m = {};
+        m.identifier = id;
+        m.extd = 1;
+        m.data_length_code = 8;
+        for (int i = 0; i < 8; ++i) m.data[i] = data[i];
+        twai_transmit(&m, pdMS_TO_TICKS(5));
+    }
+
     void send_torque(uint32_t id, float amps) {
         uint16_t raw = torque_to_raw(amps);
         twai_message_t m = {};
@@ -69,6 +78,17 @@ void begin() {
 void start_life_task() {
     // High priority, pinned to core 1, away from the loop()/scheduler.
     xTaskCreatePinnedToCore(life_task, "can_life", 4096, nullptr, 20, nullptr, 1);
+}
+
+void send_wheel_speeds() {
+    uint8_t data[8];
+    encode_vcu_wheel_speeds(
+        (float)state.wheel_speed[WHEEL_FL],
+        (float)state.wheel_speed[WHEEL_FR],
+        (float)state.wheel_speed[WHEEL_RL],
+        (float)state.wheel_speed[WHEEL_RR],
+        data);
+    transmit_ext(CAN_ID_VCU_WHEEL_SPEEDS, data);
 }
 
 void poll_rx() {

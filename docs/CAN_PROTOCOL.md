@@ -1,4 +1,4 @@
-# HEVEN CAN 프로토콜 명세서 (단일 출처)
+﻿# HEVEN CAN 프로토콜 명세서 (단일 출처)
 
 > **이 문서는 VCU·Cluster 양 레포가 공유하는 단일 출처(single source of truth)입니다.**
 > 코드(`include/can_protocol.h`)와 이 문서는 항상 일치해야 하며, 수정 시 **양 레포에 동일하게 반영**합니다. (담당: 김도현)
@@ -74,6 +74,7 @@
 | MCU → METER | 계기 메시지 I | `0x180117EF` | `0x180117F0` | 100ms | 6 |
 | MCU → METER | 계기 메시지 II | `0x180217EF` | `0x180217F0` | 100ms | 6 |
 | Cluster → VCU | 커맨드 (config/리셋) | `0x1801D0C0` (신규) | — | 100ms | 6 |
+| VCU → Cluster | 휠스피드 RPM | `0x1802C0D0` (신규) | — | 50ms | 6 |
 
 > ID에서 PS(목적지)·SA(송신)만 컨트롤러별로 바뀜. 위 표의 ID는 `PF<<16 | PS<<8 | SA`로 조립됨(+ Priority).
 
@@ -167,6 +168,23 @@
 
 > ⚠️ 패독은 **요청 신호**일 뿐. VCU가 토크/속도를 상한 이하로 클램프하고 CAN 끊김 시 fail-safe(제한 유지)를 결정해야 함.
 
+### 5.8 VCU → Cluster : 휠스피드 RPM `0x1802C0D0` (HEVEN 정의) · 50ms
+
+> VCU가 4채널 WSS에서 계산한 FL/FR/RL/RR 휠 RPM을 Cluster ESP32에 전달한다.
+> Cluster는 이 값을 km/h로 변환해 계기판 속도 숫자로 표시한다.
+> 이 프레임은 차량 제어 명령이 아니라 표시/로깅용 telemetry이다.
+
+| 바이트 | 항목 | 분해능/의미 |
+|--------|------|-------------|
+| 0~1 | Front Left wheel RPM | uint16 little-endian, 1 rpm/bit |
+| 2~3 | Front Right wheel RPM | uint16 little-endian, 1 rpm/bit |
+| 4~5 | Rear Left wheel RPM | uint16 little-endian, 1 rpm/bit |
+| 6~7 | Rear Right wheel RPM | uint16 little-endian, 1 rpm/bit |
+
+구현 위치:
+- 인코딩: `encode_vcu_wheel_speeds()`
+- 송신: `can_bus::send_wheel_speeds()`
+- 주기: `app_wiring.cpp` scheduler에서 50ms, 20Hz
 ---
 
 ## 6. 핸드셰이크 & 타임아웃 (EZkontrol 규칙)
@@ -212,8 +230,11 @@ EZkontrol 컨트롤러는 **METER 모드**일 때 피드백을 `0x1801xxEF`(VCU�
 ```cpp
 constexpr uint32_t CAN_ID_TORQUE_L = 0x0C01EFD0;  // VCU→MCU1
 constexpr uint32_t CAN_ID_TORQUE_R = 0x0C01F0D0;  // VCU→MCU2
+constexpr uint32_t CAN_ID_VCU_WHEEL_SPEEDS = 0x1802C0D0; // VCU→Cluster WSS RPM
 uint16_t torque_to_raw(float amps);   // (amps+3200)*10
 float    raw_to_torque(uint16_t raw);
+uint16_t wheel_rpm_to_raw(float rpm);
+void     encode_vcu_wheel_speeds(float fl_rpm, float fr_rpm, float rl_rpm, float rr_rpm, uint8_t out[8]);
 // SA 상수: SA_VCU=0xD0, SA_CLUSTER=0xC0, SA_CONTROLLER_L=0xEF, SA_CONTROLLER_R=0xF0, SA_ENERGY_METER=0x17
 ```
 

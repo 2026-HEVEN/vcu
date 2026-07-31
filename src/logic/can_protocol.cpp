@@ -17,3 +17,24 @@ float raw_to_voltage(uint16_t raw) { return (float)raw * 0.1f; }
 float raw_to_current(uint16_t raw) { return (float)raw * 0.1f - 3200.0f; }
 int   raw_to_temp(uint8_t raw)     { return (int)raw - 40; }
 int   raw_to_speed(uint16_t raw)   { return (int)raw - 32000; }
+
+uint16_t wheel_rpm_to_raw(float rpm) {
+    if (rpm < 0.0f) return 0;
+    if (rpm > 65535.0f) return 65535;
+    return (uint16_t)(rpm + 0.5f);
+}
+
+namespace {
+void put_u16le(uint8_t *data, uint16_t value) {
+    data[0] = (uint8_t)(value & 0xFF);
+    data[1] = (uint8_t)((value >> 8) & 0xFF);
+}
+}
+
+void encode_vcu_wheel_speeds(float fl_rpm, float fr_rpm,
+                             float rl_rpm, float rr_rpm, uint8_t out[8]) {
+    put_u16le(out + 0, wheel_rpm_to_raw(fl_rpm));
+    put_u16le(out + 2, wheel_rpm_to_raw(fr_rpm));
+    put_u16le(out + 4, wheel_rpm_to_raw(rl_rpm));
+    put_u16le(out + 6, wheel_rpm_to_raw(rr_rpm));
+}
