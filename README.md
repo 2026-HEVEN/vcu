@@ -10,7 +10,7 @@
 
 - **스택**: PlatformIO + Arduino-ESP32, ESP32 내장 TWAI(CAN)
 - **구조**: 잠긴 코어(CAN·안전·타이밍) + 팀원이 채우는 순수 모듈(`src/modules/`). 자세히는 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- **상태**: ESP32 빌드 그린, 호스트 테스트 64개 통과
+- **상태**: ESP32 빌드 그린, 호스트 테스트 66개 통과
 
 ## 빠른 시작
 
@@ -34,7 +34,7 @@ pio device monitor
 
 > 🧪 **테스트가 처음이거나 Windows 사용자라면** → 노션 [펌웨어 테스트 실행 방법](https://www.notion.so/390913e532e68199a9b5e340b73e9e71) 참고. AI에 복붙할 프롬프트 + "이렇게 나오면 성공" 출력 예시 + Windows(WSL2/MinGW) 셋업까지 있습니다. (보드 업로드는 Windows도 그냥 되고, `native` 단위테스트만 host 컴파일러가 필요해요.)
 
-> ℹ️ VCU는 4채널 WSS RPM을 `0x1802C0D0` CAN 프레임으로 Cluster ESP32에 20Hz 송신합니다. Cluster는 이 값을 km/h로 변환해 계기판 속도 숫자로 표시합니다.
+> ℹ️ VCU는 4채널 WSS RPM을 `0x1802C0D0` CAN 프레임으로 Cluster ESP32에 20Hz 송신합니다. Cluster는 이 값을 km/h로 변환해 계기판 속도 숫자로 표시합니다. 또한 TMA-1/Cluster 로깅용 단일 차량속도 `km/h x 10` 값을 `0x1803C0D0` CAN 프레임으로 20Hz 송신합니다.
 
 ## 어디서 작업하나
 

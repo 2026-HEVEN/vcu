@@ -24,6 +24,13 @@ uint16_t wheel_rpm_to_raw(float rpm) {
     return (uint16_t)(rpm + 0.5f);
 }
 
+uint16_t vehicle_speed_kph_to_raw(float kph) {
+    if (kph < 0.0f) return 0;
+    const float raw = kph * 10.0f;
+    if (raw > 65535.0f) return 65535;
+    return (uint16_t)(raw + 0.5f);
+}
+
 namespace {
 void put_u16le(uint8_t *data, uint16_t value) {
     data[0] = (uint8_t)(value & 0xFF);
@@ -37,4 +44,10 @@ void encode_vcu_wheel_speeds(float fl_rpm, float fr_rpm,
     put_u16le(out + 2, wheel_rpm_to_raw(fr_rpm));
     put_u16le(out + 4, wheel_rpm_to_raw(rl_rpm));
     put_u16le(out + 6, wheel_rpm_to_raw(rr_rpm));
+}
+
+void encode_vcu_vehicle_speed(float speed_kph, bool valid, uint8_t out[8]) {
+    for (int i = 0; i < 8; ++i) out[i] = 0;
+    put_u16le(out + 0, valid ? vehicle_speed_kph_to_raw(speed_kph) : 0);
+    out[2] = valid ? 1 : 0;
 }

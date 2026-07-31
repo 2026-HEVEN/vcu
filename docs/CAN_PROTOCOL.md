@@ -1,4 +1,4 @@
-﻿# HEVEN CAN 프로토콜 명세서 (단일 출처)
+# HEVEN CAN 프로토콜 명세서 (단일 출처)
 
 > **이 문서는 VCU·Cluster 양 레포가 공유하는 단일 출처(single source of truth)입니다.**
 > 코드(`include/can_protocol.h`)와 이 문서는 항상 일치해야 하며, 수정 시 **양 레포에 동일하게 반영**합니다. (담당: 김도현)
@@ -75,6 +75,7 @@
 | MCU → METER | 계기 메시지 II | `0x180217EF` | `0x180217F0` | 100ms | 6 |
 | Cluster → VCU | 커맨드 (config/리셋) | `0x1801D0C0` (신규) | — | 100ms | 6 |
 | VCU → Cluster | 휠스피드 RPM | `0x1802C0D0` (신규) | — | 50ms | 6 |
+| VCU → TMA-1/Cluster | 단일 차량속도 | `0x1803C0D0` (신규) | — | 50ms | 6 |
 
 > ID에서 PS(목적지)·SA(송신)만 컨트롤러별로 바뀜. 위 표의 ID는 `PF<<16 | PS<<8 | SA`로 조립됨(+ Priority).
 
@@ -185,6 +186,23 @@
 - 인코딩: `encode_vcu_wheel_speeds()`
 - 송신: `can_bus::send_wheel_speeds()`
 - 주기: `app_wiring.cpp` scheduler에서 50ms, 20Hz
+
+### 5.9 VCU → TMA-1/Cluster : 단일 차량속도 `0x1803C0D0` (HEVEN 정의) · 50ms
+
+> VCU의 `vehicle_speed_compute()`가 산출한 단일 차량속도를 TMA-1 Control Hub 그래프/로깅용으로 전달한다.
+> 기존 4륜 RPM 프레임(`0x1802C0D0`)은 그대로 유지하며, 이 프레임은 표시/로깅용 telemetry이다.
+
+| 바이트 | 항목 | 분해능/의미 |
+|--------|------|-------------|
+| 0~1 | Vehicle speed | uint16 little-endian, km/h x 10 |
+| 2 | Valid flag | 1=valid, 0=invalid |
+| 3~7 | Reserved | 0 |
+
+구현 위치:
+- 인코딩: `encode_vcu_vehicle_speed()`
+- 송신: `can_bus::send_vehicle_speed()`
+- 주기: `app_wiring.cpp` scheduler에서 50ms, 20Hz
+
 ---
 
 ## 6. 핸드셰이크 & 타임아웃 (EZkontrol 규칙)
@@ -231,10 +249,13 @@ EZkontrol 컨트롤러는 **METER 모드**일 때 피드백을 `0x1801xxEF`(VCU�
 constexpr uint32_t CAN_ID_TORQUE_L = 0x0C01EFD0;  // VCU→MCU1
 constexpr uint32_t CAN_ID_TORQUE_R = 0x0C01F0D0;  // VCU→MCU2
 constexpr uint32_t CAN_ID_VCU_WHEEL_SPEEDS = 0x1802C0D0; // VCU→Cluster WSS RPM
+constexpr uint32_t CAN_ID_VCU_VEHICLE_SPEED = 0x1803C0D0; // VCU→TMA-1/Cluster speed
 uint16_t torque_to_raw(float amps);   // (amps+3200)*10
 float    raw_to_torque(uint16_t raw);
 uint16_t wheel_rpm_to_raw(float rpm);
 void     encode_vcu_wheel_speeds(float fl_rpm, float fr_rpm, float rl_rpm, float rr_rpm, uint8_t out[8]);
+uint16_t vehicle_speed_kph_to_raw(float kph);
+void     encode_vcu_vehicle_speed(float speed_kph, bool valid, uint8_t out[8]);
 // SA 상수: SA_VCU=0xD0, SA_CLUSTER=0xC0, SA_CONTROLLER_L=0xEF, SA_CONTROLLER_R=0xF0, SA_ENERGY_METER=0x17
 ```
 

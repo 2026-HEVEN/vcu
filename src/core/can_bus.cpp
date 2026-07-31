@@ -91,6 +91,13 @@ void send_wheel_speeds() {
     transmit_ext(CAN_ID_VCU_WHEEL_SPEEDS, data);
 }
 
+void send_vehicle_speed() {
+    uint8_t data[8];
+    const float speed_kph = state.vehicle_speed_mps * 3.6f;
+    encode_vcu_vehicle_speed(speed_kph, state.vehicle_speed_valid, data);
+    transmit_ext(CAN_ID_VCU_VEHICLE_SPEED, data);
+}
+
 void poll_rx() {
     twai_message_t m;
     while (twai_receive(&m, 0) == ESP_OK) {
