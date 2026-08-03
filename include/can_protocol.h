@@ -32,19 +32,11 @@ constexpr uint32_t CAN_ID_FB1_L = 0x1801D0EF;   // Part I: voltage/current/speed
 constexpr uint32_t CAN_ID_FB2_L = 0x1802D0EF;   // Part II: temps/status/errors
 // Cluster -> VCU command (config/reset). HEVEN-defined.
 constexpr uint32_t CAN_ID_CLUSTER_CMD = 0x1801D0C0;
-// VCU -> Cluster four-wheel WSS RPM. Bytes 0..7 contain FL, FR, RL, RR
-// respectively as uint16 little-endian values at 1 rpm/bit.
-constexpr uint32_t CAN_ID_VCU_WHEEL_SPEEDS = 0x1802C0D0;
-// VCU -> TMA-1/Cluster single vehicle speed. Byte 0..1 contains km/h x 10,
+// VCU -> Cluster/TMA-1 single vehicle speed. Byte 0..1 contains km/h x 10,
 // byte 2 is valid flag (1=valid, 0=invalid), byte 3..7 reserved zero.
 constexpr uint32_t CAN_ID_VCU_VEHICLE_SPEED = 0x1803C0D0;
 
-// VCU -> Cluster wheel speed frame (0x1802C0D0). HEVEN-defined.
-uint16_t wheel_rpm_to_raw(float rpm);
-void encode_vcu_wheel_speeds(float fl_rpm, float fr_rpm,
-                             float rl_rpm, float rr_rpm, uint8_t out[8]);
-
-// VCU -> TMA-1/Cluster single vehicle speed frame (0x1803C0D0). HEVEN-defined.
+// VCU -> Cluster/TMA-1 single vehicle speed frame (0x1803C0D0). HEVEN-defined.
 uint16_t vehicle_speed_kph_to_raw(float kph);
 void encode_vcu_vehicle_speed(float speed_kph, bool valid, uint8_t out[8]);
 

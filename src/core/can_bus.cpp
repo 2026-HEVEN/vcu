@@ -80,16 +80,6 @@ void start_life_task() {
     xTaskCreatePinnedToCore(life_task, "can_life", 4096, nullptr, 20, nullptr, 1);
 }
 
-void send_wheel_speeds() {
-    uint8_t data[8];
-    encode_vcu_wheel_speeds(
-        (float)state.wheel_speed[WHEEL_FL],
-        (float)state.wheel_speed[WHEEL_FR],
-        (float)state.wheel_speed[WHEEL_RL],
-        (float)state.wheel_speed[WHEEL_RR],
-        data);
-    transmit_ext(CAN_ID_VCU_WHEEL_SPEEDS, data);
-}
 
 void send_vehicle_speed() {
     uint8_t data[8];
