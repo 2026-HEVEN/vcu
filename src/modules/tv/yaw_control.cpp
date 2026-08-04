@@ -24,9 +24,10 @@ float tv_yaw_compute(float desired_yaw, float measured_yaw, float dt,
                      const TVParams &p, TVYawState &s) {
     float error = desired_yaw - measured_yaw;
 
-    // 미분 (dt<=0 방어). 미분 kick 완화가 필요하면 측정값 미분으로 교체.
-    float deriv = (dt > 0.0f) ? (error - s.prev_error) / dt : 0.0f;
-    s.prev_error = error;
+    // 미분: 측정값 미분 −d(meas)/dt 로 derivative kick 완화 (§5). dt<=0 방어.
+    //   setpoint(desired) 급변 시 error 미분은 스파이크를 만들지만 측정값 미분은 안 만든다.
+    float deriv = (dt > 0.0f) ? -(measured_yaw - s.prev_measured) / dt : 0.0f;
+    s.prev_measured = measured_yaw;
 
     // 적분 후보 (dt<=0이면 누적 없음)
     float integral_new = s.integral + ((dt > 0.0f) ? error * dt : 0.0f);

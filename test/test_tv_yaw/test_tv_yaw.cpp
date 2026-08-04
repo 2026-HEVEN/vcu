@@ -59,7 +59,7 @@ void test_anti_windup_stops_integrating(void) {
 // 상태 주입 → 결정론적 재현
 void test_state_injection_is_deterministic(void) {
     TVParams g = tuned(1.0f, 2.0f, 0.5f);
-    TVYawState a{}; a.integral = 3.0f; a.prev_error = 1.0f;
+    TVYawState a{}; a.integral = 3.0f; a.prev_measured = 1.0f;
     TVYawState b = a;
     float ma = tv_yaw_compute(5.0f, 2.0f, 0.1f, g, a);
     float mb = tv_yaw_compute(5.0f, 2.0f, 0.1f, g, b);
