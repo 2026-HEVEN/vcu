@@ -16,7 +16,10 @@ static float wheel_current_limit(float fz_wheel, float fy_per_wheel, const TVPar
     return fx_max * p.tire_radius_m / (p.kt * p.gear_ratio);
 }
 
-MaxTorque tv_traction_compute(WheelLoads fz, float ay, const TVParams &p) {
+// ── 단위 ───────────────────────────────────────────────────────
+//   ay는 IMU 드라이버에서 g 단위로 들어온다(Notion §2.2) — load.cpp와 동일 규약.
+MaxTorque tv_traction_compute(WheelLoads fz, float ay_g, const TVParams &p) {
+    float ay = ay_g * p.accel_to_mps2;
     float fy_axle = p.mass_kg * ay * p.weight_dist_r;
     float fy_per_wheel = fabsf(fy_axle) * 0.5f;
 

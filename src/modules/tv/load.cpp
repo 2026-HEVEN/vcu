@@ -12,8 +12,14 @@
 //   fz_L = Fz_static - dFz_lat/2 + dFz_lon/2
 //   fz_R = Fz_static + dFz_lat/2 + dFz_lon/2
 //   Fz는 음수(바퀴 들림) 불가 → 0으로 clamp(Notion §3.10 불변식).
-WheelLoads tv_load_compute(float ax, float ay, const TVParams &p) {
+//
+// ── 단위 ───────────────────────────────────────────────────────
+//   ax, ay는 IMU 드라이버에서 g 단위로 들어온다(Notion §2.2). 아래 공식은
+//   m/s^2를 전제로 하므로 진입 시 p.accel_to_mps2를 곱해 변환한다.
+WheelLoads tv_load_compute(float ax_g, float ay_g, const TVParams &p) {
     const float g = 9.81f;
+    float ax = ax_g * p.accel_to_mps2;
+    float ay = ay_g * p.accel_to_mps2;
 
     float fz_static = p.mass_kg * g * p.weight_dist_r * 0.5f;
     float dfz_lat = p.mass_kg * ay * p.cg_height_m / p.track_m;

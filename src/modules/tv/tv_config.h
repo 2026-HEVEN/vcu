@@ -15,11 +15,16 @@ struct TVParams {
     float track_m        = 1.20f;    // 윤거 (좌우 바퀴 간격)
     float cg_height_m    = 0.30f;    // 무게중심 높이 h
     float weight_dist_r  = 0.50f;    // 구동축(후) 정적 하중 배분 0..1
-    float tire_radius_m  = 0.2387f;  // 구름반경 실측값 (Notion §1 — 330mm 림 지름과 혼동 금지)
+    float tire_radius_m  = 0.2387f;  // 구름반경 (Notion §1 계산 예시값 — 아직 최종 실측 확정 아님, TODO 재확인)
 
     // --- 구동계 (Notion §1 TV 권한 계산 실측값) ---
     float kt              = 0.1266f; // 모터 토크상수 [N·m/A]
     float gear_ratio      = 3.72f;   // 감속비
+
+    // --- 센서 단위 변환 ---
+    // IMU 드라이버가 ax/ay를 g 단위로 준다(Notion §2.2). load/traction stage
+    // 진입 시 이 값을 곱해 m/s^2로 바꾼다. 드라이버 단위가 바뀌면 여기만 고치면 됨.
+    float accel_to_mps2  = 9.80665f;
 
     // --- 노면 / 타이어 ---
     float mu             = 1.0f;     // 노면 마찰계수 (지금은 상수; 추후 추정 확장 여지)
