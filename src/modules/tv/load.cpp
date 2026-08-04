@@ -21,11 +21,26 @@
 //   * ax, ay의 단위(m/s^2)와 부호를 IMU 모듈과 반드시 맞출 것.
 //   * Fz는 음수 불가(바퀴 들림) → 0으로 clamp.
 //
-// ── SAFE STUB ────────────────────────────────────────────────────
-//   좌우 동일한 정적 하중만 반환(하중 이동 무시) → 좌우 대칭 → 현재 거동 유지.
+// ── 구현 (정적 + 종/횡 하중이동, Fz 0 clamp) ─────────────────────
+//   부호 규약(§2.1): ay+(좌회전) → 하중 우측(바깥) 이동, ax+(가속) → 후축(구동) 하중 증가.
 WheelLoads tv_load_compute(float ax, float ay, const TVParams &p) {
-    (void)ax; (void)ay;
     const float g = 9.81f;
-    float fz_static = p.mass_kg * g * p.weight_dist_r * 0.5f;
-    return { fz_static, fz_static };
+    float m_axle = p.mass_kg * p.weight_dist_r;        // 구동축(후)이 지지하는 질량
+
+    // 정적 하중 (바퀴당)
+    float fz_static = m_axle * g * 0.5f;
+
+    // 종하중 이동: 가속 시 후축(구동축)으로 하중 증가. 바퀴당 절반.
+    float dFz_lon = (p.mass_kg * ax * p.cg_height_m / p.wheelbase_m) * 0.5f;
+
+    // 횡하중 이동: 구동축 단위 모멘트 평형. ay+ → 우측(바깥) 증가 / 좌측(안쪽) 감소.
+    float dFz_lat = m_axle * ay * p.cg_height_m / p.track_m;
+
+    float fz_L = fz_static + dFz_lon - dFz_lat;
+    float fz_R = fz_static + dFz_lon + dFz_lat;
+
+    // 바퀴 들림(음수) 방지 → 다음 stage의 sqrt(Fz)가 깨지지 않게 0 clamp
+    if (fz_L < 0.0f) fz_L = 0.0f;
+    if (fz_R < 0.0f) fz_R = 0.0f;
+    return { fz_L, fz_R };
 }
