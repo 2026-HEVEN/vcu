@@ -7,6 +7,10 @@ void test_clamps_below_min(void) { Percent p = -250.0f; TEST_ASSERT_EQUAL_FLOAT(
 void test_passes_in_range(void) { Percent p = 42.0f; TEST_ASSERT_EQUAL_FLOAT(42.0f, (float)p); }
 void test_assignment_clamps(void) { Unit u = 0.0f; u = 5.0f; TEST_ASSERT_EQUAL_FLOAT(1.0f, (float)u); }
 void test_default_is_zero(void) { Rpm r; TEST_ASSERT_EQUAL_FLOAT(0.0f, (float)r); }
+void test_amp_clamps_above_max(void) { Amp a = 400.0f; TEST_ASSERT_EQUAL_FLOAT(300.0f, (float)a); }
+void test_amp_clamps_below_min(void) { Amp a = -400.0f; TEST_ASSERT_EQUAL_FLOAT(-300.0f, (float)a); }
+void test_amp_allows_continuous_limit(void) { Amp a = 103.0f; TEST_ASSERT_EQUAL_FLOAT(103.0f, (float)a); }
+void test_amp_allows_peak_limit(void) { Amp a = 300.0f; TEST_ASSERT_EQUAL_FLOAT(300.0f, (float)a); }
 
 void test_state_defaults_safe(void) {
     VehicleState s;
@@ -22,6 +26,10 @@ int main(int, char **) {
     RUN_TEST(test_clamps_above_max);
     RUN_TEST(test_clamps_below_min);
     RUN_TEST(test_passes_in_range);
+    RUN_TEST(test_amp_clamps_above_max);
+    RUN_TEST(test_amp_clamps_below_min);
+    RUN_TEST(test_amp_allows_continuous_limit);
+    RUN_TEST(test_amp_allows_peak_limit);
     RUN_TEST(test_assignment_clamps);
     RUN_TEST(test_default_is_zero);
     RUN_TEST(test_state_defaults_safe);

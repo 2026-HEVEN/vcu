@@ -17,7 +17,12 @@ public:
     operator float() const { return v_; }
 };
 
-using Percent   = Clamped<-100, 100>;  // throttle, torque %
+using Percent   = Clamped<-100, 100>;  // true percentage values
 using Unit      = Clamped<-1, 1>;      // steering angle
 using Pct0to100 = Clamped<0, 100>;     // brake
 using Rpm       = Clamped<0, 6000>;    // wheel/motor speed
+
+// EZkontrol Target Phase Current is an ampere command, not a percentage.
+// The domain range follows the HPM05KW maximum phase-current capability;
+// the lower continuous operating limit is enforced by TVParams.
+using Amp       = Clamped<-300, 300>;

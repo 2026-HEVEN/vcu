@@ -7,21 +7,31 @@
 //
 // 5개 stage(reference/yaw/load/traction/allocation)가 모두 이 한 struct를 참조합니다.
 // 튜닝은 "여기 한 곳"에서만 — 각 .cpp에 상수를 흩뿌리지 마세요.
+//
+// Coordinate/unit contract (ISO 8855):
+//   steering/yaw/Mz > 0 : left turn / counter-clockwise
+//   ax_g > 0            : forward acceleration, rear load increases
+//   ay_g > 0            : leftward acceleration, right wheel load increases
+//   yaw rates           : deg/s, Mz: N*m, Fz: N, motor commands: phase A
+// Confirm every sign on the stationary/low-current rig before enabling gains.
 
 struct TVParams {
     // --- 차량 제원 (TODO: 실측값으로 교체) ---
-    float mass_kg        = 300.0f;   // 차량 총중량 (운전자 포함)
-    float wheelbase_m    = 1.55f;    // 축거 L
-    float track_m        = 1.20f;    // 윤거 (좌우 바퀴 간격)
-    float cg_height_m    = 0.30f;    // 무게중심 높이 h
-    float weight_dist_r  = 0.50f;    // 구동축(후) 정적 하중 배분 0..1
-    float tire_radius_m  = 0.2387f;  // 타이어 유효 반경
-    float lltd_r          = 0.50f;    // 전체 횡하중 이동 중 후축 부담 비율
+    float mass_kg        = 300.0f;   // TODO: corner-weight measurement
+    float wheelbase_m    = 1.55f;    // TODO: vehicle measurement
+    float track_m        = 1.20f;    // TODO: vehicle measurement
+    float cg_height_m    = 0.30f;    // TODO: dynamic identification
+    float weight_dist_r  = 0.50f;    // TODO: rear static weight fraction
+    float tire_radius_m  = 0.2387f;  // measured 1.50 m rolling circumference / 2pi
+    // Rear lateral-load-transfer distribution is not static weight distribution.
+    float lltd_r          = 0.50f;    // TODO: suspension/roll-stiffness identification
 
     // --- HPM05KW + 감속기: 모터 상전류[A] <-> 휠 종력 변환 ---
-    float gear_ratio             = 3.72f;
-    float motor_kt_nm_per_a      = 0.1266f;
-    float motor_current_max_a    = 100.0f; // Percent/CAN 계약의 ±100 A와 일치
+    float gear_ratio             = 3.72f;   // confirmed reduction ratio
+    float motor_kt_nm_per_a      = 0.1266f; // HPM05KW@48V dyno regression
+    // HPM05KW continuous torque 13 N·m / measured Kt 0.1266 ~= 103 A.
+    // Peak 300 A remains representable by Amp but is not enabled here.
+    float motor_current_max_a    = 103.0f;
 
     // --- 노면 / 타이어 ---
     float mu             = 1.0f;     // 노면 마찰계수 (지금은 상수; 추후 추정 확장 여지)
@@ -37,6 +47,7 @@ struct TVParams {
     float ki             = 0.0f;
     float kd             = 0.0f;
     float yaw_deadband_degps = 0.5f;
+    float integral_max       = 100.0f; // integral-state hard limit [deg]
     float yaw_moment_max = 100.0f;   // Mz 출력 상한 [N·m]
 };
 

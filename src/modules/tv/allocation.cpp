@@ -13,7 +13,9 @@ TVAllocOutput tv_alloc_compute(float total_current_a, float yaw_moment_nm,
         !std::isfinite(limit.max_L) || !std::isfinite(limit.max_R) ||
         std::fabs(total_current_a) < 1.0e-6f || p.track_m <= 0.0f ||
         p.tire_radius_m <= 0.0f || p.gear_ratio <= 0.0f ||
-        p.motor_kt_nm_per_a <= 0.0f) return {Percent(0.0f), Percent(0.0f)};
+        p.motor_kt_nm_per_a <= 0.0f || p.motor_current_max_a <= 0.0f) {
+        return {Amp(0.0f), Amp(0.0f)};
+    }
 
     const float max_l = clampf(limit.max_L, 0.0f, p.motor_current_max_a);
     const float max_r = clampf(limit.max_R, 0.0f, p.motor_current_max_a);
@@ -42,5 +44,5 @@ TVAllocOutput tv_alloc_compute(float total_current_a, float yaw_moment_nm,
 
     const float current_l = clampf(base - diff, lo_l, hi_l);
     const float current_r = clampf(base + diff, lo_r, hi_r);
-    return {Percent(current_l), Percent(current_r)};
+    return {Amp(current_l), Amp(current_r)};
 }

@@ -16,7 +16,14 @@ float tv_yaw_compute(float desired_yaw, float measured_yaw, float dt,
     }
 
     float error = desired_yaw - measured_yaw;
-    if (std::fabs(error) <= p.yaw_deadband_degps) error = 0.0f;
+    // Continuous deadband avoids a step at the noise threshold.
+    if (error > p.yaw_deadband_degps) {
+        error -= p.yaw_deadband_degps;
+    } else if (error < -p.yaw_deadband_degps) {
+        error += p.yaw_deadband_degps;
+    } else {
+        error = 0.0f;
+    }
 
     const float derivative = s.initialized
         ? -(measured_yaw - s.prev_measured_yaw) / dt
@@ -24,7 +31,9 @@ float tv_yaw_compute(float desired_yaw, float measured_yaw, float dt,
     s.prev_measured_yaw = measured_yaw;
     s.initialized = true;
 
-    const float candidate_integral = s.integral + error * dt;
+    const float integral_limit = p.integral_max > 0.0f ? p.integral_max : 0.0f;
+    const float candidate_integral = clampf(
+        s.integral + error * dt, -integral_limit, integral_limit);
     const float candidate = p.kp * error + p.ki * candidate_integral +
                             p.kd * derivative;
 
