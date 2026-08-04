@@ -66,7 +66,18 @@ static void steering_update() {
 }
 static void imu_update() {
     ImuOutput o = imu_compute(imu_driver::read());
-    state.yaw_rate = o.yaw_rate; state.accel_x = o.accel_x; state.accel_y = o.accel_y;
+    state.imu_valid = !imu_driver::stale();
+    if (state.imu_valid) {
+        state.yaw_rate = o.yaw_rate;
+        state.accel_x = o.accel_x;
+        state.accel_y = o.accel_y;
+    } else {
+        // Never propagate a disconnected sensor's last sample into vehicle
+        // speed estimation or torque vectoring.
+        state.yaw_rate = 0.0f;
+        state.accel_x = 0.0f;
+        state.accel_y = 0.0f;
+    }
 }
 static void wheel_speed_update() {
     for (int ch = 0; ch < WHEEL_COUNT; ++ch) {
@@ -76,7 +87,7 @@ static void wheel_speed_update() {
 static void vehicle_speed_update() {
     VehicleSpeedInput in{};
     for (int ch = 0; ch < WHEEL_COUNT; ++ch) in.wheel_rpm[ch] = state.wheel_speed[ch];
-    in.yaw_rate = state.yaw_rate;
+    in.yaw_rate = state.imu_valid ? state.yaw_rate : 0.0f;
     in.dt       = WHEEL_SPEED_DT_S;
     VehicleSpeedOutput o = vehicle_speed_compute(in, VSPEED_CAL, vspeed_state);
     state.vehicle_speed_mps   = o.speed_mps;
@@ -88,7 +99,7 @@ static void longitudinal_update() {
 }
 static void torque_vectoring_update() {
     TVOutput o = tv_compute({
-        state.total_torque, state.yaw_rate, state.steering_angle,
+        state.total_torque, state.imu_valid ? state.yaw_rate : 0.0f, state.steering_angle,
         // 전륜 신호를 못 믿으면 차속 0 → reference stage의 저속 컷오프에 걸려 TV가 꺼진다.
         state.vehicle_speed_valid ? state.vehicle_speed_mps : 0.0f,
         state.accel_x, state.accel_y, TV_DT_S }, tv_yaw_state);

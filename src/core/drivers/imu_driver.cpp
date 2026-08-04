@@ -4,10 +4,12 @@
 //  Application work happens only in src/modules/.
 // ============================================================
 #include "core/drivers/imu_driver.h"
+#include "modules/imu_xbus.h"
 #include <Arduino.h>
-#include <cstring>
 
-// [LOCKED] Xsens MTi-320 over UART2, Xbus / MTData2 binary protocol.
+// [LOCKED] Xsens MTi-320 over ESP32 UART2, Xbus / MTData2 binary protocol.
+// The MTi-320 electrical interface is RS-232: an external RS-232-to-3.3V-UART
+// transceiver is required between the sensor and GPIO16/17.
 //
 // Frame:  FA  BID  MID  LEN  payload...  CS
 //         sum(BID..CS) & 0xFF == 0
@@ -27,112 +29,40 @@ namespace {
     constexpr int       PIN_TX   = 17;
     HardwareSerial &mti = Serial2;
 
-    constexpr uint8_t  PREAMBLE    = 0xFA;
-    constexpr uint8_t  MID_MTDATA2 = 0x36;
-
-    constexpr uint16_t XDI_EULER_ANGLES = 0x2030;  // roll,pitch,yaw (deg)      - unused downstream
-    constexpr uint16_t XDI_ACCELERATION = 0x4020;  // x,y,z (m/s^2)
-    constexpr uint16_t XDI_RATE_OF_TURN = 0x8020;  // x,y,z (rad/s)
-
-    constexpr float MPS2_TO_G     = 1.0f / 9.80665f;
-    // Not RAD_TO_DEG: <Arduino.h> defines that as a macro and the expansion
-    // breaks this declaration.
-    constexpr float RADPS_TO_DEGPS = 57.29578f;
-
     // No valid MTData2 frame for this long -> treat the sample as stale
     // (10x the 10ms imu_update() period; tolerates a few dropped frames).
     constexpr uint32_t STALE_TIMEOUT_MS = 100;
 
-    enum class State { WAIT_PRE, WAIT_BID, WAIT_MID, WAIT_LEN, WAIT_PAYLOAD, WAIT_CS };
-
-    State    state_        = State::WAIT_PRE;
-    uint8_t  mid_          = 0;
-    uint8_t  len_          = 0;
-    uint8_t  idx_          = 0;
-    uint8_t  checksum_     = 0;
-    uint8_t  payload_[254];
-
-    ImuRaw   latest_{ 0.0f, 0.0f, 0.0f };
-    uint32_t last_valid_ms_ = 0;  // millis() of last checksum-valid MTData2 frame; 0 = none yet
-
-    float be_float(const uint8_t *p) {
-        uint8_t sw[4] = { p[3], p[2], p[1], p[0] };  // MTi floats are big-endian
-        float f;
-        memcpy(&f, sw, 4);
-        return f;
-    }
-
-    void handle_mtdata2_payload() {
-        uint8_t i = 0;
-        while (i + 3 <= len_) {
-            uint16_t xdi  = (payload_[i] << 8) | payload_[i + 1];
-            uint8_t  dlen = payload_[i + 2];
-            const uint8_t *data = &payload_[i + 3];
-            if (i + 3 + dlen > len_) break;  // malformed group, stop
-
-            if (xdi == XDI_ACCELERATION && dlen == 12) {
-                latest_.accel_x = be_float(data) * MPS2_TO_G;
-                latest_.accel_y = be_float(data + 4) * MPS2_TO_G;
-            } else if (xdi == XDI_RATE_OF_TURN && dlen == 12) {
-                latest_.yaw_rate = be_float(data + 8) * RADPS_TO_DEGPS;  // z axis
-            }
-            // XDI_EULER_ANGLES intentionally skipped: VehicleState has no
-            // attitude fields to put it in.
-
-            i += 3 + dlen;
-        }
-    }
-
-    void feed(uint8_t b) {
-        switch (state_) {
-            case State::WAIT_PRE:
-                if (b == PREAMBLE) state_ = State::WAIT_BID;
-                break;
-            case State::WAIT_BID:
-                checksum_ = b;
-                state_ = State::WAIT_MID;
-                break;
-            case State::WAIT_MID:
-                mid_ = b; checksum_ += b;
-                state_ = State::WAIT_LEN;
-                break;
-            case State::WAIT_LEN:
-                len_ = b; checksum_ += b; idx_ = 0;
-                if (len_ == 0)         state_ = State::WAIT_CS;
-                else if (len_ == 0xFF) state_ = State::WAIT_PRE;  // unsupported extended length; drop, resync
-                else                   state_ = State::WAIT_PAYLOAD;
-                break;
-            case State::WAIT_PAYLOAD:
-                payload_[idx_++] = b; checksum_ += b;
-                if (idx_ >= len_) state_ = State::WAIT_CS;
-                break;
-            case State::WAIT_CS:
-                checksum_ += b;
-                if (checksum_ == 0 && mid_ == MID_MTDATA2) {
-                    handle_mtdata2_payload();
-                    last_valid_ms_ = millis();
-                }
-                state_ = State::WAIT_PRE;
-                break;
-        }
-    }
+    ImuXbusParser parser;
+    uint32_t last_valid_ms_ = 0;
+    bool has_valid_sample_ = false;
 }
 
 namespace imu_driver {
 
 bool begin() {
+    parser.reset();
+    last_valid_ms_ = 0;
+    has_valid_sample_ = false;
     mti.begin(MTI_BAUD, SERIAL_8N1, PIN_RX, PIN_TX);
+    // HardwareSerial cannot prove that the remote sensor is present. Runtime
+    // health is established only after a complete MTData2 sample is parsed.
     return true;
 }
 
 ImuRaw read() {
-    while (mti.available()) feed((uint8_t)mti.read());
-    return latest_;  // most recent fully-validated MTData2 sample
+    while (mti.available()) {
+        if (parser.feed(static_cast<uint8_t>(mti.read()))) {
+            last_valid_ms_ = millis();
+            has_valid_sample_ = true;
+        }
+    }
+    return parser.sample();
 }
 
 bool stale() {
-    // last_valid_ms_ == 0 (no frame ever received) also reads as stale.
-    return millis() - last_valid_ms_ > STALE_TIMEOUT_MS;
+    return !has_valid_sample_ ||
+           static_cast<uint32_t>(millis() - last_valid_ms_) > STALE_TIMEOUT_MS;
 }
 
 } // namespace imu_driver

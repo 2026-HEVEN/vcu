@@ -12,9 +12,13 @@ SafetyState safety_step(SafetyState cur, const SafetyInputs &in) {
         case SafetyState::Idle:
             return in.handshaked ? SafetyState::Ready : SafetyState::Idle;
         case SafetyState::Ready:
-            return in.start_pressed ? SafetyState::Drive : SafetyState::Ready;
+            return in.start_pressed && in.imu_ok
+                       ? SafetyState::Drive
+                       : SafetyState::Ready;
         case SafetyState::Drive:
-            return in.deadman_ok ? SafetyState::Drive : SafetyState::Halt;
+            return in.deadman_ok && in.imu_ok
+                       ? SafetyState::Drive
+                       : SafetyState::Halt;
         case SafetyState::Halt:
         default:
             return SafetyState::Halt;   // Halt is latched; re-arm via power cycle / Start

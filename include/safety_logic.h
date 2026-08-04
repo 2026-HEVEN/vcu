@@ -13,6 +13,7 @@ struct SafetyInputs {
     bool handshaked;     // controller handshake done
     bool deadman_ok;     // control commands fresh
     bool start_pressed;  // Start button latched
+    bool imu_ok;         // fresh, complete MTi-320 measurement
 };
 
 SafetyState safety_step(SafetyState cur, const SafetyInputs &in);
