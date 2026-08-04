@@ -19,7 +19,8 @@ TVOutput tv_compute(const TVInput &in, TVYawState &s) {
     // 4) Fz + 마찰원 → 바퀴별 최대 종토크
     MaxTorque lim = tv_traction_compute(fz, in.ay, TV_PARAMS);
     // 5) 총토크 + Mz, 상한 제약 → 좌/우 명령
-    TVAllocOutput a = tv_alloc_compute(in.total_torque, mz, lim);
+    // NOTE(AI 수정): TV_PARAMS 인자는 allocation.h 시그니처 확장에 맞춰 추가됨.
+    TVAllocOutput a = tv_alloc_compute(in.total_torque, mz, lim, TV_PARAMS);
 
     return TVOutput{
         a.torque_L, a.torque_R,

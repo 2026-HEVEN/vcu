@@ -1,31 +1,43 @@
 // [FILL-IN] Stage 5/5 — 토크 배분   담당: ______
+// NOTE(AI 구현): 이 함수는 Claude와 함께 작성함 — 담당자 검토 후 이 줄 삭제.
+// allocation.h 시그니처에 const TVParams& 를 추가함(Mz→전류 환산에 track_m/
+// kt_nm_per_a/gear_ratio/tire_radius_m이 필요해서). 그에 맞춰 orchestrator
+// 호출부(torque_vectoring.cpp)도 함께 수정했다.
 #include "modules/tv/allocation.h"
 
+namespace {
+// ESP32(xtensa) 툴체인 libstdc++에 std::clamp(C++17)가 없어 직접 구현.
+float clampf(float v, float lo, float hi) {
+    return v < lo ? lo : (v > hi ? hi : v);
+}
+}
+
 // ── 이 함수가 하는 일 ─────────────────────────────────────────────
-//   총토크를 좌우로 나눈다. 단, yaw_moment(Mz)만큼 좌우 차등을 주고,
+//   총전류를 좌우로 나눈다. 단, yaw_moment(Mz)만큼 좌우 차등을 주고,
 //   각 바퀴의 트랙션 상한(limit)을 넘지 않게 제한한다. 파이프라인의 마지막 단.
 //
-// ── 구현 가이드 ──────────────────────────────────────────────────
-//   float base = total_torque * 0.5f;                 // 기본 좌우 균등
-//   float diff = yaw_moment / p.track_m / 2.0f;        // Mz → 좌우 토크차 (단위 규약 통일)
-//   float tL = base - diff;                            // 부호는 좌표계에 맞춰
-//   float tR = base + diff;
-//   // 트랙션 상한 적용:
-//   tL = clamp(tL, -limit.max_L, +limit.max_L);
-//   tR = clamp(tR, -limit.max_R, +limit.max_R);
-//   //  ★ 한쪽이 상한에 걸리면? 총토크 유지를 위해 반대쪽/전체를 스케일다운할지
-//   //    (yaw 우선 vs 총량 우선) 정책을 팀에서 정할 것.
-//   return { Percent(tL), Percent(tR) };               // Percent가 ±100 자동 clamp
+// ── Mz[N·m] → 좌우 전류차 diff[A] 유도 ────────────────────────────
+//   Mz = (track/2) * (Fx_R - Fx_L)              // 요 모멘트 정의
+//   Fx = torque / tire_radius = (I * kt * gear_ratio) / tire_radius
+//   위 둘을 합치면: diff = I_R - I_total/2 = Mz * tire_radius / (track * kt * gear_ratio)
 //
-// ── 주의 ─────────────────────────────────────────────────────────
-//   * diff의 부호 규약을 reference/yaw/load와 하나로 통일(좌회전 + 등).
-//   * track_m 등 제원이 필요하면 tv_config.h(TV_PARAMS)를 인자로 받도록 시그니처 확장
-//     가능(코어 담당과 상의). 지금은 stub이라 미사용.
-//
-// ── SAFE STUB ────────────────────────────────────────────────────
-//   50:50 (Mz·limit 무시) → 현재 차 거동과 완전히 동일.
-TVAllocOutput tv_alloc_compute(float total_torque, float yaw_moment, MaxTorque limit) {
-    (void)yaw_moment; (void)limit;
-    float half = total_torque * 0.5f;
-    return { Percent(half), Percent(half) };
+// ── 지금 정책: 좌우 "독립" clamp (임시) ────────────────────────────
+//   diff를 먼저 구하고 base(=total/2) ± diff를 각자의 상한으로 자른다.
+//   → 한쪽이 상한에 걸리면 그쪽만 깎이고 Mz가 원래 요구보다 덜 반영될 수 있다.
+//   "총전류 우선 vs yaw 우선"은 아직 팀 결정이 안 된 부분이라 일부러 단순하게
+//   시작했다. 실제로 어느 쪽이 안전한지는 다음 단계에서 같이 정하자.
+TVAllocOutput tv_alloc_compute(float total_torque, float yaw_moment, MaxTorque limit,
+                                const TVParams &p) {
+    float denom = p.track_m * p.kt_nm_per_a * p.gear_ratio;
+    float diff = (denom > 1e-4f) ? (yaw_moment * p.tire_radius_m) / denom : 0.0f;
+
+    float base = total_torque * 0.5f;
+
+    float raw_L = base - diff;
+    float raw_R = base + diff;
+
+    float clamped_L = clampf(raw_L, -limit.max_L, limit.max_L);
+    float clamped_R = clampf(raw_R, -limit.max_R, limit.max_R);
+
+    return { Percent(clamped_L), Percent(clamped_R) };
 }
