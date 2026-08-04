@@ -22,10 +22,32 @@
 //   * track_m 등 제원이 필요하면 tv_config.h(TV_PARAMS)를 인자로 받도록 시그니처 확장
 //     가능(코어 담당과 상의). 지금은 stub이라 미사용.
 //
-// ── SAFE STUB ────────────────────────────────────────────────────
-//   50:50 (Mz·limit 무시) → 현재 차 거동과 완전히 동일.
+// ── 구현 (yaw 우선 제약 배분, 닫힌 해 3단계 — 문서 §8.5) ─────────
+//   base(공통, 가감속) + diff(차등, 자세): T_L = base - diff, T_R = base + diff.
+//   yaw_moment 은 여기서 "원하는 좌우 토크차"로 해석한다. (Mz[N·m]→토크차 환산은
+//   TVParams(tire_radius·track)가 필요한데 이 시그니처엔 없음 → amp-type 브랜치가
+//   allocation에 TVParams 추가하며 확정. 부호·알고리즘은 여기서 완성.)
 TVAllocOutput tv_alloc_compute(float total_torque, float yaw_moment, MaxTorque limit) {
-    (void)yaw_moment; (void)limit;
-    float half = total_torque * 0.5f;
-    return { Percent(half), Percent(half) };
+    float base = total_torque * 0.5f;
+    float diff = yaw_moment  * 0.5f;   // T_R - T_L = yaw_moment. diff>0 → 우측↑ (§2.1 Mz+ 규약)
+    float limL = limit.max_L, limR = limit.max_R;
+
+    // 1) 차등을 실현 가능 범위로 먼저 제한 (yaw 우선). 순서 중요: 2단계 구간이 안 비게 보장.
+    float d_max = (limL < limR) ? limL : limR;
+    if (diff >  d_max) diff =  d_max;
+    if (diff < -d_max) diff = -d_max;
+
+    // 2) 남은 여유에서 공통분(base)이 가질 수 있는 구간 계산
+    float a = -limL + diff, b = -limR - diff;
+    float lo = (a > b) ? a : b;                 // max(-limL+diff, -limR-diff)
+    float c =  limL + diff, e =  limR - diff;
+    float hi = (c < e) ? c : e;                 // min( limL+diff,  limR-diff)
+
+    // 3) base clamp. 0을 포함하는 구간이라 총토크 부호(회생/구동)가 뒤집히지 않음.
+    if (base < lo) base = lo;
+    if (base > hi) base = hi;
+
+    float tL = base - diff;
+    float tR = base + diff;
+    return { Percent(tL), Percent(tR) };   // Percent가 ±100 자동 clamp (현재 A 스케일)
 }
