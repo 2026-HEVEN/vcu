@@ -6,8 +6,9 @@
 // app_wiring이 static으로 하나 들고 매 tick 넘겨준다 (imu.h의 ImuFilterState와 동일 패턴).
 // 테스트는 이 상태를 직접 주입해 결정론적으로 검증한다.
 struct TVYawState {
-    float integral   = 0.0f;
-    float prev_error = 0.0f;
+    float integral         = 0.0f;
+    float prev_measured_yaw= 0.0f; // derivative-on-measurement용
+    bool initialized       = false;
 };
 
 // desired_yaw  : 목표 yaw rate [deg/s]  (reference stage 출력)

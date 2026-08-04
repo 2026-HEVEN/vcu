@@ -26,6 +26,17 @@ void test_intermediates_are_populated(void) {
     TEST_ASSERT_TRUE(o.max_torque_L > 0.0f);            // 트랙션 상한 존재
 }
 
+void test_low_speed_explicitly_disables_yaw_feedback(void) {
+    TVYawState s{};
+    s.integral = 50.0f;
+    TVInput in = straight();
+    in.yaw_rate = 20.0f;
+    in.vehicle_speed = 0.5f;
+    TVOutput o = tv_compute(in, s);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, o.yaw_moment);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, s.integral);
+}
+
 void setUp(void) {}
 void tearDown(void) {}
 int main(int, char **) {
@@ -33,5 +44,6 @@ int main(int, char **) {
     RUN_TEST(test_straight_is_symmetric);
     RUN_TEST(test_split_sums_to_demand);
     RUN_TEST(test_intermediates_are_populated);
+    RUN_TEST(test_low_speed_explicitly_disables_yaw_feedback);
     return UNITY_END();
 }
