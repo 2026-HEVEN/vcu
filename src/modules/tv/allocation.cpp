@@ -22,14 +22,14 @@
 //   * track_m 등 제원이 필요하면 tv_config.h(TV_PARAMS)를 인자로 받도록 시그니처 확장
 //     가능(코어 담당과 상의). 지금은 stub이라 미사용.
 //
-// ── 구현 (yaw 우선 제약 배분, 닫힌 해 3단계 — 문서 §8.5) ─────────
-//   base(공통, 가감속) + diff(차등, 자세): T_L = base - diff, T_R = base + diff.
-//   yaw_moment 은 여기서 "원하는 좌우 토크차"로 해석한다. (Mz[N·m]→토크차 환산은
-//   TVParams(tire_radius·track)가 필요한데 이 시그니처엔 없음 → amp-type 브랜치가
-//   allocation에 TVParams 추가하며 확정. 부호·알고리즘은 여기서 완성.)
-TVAllocOutput tv_alloc_compute(float total_torque, float yaw_moment, MaxTorque limit) {
-    float base = total_torque * 0.5f;
-    float diff = yaw_moment  * 0.5f;   // T_R - T_L = yaw_moment. diff>0 → 우측↑ (§2.1 Mz+ 규약)
+// ── 구현 (yaw 우선 제약 배분, 닫힌 해 3단계 — 문서 §8) ──────────
+//   base(공통, 가감속) + diff(차등, 자세): I_L = base - ΔI, I_R = base + ΔI.
+//   Mz[N·m] → 편도 전류차 ΔI[A] 환산: ΔI = Mz·rw/(track·kt·gear) (§8). diff>0 → 우측↑.
+TVAllocOutput tv_alloc_compute(float total_current, float yaw_moment,
+                               MaxTorque limit, const TVParams &p) {
+    float base = total_current * 0.5f;                     // I_total/2 (공통 구동분)
+    float denom = p.track_m * p.kt_nm_per_a * p.gear_ratio;
+    float diff = (denom > 1e-9f) ? yaw_moment * p.tire_radius_m / denom : 0.0f;  // ΔI, diff>0→우측↑ (§2.1)
     float limL = limit.max_L, limR = limit.max_R;
 
     // 1) 차등을 실현 가능 범위로 먼저 제한 (yaw 우선). 순서 중요: 2단계 구간이 안 비게 보장.

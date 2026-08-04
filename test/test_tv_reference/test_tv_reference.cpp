@@ -41,6 +41,12 @@ void test_friction_limit_caps_high_speed(void) {
     TEST_ASSERT_TRUE(dy < TV_PARAMS.desired_yaw_max);   // 마찰 한계가 더 낮게 걸림
 }
 
+// 저속(임계 미만)에선 조향을 줘도 목표 yaw = 0 (저속 컷오프 §4)
+void test_below_min_speed_is_zero(void) {
+    float dy = tv_reference_compute(Unit(0.5f), TV_PARAMS.tv_min_speed_mps * 0.5f, TV_PARAMS);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, dy);
+}
+
 void setUp(void) {}
 void tearDown(void) {}
 int main(int, char **) {
@@ -50,5 +56,6 @@ int main(int, char **) {
     RUN_TEST(test_sign_matches_imu_convention);
     RUN_TEST(test_clamped_to_desired_yaw_max);
     RUN_TEST(test_friction_limit_caps_high_speed);
+    RUN_TEST(test_below_min_speed_is_zero);
     return UNITY_END();
 }

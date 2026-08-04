@@ -11,8 +11,8 @@ struct TVInput {
     float yaw_rate;        // IMU 실측 yaw rate [deg/s]
     float steering_angle;  // Unit(-1..+1)
     float vehicle_speed;   // 추정 차속 [m/s] (vehicle_speed 모듈 출력)
-    float ax;              // 종가속도 [m/s^2]
-    float ay;              // 횡가속도 [m/s^2]
+    float ax;              // 종가속도 [g] (드라이버 출력; TV 진입 시 m/s²로 환산 §2.2)
+    float ay;              // 횡가속도 [g]
     float dt;              // tick 간격 [s]
 };
 

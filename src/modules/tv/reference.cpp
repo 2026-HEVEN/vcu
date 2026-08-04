@@ -24,6 +24,9 @@ float tv_reference_compute(Unit steering, float speed_mps, const TVParams &p) {
     float delta = (float)steering * p.max_steer_rad;   // Unit(±1) → 실제 조향각 [rad]
     float V = speed_mps > 0.0f ? speed_mps : 0.0f;     // 음수 차속 방어
 
+    // 저속 컷오프(§4): 임계 미만이면 목표 0. 저속에서 IMU 노이즈·μg/V 발산 회피.
+    if (V < p.tv_min_speed_mps) return 0.0f;
+
     // 목표 yaw rate [rad/s] = V·δ / (L + K_us·V²)   (0 나눗셈 방어)
     float denom = p.wheelbase_m + p.understeer_grad * V * V;
     if (denom < 1e-6f) denom = 1e-6f;
