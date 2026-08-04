@@ -15,7 +15,11 @@ struct TVParams {
     float track_m        = 1.20f;    // 윤거 (좌우 바퀴 간격)
     float cg_height_m    = 0.30f;    // 무게중심 높이 h
     float weight_dist_r  = 0.50f;    // 구동축(후) 정적 하중 배분 0..1
-    float tire_radius_m  = 0.26f;    // 타이어 유효 반경
+    float tire_radius_m  = 0.2387f;  // 구름반경 실측값 (Notion §1 — 330mm 림 지름과 혼동 금지)
+
+    // --- 구동계 (Notion §1 TV 권한 계산 실측값) ---
+    float kt              = 0.1266f; // 모터 토크상수 [N·m/A]
+    float gear_ratio      = 3.72f;   // 감속비
 
     // --- 노면 / 타이어 ---
     float mu             = 1.0f;     // 노면 마찰계수 (지금은 상수; 추후 추정 확장 여지)
@@ -29,7 +33,9 @@ struct TVParams {
     float kp             = 0.0f;     // TODO: 튜닝
     float ki             = 0.0f;
     float kd             = 0.0f;
-    float yaw_moment_max = 200.0f;   // Mz 출력 상한 (N·m 규약)
+    // Mz 출력 상한 (N·m 규약). 타이어 그립 한계 요모멘트는 약 1140 N·m(Notion §1)지만,
+    // 검증 전 미튜닝 상태의 안전 상한으로 100 N·m만 허용한다(TV 권한 약 10%).
+    float yaw_moment_max = 100.0f;
 };
 
 // 팀 공용 인스턴스. 위 기본값을 바꾸면 전체 파이프라인에 반영됩니다.
