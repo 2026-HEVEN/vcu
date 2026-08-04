@@ -19,10 +19,30 @@
 //   * 게인 p.kp/ki/kd는 tv_config.h에서 튜닝. 여기 상수 박지 말 것.
 //   * 와인드업 방지는 선택이 아니라 필수 (긴 정상상태 오차에서 폭주함).
 //
-// ── SAFE STUB ────────────────────────────────────────────────────
-//   Mz = 0  → 좌우 차등 없음 → 현재 차 거동과 100% 동일.
+// ── 구현 (이산 PID + 조건부 적분 anti-windup) ────────────────────
 float tv_yaw_compute(float desired_yaw, float measured_yaw, float dt,
                      const TVParams &p, TVYawState &s) {
-    (void)desired_yaw; (void)measured_yaw; (void)dt; (void)p; (void)s;
-    return 0.0f;
+    float error = desired_yaw - measured_yaw;
+
+    // 미분 (dt<=0 방어). 미분 kick 완화가 필요하면 측정값 미분으로 교체.
+    float deriv = (dt > 0.0f) ? (error - s.prev_error) / dt : 0.0f;
+    s.prev_error = error;
+
+    // 적분 후보 (dt<=0이면 누적 없음)
+    float integral_new = s.integral + ((dt > 0.0f) ? error * dt : 0.0f);
+    float u = p.kp * error + p.ki * integral_new + p.kd * deriv;
+
+    // 출력 포화 (±yaw_moment_max)
+    const float lim = p.yaw_moment_max;
+    float u_sat = u;
+    if (u_sat >  lim) u_sat =  lim;
+    if (u_sat < -lim) u_sat = -lim;
+
+    // anti-windup(조건부 적분): 포화 중 & 오차가 포화를 더 미는 방향이면 적분을 얼린다(commit 안 함).
+    //   출력은 u_sat 그대로 유지 — 저장하는 적분값만 동결해서 폭주를 막는다.
+    bool saturated = (u != u_sat);
+    bool pushing   = (u_sat > 0.0f && error > 0.0f) || (u_sat < 0.0f && error < 0.0f);
+    s.integral = (saturated && pushing) ? s.integral : integral_new;
+
+    return u_sat;   // 부호: error>0(더 좌회전 필요) → Mz>0(좌회전 보조) → 우측 바퀴 토크↑
 }
