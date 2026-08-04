@@ -7,18 +7,18 @@
 // ============================================================
 
 struct TVInput {
-    float total_torque;    // longitudinal 출력 (부호 있는 총 토크)
+    float total_torque;    // longitudinal 출력: 부호 있는 총 상전류 [A]
     float yaw_rate;        // IMU 실측 yaw rate [deg/s]
     float steering_angle;  // Unit(-1..+1)
     float vehicle_speed;   // 추정 차속 [m/s] (vehicle_speed 모듈 출력)
-    float ax;              // 종가속도 [m/s^2]
-    float ay;              // 횡가속도 [m/s^2]
+    float ax;              // 종가속도 [g] (IMU driver 출력 계약)
+    float ay;              // 횡가속도 [g]
     float dt;              // tick 간격 [s]
 };
 
 struct TVOutput {
     // 컨트롤러로 나가는 실제 명령
-    Percent torque_L;
+    Percent torque_L;      // 레거시 타입명, 실제 CAN 명령은 상전류 [A]
     Percent torque_R;
     // 관측용 중간신호 (app_wiring이 VehicleState로 복사 → debug/Cluster에서 보임)
     float desired_yaw_rate;

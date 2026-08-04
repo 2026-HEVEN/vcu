@@ -15,7 +15,13 @@ struct TVParams {
     float track_m        = 1.20f;    // 윤거 (좌우 바퀴 간격)
     float cg_height_m    = 0.30f;    // 무게중심 높이 h
     float weight_dist_r  = 0.50f;    // 구동축(후) 정적 하중 배분 0..1
-    float tire_radius_m  = 0.26f;    // 타이어 유효 반경
+    float tire_radius_m  = 0.2387f;  // 타이어 유효 반경
+    float lltd_r          = 0.50f;    // 전체 횡하중 이동 중 후축 부담 비율
+
+    // --- HPM05KW + 감속기: 모터 상전류[A] <-> 휠 종력 변환 ---
+    float gear_ratio             = 3.72f;
+    float motor_kt_nm_per_a      = 0.1266f;
+    float motor_current_max_a    = 100.0f; // Percent/CAN 계약의 ±100 A와 일치
 
     // --- 노면 / 타이어 ---
     float mu             = 1.0f;     // 노면 마찰계수 (지금은 상수; 추후 추정 확장 여지)
@@ -24,12 +30,14 @@ struct TVParams {
     float max_steer_rad  = 0.52f;    // steering Unit(±1) → 실제 조향각(rad) 매핑 (≈30°)
     float understeer_grad= 0.0f;     // 언더스티어 구배 K_us (0=중립)
     float desired_yaw_max= 60.0f;    // 목표 yaw rate 상한 (deg/s)
+    float tv_min_speed_mps= 1.0f;    // 이 속도 미만에서는 TV 차등 금지
 
     // --- yaw 제어기 (yaw_control stage) PID ---
     float kp             = 0.0f;     // TODO: 튜닝
     float ki             = 0.0f;
     float kd             = 0.0f;
-    float yaw_moment_max = 200.0f;   // Mz 출력 상한 (N·m 규약)
+    float yaw_deadband_degps = 0.5f;
+    float yaw_moment_max = 100.0f;   // Mz 출력 상한 [N·m]
 };
 
 // 팀 공용 인스턴스. 위 기본값을 바꾸면 전체 파이프라인에 반영됩니다.
