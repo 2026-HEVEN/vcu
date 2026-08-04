@@ -18,6 +18,15 @@ float raw_to_current(uint16_t raw) { return (float)raw * 0.1f - 3200.0f; }
 int   raw_to_temp(uint8_t raw)     { return (int)raw - 40; }
 int   raw_to_speed(uint16_t raw)   { return (int)raw - 32000; }
 
+ClusterCommandRequest decode_cluster_command(const uint8_t data[8]) {
+    ClusterCommandRequest cmd;
+    cmd.tc_enabled = (data[1] & 0x01) != 0;
+    cmd.regen_auto_enabled = (data[1] & 0x02) != 0;
+    cmd.debug_enabled = (data[1] & 0x08) != 0;
+    cmd.paddock_request = (data[2] & 0x01) != 0;
+    return cmd;
+}
+
 uint16_t vehicle_speed_kph_to_raw(float kph) {
     if (kph < 0.0f) return 0;
     const float raw = kph * 10.0f;

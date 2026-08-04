@@ -10,7 +10,7 @@
 
 - **스택**: PlatformIO + Arduino-ESP32, ESP32 내장 TWAI(CAN)
 - **구조**: 잠긴 코어(CAN·안전·타이밍) + 팀원이 채우는 순수 모듈(`src/modules/`). 자세히는 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- **상태**: ESP32 빌드 그린, 호스트 테스트 64개 통과
+- **상태**: ESP32 빌드 그린, 호스트 테스트 66개 통과
 
 ## 빠른 시작
 
@@ -63,7 +63,7 @@ pio device monitor
 
 ## 아직 미구현 (의도된 TODO)
 
-- **CAN RX 파싱 + 핸드셰이크** — `src/core/can_bus.cpp` `poll_rx()` 스텁. 구현 전엔 안전 FSM이 `Idle`에 머물러 차량이 arm되지 않음.
+- **CAN RX 파싱 + 핸드셰이크** — `src/core/can_bus.cpp` `poll_rx()` 스텁. 구현 전엔 안전 FSM이 `Idle`에 머물러 차량이 arm되지 않음. Cluster 명령 `0x1801D0C0`은 `decode_cluster_command()` 기준으로 TC/Regen Auto/Debug/Paddock 요청을 해석하면 됨.
 - **`longitudinal` / `torque_vectoring`** — 안전한 기본 stub(선형 매핑·50:50). 토크벡터링팀이 실제 전략으로 채울 지점.
 
 > ⚠️ 안전: HV·토크가 걸리는 보드입니다. 첫 스탠드 테스트 전 잠긴 코어(특히 `safety`·`can_bus`)를 임의로 수정하지 마세요.
@@ -74,7 +74,7 @@ pio device monitor
 > **새 버전 올릴 때:** 아래에 항목 추가 → `git tag vX.Y` → `git push origin vX.Y`.
 
 ### v1.1 (2026-06-29) — CAN 프로토콜 갱신
-- Cluster→VCU 커맨드(`0x1801D0C0`) 레이아웃(`CAN_PROTOCOL.md` §5.7)을 **gear · drive_mode · paddock** 로 확정 (Cluster 재설계와 동기화)
+- Cluster→VCU 커맨드(`0x1801D0C0`) 레이아웃(`CAN_PROTOCOL.md` §5.7)을 **TC · Regen Auto · Debug · Paddock** 요청으로 갱신
 
 ### v1.0 (2026-06-29) — VCU 펌웨어 베이스
 - 잠긴 코어(TWAI + **50ms 라이프 태스크** + 안전 FSM + 협력형 스케줄러) + 순수 모듈 8개(throttle · brake · steering · imu · wheel_speed · vehicle_speed · longitudinal · torque_vectoring)

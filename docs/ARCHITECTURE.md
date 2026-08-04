@@ -253,7 +253,7 @@ ImuOutput imu_compute(const ImuRaw &raw, ImuFilterState &s);  // s에 이전값 
 이것이 **모듈이 `state.h`/`Arduino.h`를 include하면 안 되는 이유**이기도 하다 —
 그러면 native 빌드가 깨지므로, 순수성이 컴파일러로 강제된다.
 
-> 현재 기준 native 테스트 **38개 전부 통과**, ESP32 빌드 그린.
+> 현재 기준 native 테스트 **66개 전부 통과**, ESP32 빌드 그린.
 
 ---
 

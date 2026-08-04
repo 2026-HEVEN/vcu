@@ -8,7 +8,30 @@ void test_roundtrip(void)          { TEST_ASSERT_FLOAT_WITHIN(0.01f, 17.5f, raw_
 void test_ids(void) {
     TEST_ASSERT_EQUAL_HEX32(0x0C01EFD0, CAN_ID_TORQUE_L);
     TEST_ASSERT_EQUAL_HEX32(0x0C01F0D0, CAN_ID_TORQUE_R);
+    TEST_ASSERT_EQUAL_HEX32(0x1801D0C0, CAN_ID_CLUSTER_CMD);
     TEST_ASSERT_EQUAL_HEX32(0x1803C0D0, CAN_ID_VCU_VEHICLE_SPEED);
+}
+
+void test_decode_cluster_command_bits(void) {
+    uint8_t data[8] = {};
+    data[1] = 0x0B; // TC + Regen Auto + Debug, bit2 reserved clear
+    data[2] = 0x01; // Paddock
+
+    ClusterCommandRequest cmd = decode_cluster_command(data);
+    TEST_ASSERT_TRUE(cmd.tc_enabled);
+    TEST_ASSERT_TRUE(cmd.regen_auto_enabled);
+    TEST_ASSERT_TRUE(cmd.debug_enabled);
+    TEST_ASSERT_TRUE(cmd.paddock_request);
+}
+
+void test_decode_cluster_command_regen_off(void) {
+    uint8_t data[8] = {};
+    data[1] = 0x04; // reserved bit must not imply regen auto
+    ClusterCommandRequest cmd = decode_cluster_command(data);
+    TEST_ASSERT_FALSE(cmd.tc_enabled);
+    TEST_ASSERT_FALSE(cmd.regen_auto_enabled);
+    TEST_ASSERT_FALSE(cmd.debug_enabled);
+    TEST_ASSERT_FALSE(cmd.paddock_request);
 }
 
 void test_vehicle_speed_kph_to_raw_clamps_and_rounds(void) {
@@ -39,6 +62,8 @@ int main(int, char **) {
     RUN_TEST(test_negative_regen);
     RUN_TEST(test_roundtrip);
     RUN_TEST(test_ids);
+    RUN_TEST(test_decode_cluster_command_bits);
+    RUN_TEST(test_decode_cluster_command_regen_off);
     RUN_TEST(test_vehicle_speed_kph_to_raw_clamps_and_rounds);
     RUN_TEST(test_encode_vcu_vehicle_speed);
     return UNITY_END();
