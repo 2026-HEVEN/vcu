@@ -18,8 +18,12 @@ struct TVParams {
     float tire_radius_m  = 0.2387f;  // 구름반경 (Notion §1 계산 예시값 — 아직 최종 실측 확정 아님, TODO 재확인)
 
     // --- 구동계 (Notion §1 TV 권한 계산 실측값) ---
-    float kt              = 0.1266f; // 모터 토크상수 [N·m/A]
-    float gear_ratio      = 3.72f;   // 감속비
+    float kt_nm_per_a     = 0.1266f; // 모터 토크상수 [N·m/A] (다이노 실측, 상전류 RMS 기준)
+    float gear_ratio      = 3.72f;   // 감속비 (확정)
+    // 바퀴당 구동계 상전류 상한 [A]. 모터 연속정격 13 N·m ÷ kt 로 산출.
+    // traction stage가 그립 기반 상한과 이 값을 같이 clamp해야 한다 —
+    // 그립만 보면 모터가 못 버티는 전류를 상한으로 낼 수 있음(피크는 300A/10초).
+    float motor_current_max_a = 103.0f;
 
     // --- 센서 단위 변환 ---
     // IMU 드라이버가 ax/ay를 g 단위로 준다(Notion §2.2). load/traction stage
@@ -31,8 +35,11 @@ struct TVParams {
 
     // --- 레퍼런스 모델 (reference stage) ---
     float max_steer_rad  = 0.52f;    // steering Unit(±1) → 실제 조향각(rad) 매핑 (≈30°)
-    float understeer_grad= 0.0f;     // 언더스티어 구배 K_us (0=중립)
-    float desired_yaw_max= 60.0f;    // 목표 yaw rate 상한 (deg/s)
+    float understeer_grad= 0.0f;     // 언더스티어 구배 K_us÷g 형태, s^2/m 단위 (0=중립)
+    float desired_yaw_max= 60.0f;    // 목표 yaw rate 소프트웨어 안전상한 (deg/s). 마찰 한계(μg/v)와 함께 min 적용.
+    // TV 활성 최저 차속 [m/s]. 이 아래에서는 reference stage가 0을 반환해 TV를 끈다
+    // (저속에서 yaw rate 추정/기준 자체가 불안정하므로).
+    float tv_min_speed_mps = 1.0f;
 
     // --- yaw 제어기 (yaw_control stage) PID ---
     float kp             = 0.0f;     // TODO: 튜닝

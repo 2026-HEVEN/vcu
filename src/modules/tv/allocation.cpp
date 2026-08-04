@@ -3,7 +3,7 @@
 
 // ── 이 함수가 하는 일 / 구현 근거(Notion 문서 §8) ─────────────────
 //   Mz = (track/2)*(Fx_R - Fx_L) 를 전류 차등으로 역산:
-//     dI = Mz * tire_radius_m / (track_m * kt * gear_ratio)
+//     dI = Mz * tire_radius_m / (track_m * kt_nm_per_a * gear_ratio)
 //   I_R = total/2 + dI,  I_L = total/2 - dI
 //   (양의 Mz는 우측 전류를 좌측보다 크게 만든다 — Notion §8 불변식)
 //
@@ -15,7 +15,7 @@ TVAllocOutput tv_alloc_compute(float total_torque, float yaw_moment, MaxTorque l
     const TVParams &p = TV_PARAMS;
 
     float base = total_torque * 0.5f;
-    float dI = yaw_moment * p.tire_radius_m / (p.track_m * p.kt * p.gear_ratio);
+    float dI = yaw_moment * p.tire_radius_m / (p.track_m * p.kt_nm_per_a * p.gear_ratio);
 
     float tL = base - dI;
     float tR = base + dI;
