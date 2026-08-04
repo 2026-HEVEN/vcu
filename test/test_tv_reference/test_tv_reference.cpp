@@ -9,16 +9,46 @@ void test_no_steer_no_target(void) {
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, dy);
 }
 
-// TODO(담당자): 구현 후 아래 같은 테스트를 추가하세요.
-//  - 조향이 커지면 |목표 yaw|도 커진다 (단조성)
-//  - 같은 조향에서 차속↑이면 목표 yaw 변화 (모델 특성 확인)
-//  - 목표 yaw가 p.desired_yaw_max를 넘지 않는다 (clamp)
-//  - 좌/우 조향의 부호가 IMU yaw 규약과 일치한다
+// 조향이 커지면 |목표 yaw|도 커진다 (단조성). 클램프 안 걸리는 저속 구간에서.
+void test_monotonic_in_steering(void) {
+    float small = tv_reference_compute(Unit(0.2f), 5.0f, TV_PARAMS);
+    float big   = tv_reference_compute(Unit(0.4f), 5.0f, TV_PARAMS);
+    TEST_ASSERT_TRUE(big > small && small > 0.0f);   // 둘 다 상한 아래라 비례
+}
+
+// 좌/우 조향의 부호가 IMU yaw 규약과 일치 (좌+ / 우−, 크기 대칭)
+void test_sign_matches_imu_convention(void) {
+    float left  = tv_reference_compute(Unit(+0.5f), 10.0f, TV_PARAMS);
+    float right = tv_reference_compute(Unit(-0.5f), 10.0f, TV_PARAMS);
+    TEST_ASSERT_TRUE(left > 0.0f);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, -left, right);
+}
+
+// 어떤 입력에서도 desired_yaw_max를 넘지 않는다 (clamp)
+void test_clamped_to_desired_yaw_max(void) {
+    // 풀 조향 + 중속 → 클수록 상한에 걸림
+    float dy = tv_reference_compute(Unit(1.0f), 20.0f, TV_PARAMS);
+    TEST_ASSERT_TRUE(dy <= TV_PARAMS.desired_yaw_max + 0.01f);
+}
+
+// 고속에서 마찰 한계가 desired_yaw_max보다 먼저 걸린다 (r_max=μg/V)
+void test_friction_limit_caps_high_speed(void) {
+    // V가 크면 μg/V(deg/s)가 desired_yaw_max(60)보다 작아짐. μ=1,g=9.81 → 60deg/s=1.047rad/s
+    // r_fric=9.81/V*57.3 < 60  ⇔  V > 9.36 m/s
+    float dy = tv_reference_compute(Unit(1.0f), 30.0f, TV_PARAMS);
+    float r_fric = (TV_PARAMS.mu * 9.81f / 30.0f) * 57.29578f;   // ≈ 18.7 deg/s
+    TEST_ASSERT_TRUE(dy <= r_fric + 0.01f);
+    TEST_ASSERT_TRUE(dy < TV_PARAMS.desired_yaw_max);   // 마찰 한계가 더 낮게 걸림
+}
 
 void setUp(void) {}
 void tearDown(void) {}
 int main(int, char **) {
     UNITY_BEGIN();
     RUN_TEST(test_no_steer_no_target);
+    RUN_TEST(test_monotonic_in_steering);
+    RUN_TEST(test_sign_matches_imu_convention);
+    RUN_TEST(test_clamped_to_desired_yaw_max);
+    RUN_TEST(test_friction_limit_caps_high_speed);
     return UNITY_END();
 }
