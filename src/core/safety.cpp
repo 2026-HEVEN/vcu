@@ -6,6 +6,7 @@
 #include <Arduino.h>
 #include "safety_logic.h"
 #include "can_bus.h"
+#include "state.h"
 
 // [LOCKED] Reads hardware safety signals, steps the FSM, gates torque.
 namespace {
@@ -22,6 +23,7 @@ void safety_update() {
         can_bus::handshaked(),
         can_bus::deadman_ok(),
         digitalRead(PIN_START_BTN) == HIGH,
+        state.imu_valid,
     };
     g_state = safety_step(g_state, in);
 }

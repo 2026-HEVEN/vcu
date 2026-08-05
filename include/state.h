@@ -18,6 +18,7 @@ struct VehicleState {
     float     yaw_rate = 0.0f;    // deg/s
     float     accel_x  = 0.0f;
     float     accel_y  = 0.0f;
+    bool      imu_valid = false;    // complete Acceleration + RateOfTurn, fresh <=100 ms
     Rpm       wheel_speed[WHEEL_COUNT];   // FL, FR, RL, RR (개별 휠속)
     float     vehicle_speed_mps  = 0.0f;  // 전륜 기준 추정 차속 (vehicle_speed 모듈)
     bool      vehicle_speed_valid = false;// false = 전륜 신호 불신 → TV 비활성
