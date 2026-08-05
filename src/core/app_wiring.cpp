@@ -101,6 +101,7 @@ static void torque_vectoring_update() {
     can_bus::note_command();   // refresh deadman
 }
 static void can_rx_update()  { can_bus::poll_rx(); }
+static void vehicle_speed_can_tx_update() { can_bus::send_vehicle_speed(); }
 static void safety_task()    { safety_update(); }
 
 // --- task table: add a new module here (one line) ---
@@ -115,6 +116,7 @@ Task g_tasks[] = {
     { torque_vectoring_update, 10, 0 },
     { safety_task,             10, 0 },
     { can_rx_update,            5, 0 },   // 200 Hz drain
+    { vehicle_speed_can_tx_update, 50, 0 }, // 20 Hz VCU -> Cluster/TMA-1 single speed telemetry
     { debug_update,           200, 0 },   // 5 Hz serial debug
 };
 const int G_TASK_COUNT = sizeof(g_tasks) / sizeof(g_tasks[0]);

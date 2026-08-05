@@ -30,8 +30,26 @@ float    raw_to_torque(uint16_t raw);
 // MCU -> VCU feedback (Controller_L). Controller_R replaces SA 0xEF with 0xF0.
 constexpr uint32_t CAN_ID_FB1_L = 0x1801D0EF;   // Part I: voltage/current/speed
 constexpr uint32_t CAN_ID_FB2_L = 0x1802D0EF;   // Part II: temps/status/errors
-// Cluster -> VCU command (config/reset). HEVEN-defined.
+// Cluster -> VCU command (TC/Regen Auto/Debug/Paddock). HEVEN-defined.
 constexpr uint32_t CAN_ID_CLUSTER_CMD = 0x1801D0C0;
+// VCU -> Cluster/TMA-1 single vehicle speed. Byte 0..1 contains km/h x 10,
+// byte 2 is valid flag (1=valid, 0=invalid), byte 3..7 reserved zero.
+constexpr uint32_t CAN_ID_VCU_VEHICLE_SPEED = 0x1803C0D0;
+
+struct ClusterCommandRequest {
+    bool tc_enabled = false;
+    bool regen_auto_enabled = false;
+    bool debug_enabled = false;
+    bool paddock_request = false;
+};
+
+// Cluster -> VCU command frame (0x1801D0C0):
+// byte1 bit0=TC, bit1=Regen Auto, bit2=reserved, bit3=Debug,
+// byte2 bit0=Paddock. Debug is kept as a request bit even if VCU ignores it.
+ClusterCommandRequest decode_cluster_command(const uint8_t data[8]);
+// VCU -> Cluster/TMA-1 single vehicle speed frame (0x1803C0D0). HEVEN-defined.
+uint16_t vehicle_speed_kph_to_raw(float kph);
+void encode_vcu_vehicle_speed(float speed_kph, bool valid, uint8_t out[8]);
 
 // Signal decoders (EZkontrol scaling)
 float raw_to_voltage(uint16_t raw);   // 0.1 V/bit, offset 0

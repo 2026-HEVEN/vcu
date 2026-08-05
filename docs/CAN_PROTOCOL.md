@@ -73,7 +73,8 @@
 | MCU → VCU | 피드백 Part II (온도/상태/에러) | `0x1802D0EF` | `0x1802D0F0` | 50ms | 6 |
 | MCU → METER | 계기 메시지 I | `0x180117EF` | `0x180117F0` | 100ms | 6 |
 | MCU → METER | 계기 메시지 II | `0x180217EF` | `0x180217F0` | 100ms | 6 |
-| Cluster → VCU | 커맨드 (config/리셋) | `0x1801D0C0` (신규) | — | 100ms | 6 |
+| Cluster → VCU | 커맨드 (TC/Regen Auto/Debug/Paddock) | `0x1801D0C0` (신규) | — | ~20ms | 8 |
+| VCU → Cluster/TMA-1 | 단일 차량속도 | `0x1803C0D0` (신규) | — | 50ms | 6 |
 
 > ID에서 PS(목적지)·SA(송신)만 컨트롤러별로 바뀜. 위 표의 ID는 `PF<<16 | PS<<8 | SA`로 조립됨(+ Priority).
 
@@ -152,20 +153,44 @@
 | 6 | ERROR3 (5.4 Byte5와 동일) | — |
 | 7 | bit7-4: Life signal | 0~0xFF |
 
-### 5.7 Cluster → VCU : 커맨드  `0x1801D0C0` (신규 할당) · 100ms
+### 5.7 Cluster → VCU : 커맨드  `0x1801D0C0` (신규 할당) · ~20ms
 
-> 계기판 스위치(기어·주행모드·패독)를 VCU에 전달. **EZkontrol 표준이 아닌 HEVEN 자체 정의.**
+> 계기판 config 입력(TC·Regen Auto·Debug·Paddock)을 VCU에 전달. **EZkontrol 표준이 아닌 HEVEN 자체 정의.**
 > PF=0x01, PS=0xD0(VCU), SA=0xC0(Cluster). MCU→VCU(0x1801D0EF)와 SA로 구분되어 충돌 없음.
-> 인코딩 구현: Cluster 펌웨어 `encode_cluster_command()`. 아래 레이아웃과 일치.
+> VCU 디코딩 구현 기준: `decode_cluster_command()`.
 
 | 바이트 | 항목 | 의미 |
 |--------|------|------|
-| 0 | Gear | 0:N, 1:R, 2:D |
-| 1 | Drive mode | 0:Normal, 1:Efficiency, 2:Sport |
-| 2 | bit0 = Paddock | 1 = 속도제한 **요청** (실제 제한은 VCU가 클램프) |
+| 0 | Reserved | 0 |
+| 1 | Config flags | bit0: TC request, bit1: Regen Auto request, bit2: reserved(0), bit3: Debug request, bit7-4: reserved(0) |
+| 2 | Flags | bit0: Paddock request, bit7-1: reserved(0) |
 | 3~7 | 예약 | 0 |
 
-> ⚠️ 패독은 **요청 신호**일 뿐. VCU가 토크/속도를 상한 이하로 클램프하고 CAN 끊김 시 fail-safe(제한 유지)를 결정해야 함.
+`Regen Auto request` 해석:
+
+| 값 | 의미 |
+|----|------|
+| 0 | 회생제동 OFF 요청 |
+| 1 | VCU 자동 회생제동 허용 요청 |
+
+> ⚠️ TC/Paddock/Regen Auto/Debug는 모두 **요청 신호**다. 실제 토크 제한, 패독 진입 조건, 회생 전류/차단 여부는 VCU가 안전 조건을 기준으로 최종 판단해야 한다.
+> Debug bit는 유지하되, VCU가 현재처럼 Serial debug를 항상 출력한다면 무시해도 된다. 단, 파싱 시 bit 위치는 보존한다.
+
+### 5.8 VCU → Cluster/TMA-1 : 단일 차량속도 `0x1803C0D0` (HEVEN 정의) · 50ms
+
+> VCU의 `vehicle_speed_compute()`가 산출한 단일 차량속도를 Cluster LCD 표시와 TMA-1 Control Hub 그래프/로깅용으로 전달한다.
+> 개별 4채널 WSS RPM은 VCU 내부 계산용으로만 사용하며, CAN telemetry로 내보내지 않는다.
+
+| 바이트 | 항목 | 분해능/의미 |
+|--------|------|-------------|
+| 0~1 | Vehicle speed | uint16 little-endian, km/h x 10 |
+| 2 | Valid flag | 1=valid, 0=invalid |
+| 3~7 | Reserved | 0 |
+
+구현 위치:
+- 인코딩: `encode_vcu_vehicle_speed()`
+- 송신: `can_bus::send_vehicle_speed()`
+- 주기: `app_wiring.cpp` scheduler에서 50ms, 20Hz
 
 ---
 
@@ -212,15 +237,18 @@ EZkontrol 컨트롤러는 **METER 모드**일 때 피드백을 `0x1801xxEF`(VCU�
 ```cpp
 constexpr uint32_t CAN_ID_TORQUE_L = 0x0C01EFD0;  // VCU→MCU1
 constexpr uint32_t CAN_ID_TORQUE_R = 0x0C01F0D0;  // VCU→MCU2
+constexpr uint32_t CAN_ID_VCU_VEHICLE_SPEED = 0x1803C0D0; // VCU→Cluster/TMA-1 speed
 uint16_t torque_to_raw(float amps);   // (amps+3200)*10
 float    raw_to_torque(uint16_t raw);
+uint16_t vehicle_speed_kph_to_raw(float kph);
+void     encode_vcu_vehicle_speed(float speed_kph, bool valid, uint8_t out[8]);
 // SA 상수: SA_VCU=0xD0, SA_CLUSTER=0xC0, SA_CONTROLLER_L=0xEF, SA_CONTROLLER_R=0xF0, SA_ENERGY_METER=0x17
 ```
 
 아직 코드에 추가해야 할 것 (이 문서 기준):
 - 피드백 ID 상수: `CAN_ID_FB1_L=0x1801D0EF` 등
 - METER ID 상수 (경로 A 선택 시)
-- `CAN_ID_CLUSTER_CMD = 0x1801D0C0`
+- `CAN_ID_CLUSTER_CMD = 0x1801D0C0` 및 `decode_cluster_command()`
 - 디코딩 헬퍼: `raw_to_voltage` (×0.1), `raw_to_current` (×0.1, −3200), `raw_to_temp` (−40), 속도(경로별 1 또는 0.1 rpm/bit)
 
 ---

@@ -10,6 +10,7 @@ namespace can_bus {
     void begin();           // install + start TWAI at 250 kbps
     void start_life_task(); // spawn high-priority 50ms TX task (life + torque frames)
     void poll_rx();         // drain RX queue into `state` (call from a scheduler task)
+    void send_vehicle_speed(); // VCU -> Cluster/TMA-1 single speed telemetry
     bool handshaked();      // controller handshake completed
     bool deadman_ok();      // a fresh control command arrived within timeout
     void note_command();    // call when a new control command is produced
