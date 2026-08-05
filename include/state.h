@@ -27,8 +27,8 @@ struct VehicleState {
     Rpm       motor_speed_R;
     // control outputs
     float     total_torque = 0.0f;   // signed A demand
-    Percent   torque_L;
-    Percent   torque_R;
+    Amp       torque_L;           // 상전류 명령 [A] (백분율 아님)
+    Amp       torque_R;
     // TV intermediate signals (관측/튜닝용; app_wiring이 TVOutput에서 복사)
     float     desired_yaw_rate = 0.0f;   // reference stage
     float     yaw_moment       = 0.0f;   // yaw_control stage (Mz)
