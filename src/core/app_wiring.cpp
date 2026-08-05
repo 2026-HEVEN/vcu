@@ -49,7 +49,9 @@ namespace {
     VehicleSpeedState vspeed_state{};
     const SteerCalib STEER_CAL { 8192, 4096.0f, false };
     TVYawState       tv_yaw_state{};       // yaw 제어기 이력 (전역상태 아님, 여기서만 보유)
+    LongitudinalState longitudinal_state{};
     DriveMode        drive_mode = DriveMode::Normal;
+    constexpr float  LONGITUDINAL_DT_S = 0.01f; // longitudinal_update 주기 (10ms task)
     constexpr float  TV_DT_S = 0.01f;      // torque_vectoring_update 주기 (10ms task)
     constexpr float  WHEEL_SPEED_DT_S = 0.01f;  // wheel/vehicle speed task 주기 (10ms)
 }
@@ -83,8 +85,16 @@ static void vehicle_speed_update() {
     state.vehicle_speed_valid = o.valid;
 }
 static void longitudinal_update() {
+    const float motor_rpm_L = static_cast<float>(state.motor_speed_L);
+    const float motor_rpm_R = static_cast<float>(state.motor_speed_R);
+    // Use the faster motor so the high-speed battery-power limit remains
+    // conservative if left/right speeds disagree.
+    const float motor_rpm = motor_rpm_L > motor_rpm_R
+                                ? motor_rpm_L
+                                : motor_rpm_R;
     state.total_torque = longitudinal_compute({
-        state.throttle_pct, state.brake_pct, state.pack_soc, drive_mode });
+        state.throttle_pct, state.brake_pct, state.pack_soc, motor_rpm, drive_mode },
+        longitudinal_state, LONGITUDINAL_DT_S);
 }
 static void torque_vectoring_update() {
     TVOutput o = tv_compute({

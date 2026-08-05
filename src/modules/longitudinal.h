@@ -7,7 +7,14 @@ struct LongInput {
     float throttle_pct;   // 0..100
     float brake_pct;      // 0..100
     float pack_soc;       // 0..1
+    float motor_rpm;      // absolute motor speed, RPM
     DriveMode mode;
 };
 
-float longitudinal_compute(const LongInput &in);   // + = drive, - = regen
+struct LongitudinalState {
+    float regen_current_a = 0.0f;  // slew-limited regen magnitude
+};
+
+float longitudinal_compute(const LongInput &in,
+                           LongitudinalState &state,
+                           float dt_s);   // + = drive, - = regen
