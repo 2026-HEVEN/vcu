@@ -39,10 +39,34 @@ void put_u16le(uint8_t *data, uint16_t value) {
     data[0] = (uint8_t)(value & 0xFF);
     data[1] = (uint8_t)((value >> 8) & 0xFF);
 }
+
+void put_i16le(uint8_t *data, int16_t value) {
+    data[0] = (uint8_t)((uint16_t)value & 0xFF);
+    data[1] = (uint8_t)(((uint16_t)value >> 8) & 0xFF);
+}
 }
 
 void encode_vcu_vehicle_speed(float speed_kph, bool valid, uint8_t out[8]) {
     for (int i = 0; i < 8; ++i) out[i] = 0;
     put_u16le(out + 0, valid ? vehicle_speed_kph_to_raw(speed_kph) : 0);
     out[2] = valid ? 1 : 0;
+}
+
+int16_t telemetry_to_i16(float value, float scale) {
+    const float raw = value * scale;
+    if (raw > 32767.0f) return 32767;
+    if (raw < -32768.0f) return -32768;
+    return (int16_t)(raw >= 0.0f ? raw + 0.5f : raw - 0.5f);
+}
+
+void encode_vcu_steering(float steering_unit, uint8_t out[8]) {
+    for (int i = 0; i < 8; ++i) out[i] = 0;
+    put_i16le(out + 0, telemetry_to_i16(steering_unit, 1000.0f));
+}
+
+void encode_vcu_imu(float yaw_rate_dps, float accel_x_g, float accel_y_g, uint8_t out[8]) {
+    for (int i = 0; i < 8; ++i) out[i] = 0;
+    put_i16le(out + 0, telemetry_to_i16(yaw_rate_dps, 100.0f));
+    put_i16le(out + 2, telemetry_to_i16(accel_x_g, 100.0f));
+    put_i16le(out + 4, telemetry_to_i16(accel_y_g, 100.0f));
 }

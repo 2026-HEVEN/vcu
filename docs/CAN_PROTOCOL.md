@@ -75,6 +75,8 @@
 | MCU → METER | 계기 메시지 II | `0x180217EF` | `0x180217F0` | 100ms | 6 |
 | Cluster → VCU | 커맨드 (TC/Regen Auto/Debug/Paddock) | `0x1801D0C0` (신규) | — | ~20ms | 8 |
 | VCU → Cluster/TMA-1 | 단일 차량속도 | `0x1803C0D0` (신규) | — | 50ms | 6 |
+| VCU → Logger | 스티어링 | `0x1804C0D0` (신규) | — | 50ms | 6 |
+| VCU → Logger | IMU yaw/accel | `0x1805C0D0` (신규) | — | 50ms | 6 |
 
 > ID에서 PS(목적지)·SA(송신)만 컨트롤러별로 바뀜. 위 표의 ID는 `PF<<16 | PS<<8 | SA`로 조립됨(+ Priority).
 
@@ -190,6 +192,37 @@
 구현 위치:
 - 인코딩: `encode_vcu_vehicle_speed()`
 - 송신: `can_bus::send_vehicle_speed()`
+- 주기: `app_wiring.cpp` scheduler에서 50ms, 20Hz
+
+### 5.9 VCU → Logger : 스티어링 `0x1804C0D0` (HEVEN 정의) · 50ms
+
+> VCU가 읽은 steering encoder 값을 토크벡터링 튜닝/로그 분석용으로 전달한다.
+> 값은 `Unit(-1..+1)` 정규화 조향값이며, 실제 조향각(deg)이 아니다.
+
+| 바이트 | 항목 | 분해능/의미 |
+|--------|------|-------------|
+| 0~1 | Steering Unit | int16 little-endian, Unit x 1000 |
+| 2~7 | Reserved | 0 |
+
+구현 위치:
+- 인코딩: `encode_vcu_steering()`
+- 송신: `can_bus::send_sensor_telemetry()`
+- 주기: `app_wiring.cpp` scheduler에서 50ms, 20Hz
+
+### 5.10 VCU → Logger : IMU `0x1805C0D0` (HEVEN 정의) · 50ms
+
+> VCU가 읽은 IMU yaw rate와 평면 가속도를 토크벡터링 튜닝/로그 분석용으로 전달한다.
+
+| 바이트 | 항목 | 분해능/의미 |
+|--------|------|-------------|
+| 0~1 | Yaw rate | int16 little-endian, deg/s x 100 |
+| 2~3 | Accel X | int16 little-endian, g x 100 |
+| 4~5 | Accel Y | int16 little-endian, g x 100 |
+| 6~7 | Reserved | 0 |
+
+구현 위치:
+- 인코딩: `encode_vcu_imu()`
+- 송신: `can_bus::send_sensor_telemetry()`
 - 주기: `app_wiring.cpp` scheduler에서 50ms, 20Hz
 
 ---

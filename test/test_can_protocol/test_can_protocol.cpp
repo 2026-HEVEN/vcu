@@ -10,6 +10,8 @@ void test_ids(void) {
     TEST_ASSERT_EQUAL_HEX32(0x0C01F0D0, CAN_ID_TORQUE_R);
     TEST_ASSERT_EQUAL_HEX32(0x1801D0C0, CAN_ID_CLUSTER_CMD);
     TEST_ASSERT_EQUAL_HEX32(0x1803C0D0, CAN_ID_VCU_VEHICLE_SPEED);
+    TEST_ASSERT_EQUAL_HEX32(0x1804C0D0, CAN_ID_VCU_STEERING);
+    TEST_ASSERT_EQUAL_HEX32(0x1805C0D0, CAN_ID_VCU_IMU);
 }
 
 void test_decode_cluster_command_bits(void) {
@@ -53,6 +55,34 @@ void test_encode_vcu_vehicle_speed(void) {
     for (int i = 0; i < 8; ++i) TEST_ASSERT_EQUAL_UINT8(0, out[i]);
 }
 
+void test_telemetry_to_i16_clamps_and_rounds(void) {
+    TEST_ASSERT_EQUAL_INT16(1235, telemetry_to_i16(1.2345f, 1000.0f));
+    TEST_ASSERT_EQUAL_INT16(-1235, telemetry_to_i16(-1.2345f, 1000.0f));
+    TEST_ASSERT_EQUAL_INT16(32767, telemetry_to_i16(400.0f, 100.0f));
+    TEST_ASSERT_EQUAL_INT16(-32768, telemetry_to_i16(-400.0f, 100.0f));
+}
+
+void test_encode_vcu_steering(void) {
+    uint8_t out[8];
+    encode_vcu_steering(-0.375f, out);
+    TEST_ASSERT_EQUAL_UINT8(0x89, out[0]);
+    TEST_ASSERT_EQUAL_UINT8(0xFE, out[1]);
+    for (int i = 2; i < 8; ++i) TEST_ASSERT_EQUAL_UINT8(0, out[i]);
+}
+
+void test_encode_vcu_imu(void) {
+    uint8_t out[8];
+    encode_vcu_imu(12.34f, -0.56f, 1.25f, out);
+    TEST_ASSERT_EQUAL_UINT8(0xD2, out[0]); // 1234
+    TEST_ASSERT_EQUAL_UINT8(0x04, out[1]);
+    TEST_ASSERT_EQUAL_UINT8(0xC8, out[2]); // -56
+    TEST_ASSERT_EQUAL_UINT8(0xFF, out[3]);
+    TEST_ASSERT_EQUAL_UINT8(0x7D, out[4]); // 125
+    TEST_ASSERT_EQUAL_UINT8(0x00, out[5]);
+    TEST_ASSERT_EQUAL_UINT8(0, out[6]);
+    TEST_ASSERT_EQUAL_UINT8(0, out[7]);
+}
+
 void setUp(void) {}
 void tearDown(void) {}
 int main(int, char **) {
@@ -66,5 +96,8 @@ int main(int, char **) {
     RUN_TEST(test_decode_cluster_command_regen_off);
     RUN_TEST(test_vehicle_speed_kph_to_raw_clamps_and_rounds);
     RUN_TEST(test_encode_vcu_vehicle_speed);
+    RUN_TEST(test_telemetry_to_i16_clamps_and_rounds);
+    RUN_TEST(test_encode_vcu_steering);
+    RUN_TEST(test_encode_vcu_imu);
     return UNITY_END();
 }

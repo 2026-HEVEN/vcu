@@ -35,6 +35,10 @@ constexpr uint32_t CAN_ID_CLUSTER_CMD = 0x1801D0C0;
 // VCU -> Cluster/TMA-1 single vehicle speed. Byte 0..1 contains km/h x 10,
 // byte 2 is valid flag (1=valid, 0=invalid), byte 3..7 reserved zero.
 constexpr uint32_t CAN_ID_VCU_VEHICLE_SPEED = 0x1803C0D0;
+// VCU -> logger telemetry. Steering is normalized Unit x 1000.
+constexpr uint32_t CAN_ID_VCU_STEERING = 0x1804C0D0;
+// VCU -> logger telemetry. IMU yaw/accel channels are physical values x 100.
+constexpr uint32_t CAN_ID_VCU_IMU = 0x1805C0D0;
 
 struct ClusterCommandRequest {
     bool tc_enabled = false;
@@ -50,6 +54,9 @@ ClusterCommandRequest decode_cluster_command(const uint8_t data[8]);
 // VCU -> Cluster/TMA-1 single vehicle speed frame (0x1803C0D0). HEVEN-defined.
 uint16_t vehicle_speed_kph_to_raw(float kph);
 void encode_vcu_vehicle_speed(float speed_kph, bool valid, uint8_t out[8]);
+int16_t telemetry_to_i16(float value, float scale);
+void encode_vcu_steering(float steering_unit, uint8_t out[8]);
+void encode_vcu_imu(float yaw_rate_dps, float accel_x_g, float accel_y_g, uint8_t out[8]);
 
 // Signal decoders (EZkontrol scaling)
 float raw_to_voltage(uint16_t raw);   // 0.1 V/bit, offset 0

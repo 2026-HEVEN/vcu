@@ -88,6 +88,15 @@ void send_vehicle_speed() {
     transmit_ext(CAN_ID_VCU_VEHICLE_SPEED, data);
 }
 
+void send_sensor_telemetry() {
+    uint8_t data[8];
+    encode_vcu_steering((float)state.steering_angle, data);
+    transmit_ext(CAN_ID_VCU_STEERING, data);
+
+    encode_vcu_imu(state.yaw_rate, state.accel_x, state.accel_y, data);
+    transmit_ext(CAN_ID_VCU_IMU, data);
+}
+
 void poll_rx() {
     twai_message_t m;
     while (twai_receive(&m, 0) == ESP_OK) {
