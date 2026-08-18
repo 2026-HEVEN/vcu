@@ -9,7 +9,6 @@
 #include "core/debug_monitor.h"
 #include "core/drivers/wss_driver.h"
 #include "core/drivers/imu_driver.h"
-#include "core/drivers/steering_encoder_driver.h"
 #include "modules/throttle.h"
 #include "modules/brake.h"
 #include "modules/steering.h"
@@ -31,6 +30,8 @@ namespace {
     //     핀을 바꾸려면 그 문서를 먼저 고치고 여기를 맞출 것 (문서가 기준).
     constexpr int PIN_THROTTLE_ADC = 33;   // v4: 구 D35 → D33 이동
     constexpr int PIN_BRAKE_ADC    = 32;   // v4: 12V→3.3V 분압
+    // 스티어링: 최신 하네스에서 AS5600 I2C 엔코더 → 슬라이드 포텐(아날로그)으로 교체.
+    constexpr int PIN_STEER_ADC    = 25;   // D25 ADC2·J6 AUX. WiFi 미사용이라 ADC2 사용 OK.
     // WSS 4채널 — 전부 input-only 핀. LM393 오픈컬렉터라 외부 3.3V 풀업 필수.
     constexpr int PIN_WSS[WHEEL_COUNT] = {
         36,   // WHEEL_FL
@@ -47,7 +48,8 @@ namespace {
     };
     const VehicleSpeedCalib VSPEED_CAL{};   // 기본값: 구름반경 0.165m, 윤거 1.20m
     VehicleSpeedState vspeed_state{};
-    const SteerCalib STEER_CAL { 8192, 4096.0f, false };
+    // TODO(배선팀): 분압·스트로크 확정 후 직진/좌최대/우최대 ADC 실측으로 교체.
+    const SteerCalib STEER_CAL { 2048, 1500.0f, false };  // ADC(0..4095) placeholder
     TVYawState       tv_yaw_state{};       // yaw 제어기 이력 (전역상태 아님, 여기서만 보유)
     DriveMode        drive_mode = DriveMode::Normal;
     constexpr float  TV_DT_S = 0.01f;      // torque_vectoring_update 주기 (10ms task)
@@ -62,7 +64,7 @@ static void brake_update() {
     state.brake_pct = o.pct; state.brake_active = o.active;
 }
 static void steering_update() {
-    state.steering_angle = steering_compute(steering_encoder_driver::read(), STEER_CAL);
+    state.steering_angle = steering_compute({ (uint16_t)analogRead(PIN_STEER_ADC) }, STEER_CAL);
 }
 static void imu_update() {
     ImuOutput o = imu_compute(imu_driver::read());
@@ -123,6 +125,5 @@ void modules_init() {
     analogReadResolution(12);
     for (int ch = 0; ch < WHEEL_COUNT; ++ch) wss_driver::begin(ch, PIN_WSS[ch]);
     imu_driver::begin();
-    steering_encoder_driver::begin();
     can_bus::begin();
 }
