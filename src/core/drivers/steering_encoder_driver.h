@@ -5,10 +5,10 @@
 // ============================================================
 #pragma once
 #include "modules/steering.h"   // for SteerRaw
-// [LOCKED] Absolute magnetic encoder. Default: AS5600 over I2C.
-// Swap to AS5048A (SPI) by reimplementing read() — interface stays the same.
+// [LOCKED] Harness v5 slide potentiometer on GPIO25 (12-bit ADC).
+// Samples are scaled to the existing 14-bit SteerRaw interface.
 
 namespace steering_encoder_driver {
     bool     begin();
-    SteerRaw read();   // 14-bit absolute angle (0..16383)
+    SteerRaw read();   // 12-bit ADC scaled to 14-bit (0..16380)
 }

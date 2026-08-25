@@ -10,6 +10,7 @@
 #include "core/drivers/wss_driver.h"
 #include "core/drivers/imu_driver.h"
 #include "core/drivers/steering_encoder_driver.h"
+#include "core/board_pins.h"
 #include "modules/throttle.h"
 #include "modules/brake.h"
 #include "modules/steering.h"
@@ -26,17 +27,15 @@ VehicleState state;
 
 // --- per-module calibration (tune to the car) ---
 namespace {
-    // --- GPIO 배정: 노션 「하네스 설계 (v4)」 기준 ---
-    //     https://app.notion.com/p/399913e532e6810fa2ffeac09c02f0f9
-    //     핀을 바꾸려면 그 문서를 먼저 고치고 여기를 맞출 것 (문서가 기준).
-    constexpr int PIN_THROTTLE_ADC = 33;   // v4: 구 D35 → D33 이동
-    constexpr int PIN_BRAKE_ADC    = 32;   // v4: 12V→3.3V 분압
+    // --- GPIO 배정: 제작 완료된 PCB 및 노션 「하네스 설계 (v5)」 기준 ---
+    //     https://app.notion.com/p/3c776139220680ce960bd09ea44d84ed
+    //     실제 핀 번호는 core/board_pins.h 한 곳에서 관리한다.
     // WSS 4채널 — 전부 input-only 핀. LM393 오픈컬렉터라 외부 3.3V 풀업 필수.
     constexpr int PIN_WSS[WHEEL_COUNT] = {
-        36,   // WHEEL_FL
-        39,   // WHEEL_FR
-        34,   // WHEEL_RL
-        35,   // WHEEL_RR
+        board_pins::WSS_FL,
+        board_pins::WSS_FR,
+        board_pins::WSS_RL,
+        board_pins::WSS_RR,
     };
 
     // TODO(배선팀): 자석 수 N이 확정되면 교체. 노션 「WSS 자석 수 계산기」의
@@ -55,10 +54,12 @@ namespace {
 }
 
 static void throttle_update() {
-    state.throttle_pct = throttle_compute({ analogRead(PIN_THROTTLE_ADC) });
+    state.throttle_pct = throttle_compute({ analogRead(board_pins::THROTTLE_ADC) });
 }
 static void brake_update() {
-    BrakeOutput o = brake_compute({ analogRead(PIN_BRAKE_ADC) });
+    // PCB converts the 12 V brake signal to a 3.3 V digital input.
+    const int raw = digitalRead(board_pins::BRAKE_DIGITAL) == HIGH ? 4095 : 0;
+    BrakeOutput o = brake_compute({ raw });
     state.brake_pct = o.pct; state.brake_active = o.active;
 }
 static void steering_update() {
@@ -123,6 +124,9 @@ const int G_TASK_COUNT = sizeof(g_tasks) / sizeof(g_tasks[0]);
 
 void modules_init() {
     analogReadResolution(12);
+    pinMode(board_pins::THROTTLE_ADC, INPUT);
+    pinMode(board_pins::BRAKE_DIGITAL, INPUT);
+    pinMode(board_pins::GEAR_ADC, INPUT);  // Reserved for the gear-ladder module.
     for (int ch = 0; ch < WHEEL_COUNT; ++ch) wss_driver::begin(ch, PIN_WSS[ch]);
     imu_driver::begin();
     steering_encoder_driver::begin();

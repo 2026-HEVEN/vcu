@@ -9,6 +9,7 @@
 #include "can_protocol.h"
 #include "state.h"
 #include "safety_logic.h"   // torque_allowed()
+#include "core/board_pins.h"
 
 // [LOCKED] Bit layout of EZkontrol control frames follows
 // EZkontrol-CANBUS-MCU-to-VCU.pdf and the reference 2026/Can_driver/CAN_DRIVER.ino.
@@ -68,7 +69,10 @@ namespace {
 namespace can_bus {
 
 void begin() {
-    twai_general_config_t g = TWAI_GENERAL_CONFIG_DEFAULT(GPIO_NUM_5, GPIO_NUM_4, TWAI_MODE_NORMAL);
+    twai_general_config_t g = TWAI_GENERAL_CONFIG_DEFAULT(
+        static_cast<gpio_num_t>(board_pins::CAN_TX),
+        static_cast<gpio_num_t>(board_pins::CAN_RX),
+        TWAI_MODE_NORMAL);
     twai_timing_config_t  t = TWAI_TIMING_CONFIG_250KBITS();
     twai_filter_config_t  f = TWAI_FILTER_CONFIG_ACCEPT_ALL();
     twai_driver_install(&g, &t, &f);
