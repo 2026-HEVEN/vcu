@@ -36,6 +36,20 @@ TVAllocOutput tv_alloc_compute(float total_current_a, float yaw_moment_nm,
         diff = clampf(diff, -0.5f * max_r, 0.5f * max_l);
     }
 
+    // No-add safety: the motor-limit clamps above bound diff by how much
+    // current a single motor can carry, but say nothing about how much the
+    // *driver* actually asked for. Left unchecked, a small total_current_a
+    // (e.g. coasting) combined with a large yaw_moment_nm demand pulls base
+    // toward base_lo/base_hi below, which can be far from 0.5*total_current_a
+    // -- i.e. current_l+current_r ends up *manufacturing* current the driver
+    // never requested (reproduced: total=1A, mz=100Nm -> sum came out ~93A).
+    // Capping |diff| at half the driver's own total demand guarantees
+    // current_l+current_r never exceeds total_current_a in magnitude: TV
+    // authority degrades gracefully at low throttle instead of inventing
+    // propulsion/regen current from nothing.
+    const float total_half = 0.5f * std::fabs(total_current_a);
+    diff = clampf(diff, -total_half, total_half);
+
     const float base_lo = (lo_l + diff) > (lo_r - diff)
         ? (lo_l + diff) : (lo_r - diff);
     const float base_hi = (hi_l + diff) < (hi_r - diff)
