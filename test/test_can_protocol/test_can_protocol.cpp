@@ -9,6 +9,15 @@ void test_ids(void) {
     TEST_ASSERT_EQUAL_HEX32(0x0C01EFD0, CAN_ID_TORQUE_L);
     TEST_ASSERT_EQUAL_HEX32(0x0C01F0D0, CAN_ID_TORQUE_R);
 }
+void test_feedback_ids(void) {
+    TEST_ASSERT_EQUAL_HEX32(0x1801D0EF, CAN_ID_FB1_L);
+    TEST_ASSERT_EQUAL_HEX32(0x1802D0EF, CAN_ID_FB2_L);
+    TEST_ASSERT_EQUAL_HEX32(0x1801D0F0, CAN_ID_FB1_R);
+    TEST_ASSERT_EQUAL_HEX32(0x1802D0F0, CAN_ID_FB2_R);
+    // handshake request (FB1) and reply (TORQUE) IDs must be distinct per side
+    TEST_ASSERT_NOT_EQUAL(CAN_ID_FB1_L, CAN_ID_FB1_R);
+    TEST_ASSERT_NOT_EQUAL(CAN_ID_TORQUE_L, CAN_ID_TORQUE_R);
+}
 
 void setUp(void) {}
 void tearDown(void) {}
@@ -19,5 +28,6 @@ int main(int, char **) {
     RUN_TEST(test_negative_regen);
     RUN_TEST(test_roundtrip);
     RUN_TEST(test_ids);
+    RUN_TEST(test_feedback_ids);
     return UNITY_END();
 }

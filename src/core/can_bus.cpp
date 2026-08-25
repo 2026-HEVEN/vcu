@@ -5,6 +5,7 @@
 // ============================================================
 #include "core/can_bus.h"
 #include <Arduino.h>
+#include <cstring>
 #include "driver/twai.h"
 #include "can_protocol.h"
 #include "state.h"
@@ -76,12 +77,41 @@ void start_life_task() {
 }
 
 void poll_rx() {
+    // EZkontrol handshake (docs/CAN_PROTOCOL.md §6): each controller sends its
+    // feedback-Part-I ID (CAN_ID_FB1_L/R) with all 8 data bytes = 0x55 at
+    // startup (50ms/20Hz) until the VCU replies on the matching torque-command
+    // ID (CAN_ID_TORQUE_L/R) with all 8 data bytes = 0xAA. That reply frame
+    // carries no real torque; the life_task's normal 50ms torque frames take
+    // over once running. A 0x55-pattern frame is a handshake probe, not real
+    // feedback, so it must be intercepted before feedback parsing.
+    static const uint8_t HANDSHAKE_PATTERN[8] = {0x55,0x55,0x55,0x55,0x55,0x55,0x55,0x55};
+    static bool g_handshaked_L = false;
+    static bool g_handshaked_R = false;
+
     twai_message_t m;
     while (twai_receive(&m, 0) == ESP_OK) {
-        // TODO(core): parse controller feedback (speed/temp/err) + handshake
-        // (8x 0x55 request -> reply 0x55) into `state`. Set g_handshaked on success.
+        const bool from_l = (m.identifier == CAN_ID_FB1_L);
+        const bool from_r = (m.identifier == CAN_ID_FB1_R);
+
+        if ((from_l || from_r) && m.data_length_code == 8 &&
+            memcmp(m.data, HANDSHAKE_PATTERN, 8) == 0) {
+            twai_message_t reply = {};
+            reply.identifier = from_l ? CAN_ID_TORQUE_L : CAN_ID_TORQUE_R;
+            reply.extd = 1;
+            reply.data_length_code = 8;
+            memset(reply.data, 0xAA, 8);
+            twai_transmit(&reply, pdMS_TO_TICKS(5));
+            if (from_l) g_handshaked_L = true; else g_handshaked_R = true;
+            continue;
+        }
+
+        // TODO(core): parse real controller feedback (voltage/current/speed
+        // from CAN_ID_FB1_L/R, temp/status/err from CAN_ID_FB2_L/R) into
+        // `state`. Needs new VehicleState fields (state.h) before this can
+        // be filled in — out of scope for the handshake fix.
         (void)m;
     }
+    g_handshaked = g_handshaked_L && g_handshaked_R;
 }
 
 bool handshaked() { return g_handshaked; }
