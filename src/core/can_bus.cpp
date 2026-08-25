@@ -11,6 +11,7 @@
 #include "state.h"
 #include "safety_logic.h"   // torque_allowed()
 #include "core/board_pins.h"
+#include "modules/realcar_calibration.h"
 
 // [LOCKED] Bit layout of EZkontrol control frames follows
 // EZkontrol-CANBUS-MCU-to-VCU.pdf and the reference 2026/Can_driver/CAN_DRIVER.ino.
@@ -31,6 +32,8 @@ namespace {
     constexpr uint32_t DEADMAN_MS = 200;
     volatile uint32_t  g_last_cmd_ms = 0;
     volatile bool      g_handshaked  = false;
+    volatile bool      g_handshaked_L = false;
+    volatile bool      g_handshaked_R = false;
     uint8_t            g_life = 0;
 
     void send_torque(uint32_t id, float amps) {
@@ -50,8 +53,10 @@ namespace {
                          (millis() - g_last_cmd_ms < DEADMAN_MS);
             float l = allow ? (float)state.torque_L : 0.0f;
             float r = allow ? (float)state.torque_R : 0.0f;
-            send_torque(CAN_ID_TORQUE_L, l);
-            send_torque(CAN_ID_TORQUE_R, r);
+            // Do not place normal command frames on a controller ID before
+            // that controller has completed its 0x55/0xAA handshake.
+            if (g_handshaked_L) send_torque(CAN_ID_TORQUE_L, l);
+            if (g_handshaked_R) send_torque(CAN_ID_TORQUE_R, r);
             g_life++;
             vTaskDelayUntil(&next, period);   // exact 50ms cadence
         }
@@ -85,9 +90,6 @@ void poll_rx() {
     // over once running. A 0x55-pattern frame is a handshake probe, not real
     // feedback, so it must be intercepted before feedback parsing.
     static const uint8_t HANDSHAKE_PATTERN[8] = {0x55,0x55,0x55,0x55,0x55,0x55,0x55,0x55};
-    static bool g_handshaked_L = false;
-    static bool g_handshaked_R = false;
-
     twai_message_t m;
     while (twai_receive(&m, 0) == ESP_OK) {
         const bool from_l = (m.identifier == CAN_ID_FB1_L);
@@ -100,8 +102,15 @@ void poll_rx() {
             reply.extd = 1;
             reply.data_length_code = 8;
             memset(reply.data, 0xAA, 8);
-            twai_transmit(&reply, pdMS_TO_TICKS(5));
-            if (from_l) g_handshaked_L = true; else g_handshaked_R = true;
+            const esp_err_t tx_result = twai_transmit(&reply, pdMS_TO_TICKS(5));
+            if (tx_result == ESP_OK) {
+                if (from_l) g_handshaked_L = true; else g_handshaked_R = true;
+                Serial.printf("[CAN] controller %c handshake reply sent\n",
+                              from_l ? 'L' : 'R');
+            } else {
+                Serial.printf("[CAN] controller %c handshake reply failed: %d\n",
+                              from_l ? 'L' : 'R', static_cast<int>(tx_result));
+            }
             continue;
         }
 
@@ -120,7 +129,9 @@ void poll_rx() {
         // be filled in — out of scope for the handshake fix.
         (void)m;
     }
-    g_handshaked = g_handshaked_L && g_handshaked_R;
+    g_handshaked = realcar_cal::bringup::REQUIRE_BOTH_MOTOR_CONTROLLERS
+        ? (g_handshaked_L && g_handshaked_R)
+        : (g_handshaked_L || g_handshaked_R);
 }
 
 bool handshaked() { return g_handshaked; }

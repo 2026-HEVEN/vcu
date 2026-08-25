@@ -14,6 +14,13 @@
 
 namespace realcar_cal {
 
+// Temporary bring-up profile for the current single-motor vehicle.
+// Set these back to production requirements as hardware is installed.
+namespace bringup {
+constexpr bool BRAKE_SENSOR_INSTALLED = false;
+constexpr bool REQUIRE_BOTH_MOTOR_CONTROLLERS = false;
+}  // namespace bringup
+
 namespace confirmed {
 // PCNT는 상승엣지만 센다. 네 바퀴 모두 휠 1회전당 상승엣지 48개.
 constexpr float WSS_PULSES_PER_WHEEL_REV_FL = 48.0f;

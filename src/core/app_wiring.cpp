@@ -69,8 +69,12 @@ static void throttle_update() {
     state.throttle_pct = throttle_compute({ analogRead(board_pins::THROTTLE_ADC) });
 }
 static void brake_update() {
-    // PCB가 12 V 브레이크 신호를 3.3 V 디지털 입력으로 변환한다.
-    const int raw = digitalRead(board_pins::BRAKE_DIGITAL) == HIGH ? 4095 : 0;
+    // Current bring-up vehicle has no brake sensor. Never read the floating
+    // PCB input: a random HIGH would otherwise request regen. Re-enable this
+    // path in realcar_calibration.h after the sensor polarity is verified.
+    const int raw = realcar_cal::bringup::BRAKE_SENSOR_INSTALLED
+        ? (digitalRead(board_pins::BRAKE_DIGITAL) == HIGH ? 4095 : 0)
+        : 0;
     BrakeOutput o = brake_compute({ raw });
     state.brake_pct = o.pct; state.brake_active = o.active;
 }
@@ -139,7 +143,9 @@ const int G_TASK_COUNT = sizeof(g_tasks) / sizeof(g_tasks[0]);
 void modules_init() {
     analogReadResolution(12);
     pinMode(board_pins::THROTTLE_ADC, INPUT);
-    pinMode(board_pins::BRAKE_DIGITAL, INPUT);
+    if (realcar_cal::bringup::BRAKE_SENSOR_INSTALLED) {
+        pinMode(board_pins::BRAKE_DIGITAL, INPUT);
+    }
     pinMode(board_pins::GEAR_ADC, INPUT);  // gear-ladder 모듈용 예약 입력
     for (int ch = 0; ch < WHEEL_COUNT; ++ch) wss_driver::begin(ch, PIN_WSS[ch]);
     imu_driver::begin();
