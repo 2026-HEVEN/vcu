@@ -14,13 +14,20 @@ TVOutput tv_compute(const TVInput &in, TVYawState &s) {
     // 1) 조향 의도 → 목표 yaw rate
     float desired_yaw = tv_reference_compute(in.steering_angle, in.vehicle_speed, TV_PARAMS);
     // 2) yaw 오차 → 요 모멘트 Mz
+    const bool gains_enabled = std::fabs(TV_PARAMS.kp) > 1.0e-6f ||
+                               std::fabs(TV_PARAMS.ki) > 1.0e-6f ||
+                               std::fabs(TV_PARAMS.kd) > 1.0e-6f;
+    const bool speed_enabled = std::isfinite(in.vehicle_speed) &&
+        std::fabs(in.vehicle_speed) >= TV_PARAMS.tv_min_speed_mps;
+    const bool control_enabled = gains_enabled && speed_enabled;
+
     float mz = 0.0f;
-    if (std::isfinite(in.vehicle_speed) &&
-        std::fabs(in.vehicle_speed) >= TV_PARAMS.tv_min_speed_mps) {
+    if (control_enabled) {
         mz = tv_yaw_compute(desired_yaw, in.yaw_rate, in.dt, TV_PARAMS, s);
     } else {
-        // Explicit low-speed disable: reference=0 alone would still let the
-        // feedback controller react to measured yaw.
+        // kp=ki=kd=0 is the production-safe master OFF until a dedicated
+        // enable signal is added to the locked interface.  Low/invalid speed
+        // also disables feedback.  Always clear history at either boundary.
         s = TVYawState{};
     }
     // 3) 가속도 → 바퀴별 수직하중 Fz
@@ -28,7 +35,18 @@ TVOutput tv_compute(const TVInput &in, TVYawState &s) {
     // 4) Fz + 마찰원 → 모터별 최대 상전류
     MaxTorque lim = tv_traction_compute(fz, in.ay, TV_PARAMS);
     // 5) 총전류 + Mz, 상한 제약 → 좌/우 상전류 명령
-    TVAllocOutput a = tv_alloc_compute(in.total_torque, mz, lim, TV_PARAMS);
+    // Strict OFF must be behaviorally identical to the pre-TV 50:50 split.
+    // In particular, Stage 4 may still calculate diagnostic limits but must
+    // not silently reduce longitudinal demand while TV is disabled.
+    TVAllocOutput a{};
+    if (control_enabled) {
+        a = tv_alloc_compute(in.total_torque, mz, lim, TV_PARAMS);
+    } else {
+        const float safe_total = std::isfinite(in.total_torque)
+            ? in.total_torque : 0.0f;
+        const float half = 0.5f * safe_total;
+        a = {Amp(half), Amp(half)};
+    }
 
     return TVOutput{
         a.torque_L, a.torque_R,

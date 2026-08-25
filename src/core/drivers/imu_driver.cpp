@@ -4,6 +4,7 @@
 //  Application work happens only in src/modules/.
 // ============================================================
 #include "core/drivers/imu_driver.h"
+#include "core/board_pins.h"
 #include <Arduino.h>
 #include <cstring>
 
@@ -23,8 +24,6 @@
 // next 0xFA (see feed()/WAIT_LEN).
 namespace {
     constexpr uint32_t MTI_BAUD  = 115200;
-    constexpr int       PIN_RX   = 16;
-    constexpr int       PIN_TX   = 17;
     HardwareSerial &mti = Serial2;
 
     constexpr uint8_t  PREAMBLE    = 0xFA;
@@ -121,7 +120,7 @@ namespace {
 namespace imu_driver {
 
 bool begin() {
-    mti.begin(MTI_BAUD, SERIAL_8N1, PIN_RX, PIN_TX);
+    mti.begin(MTI_BAUD, SERIAL_8N1, board_pins::IMU_RX, board_pins::IMU_TX);
     return true;
 }
 

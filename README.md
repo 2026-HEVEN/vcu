@@ -10,7 +10,7 @@
 
 - **스택**: PlatformIO + Arduino-ESP32, ESP32 내장 TWAI(CAN)
 - **구조**: 잠긴 코어(CAN·안전·타이밍) + 팀원이 채우는 순수 모듈(`src/modules/`). 자세히는 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- **상태**: ESP32 빌드 그린, 호스트 테스트 38개 통과
+- **상태**: ESP32 빌드 그린, 호스트 테스트 105개 통과
 
 ## 빠른 시작
 
@@ -58,11 +58,15 @@ pio device monitor
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | 전체 설계 해설 (2층 구조·안전·테스트) |
 | [`docs/ADDING_A_MODULE.md`](docs/ADDING_A_MODULE.md) | 모듈 추가/작성 절차 |
 | [`docs/CAN_PROTOCOL.md`](docs/CAN_PROTOCOL.md) | CAN 메시지 명세 (VCU/Cluster 공유 단일 출처) |
+| [`docs/TORQUE_VECTORING.md`](docs/TORQUE_VECTORING.md) | 5-stage 토크벡터링 설계와 안전 동작 |
+| [`docs/REALCAR_CALIBRATION.md`](docs/REALCAR_CALIBRATION.md) | 실차 확정값·초기값·측정/튜닝 절차 |
+| [`src/core/board_pins.h`](src/core/board_pins.h) | 하네스 v5 GPIO 단일 기준 (`GPIO-fixed` 동기화) |
 
 ## 아직 미구현 (의도된 TODO)
 
 - **CAN RX 파싱 + 핸드셰이크** — `src/core/can_bus.cpp` `poll_rx()` 스텁. 구현 전엔 안전 FSM이 `Idle`에 머물러 차량이 arm되지 않음.
-- **`longitudinal` / `torque_vectoring`** — 안전한 기본 stub(선형 매핑·50:50). 토크벡터링팀이 실제 전략으로 채울 지점.
+- **토크벡터링 실차 활성화** — 5-stage 로직은 구현되어 있지만 기본 PID는
+  `0/0/0`이라 strict 50:50 OFF다. 실차 캘리브레이션과 단계별 검증 후 활성화한다.
 
 > ⚠️ 안전: HV·토크가 걸리는 보드입니다. 첫 스탠드 테스트 전 잠긴 코어(특히 `safety`·`can_bus`)를 임의로 수정하지 마세요.
 

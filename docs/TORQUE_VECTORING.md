@@ -3,6 +3,11 @@
 현재 구현은 후륜 좌·우 모터의 목표 상전류를 배분하는 5단계 파이프라인이다.
 `src/modules/torque_vectoring.cpp`가 각 단계를 순서대로 호출한다.
 
+실차에서 바꿀 숫자와 측정 순서는
+[`REALCAR_CALIBRATION.md`](REALCAR_CALIBRATION.md)에 모아 두었다. 차량·센서
+제원은 `src/modules/realcar_calibration.h`, TV 정책과 PID는
+`src/modules/tv/tv_config.h`에서만 수정한다.
+
 ```text
 steering + vehicle speed -> desired yaw rate
 desired/measured yaw     -> yaw moment Mz
@@ -55,7 +60,12 @@ I_right = base_A + diff_A
 - 기본 `kp/ki/kd`는 모두 0이다. 실차 식별과 단계별 시험 전에는 TV가 차등
   전류를 만들지 않는다.
 
-## 아직 실측해야 하는 값
+## 확정값과 아직 실측해야 하는 값
+
+- WSS는 네 바퀴 모두 **상승엣지 48 pulse/rev**로 확정했다.
+- `Kt=0.1266 N·m/A`, 실차 감속비 `3.72`, 100 Hz 제어주기를 사용한다.
+- 차속 계산에서 센서의 림 안쪽 장착반경을 사용하지 않는다. 센서 펄스는
+  바퀴 RPM을 만들고, RPM은 타이어 유효 구름반경으로 차속에 환산한다.
 
 - 운전자 포함 질량, 축거, 윤거, CG 높이
 - 정적 후축 하중 배분과 후축 LLTD
@@ -64,9 +74,10 @@ I_right = base_A + diff_A
 - 노면별 `mu`와 좌우 차등 전류의 허용 변화율
 - PID 게인과 센서 stale 판단 시간
 
-`Kt=0.1266 N·m/A`, 감속비 `3.72`, 구름반경 `0.2387 m`는 현재 확인된
-값을 사용한다. 차량 파라미터는 `src/modules/tv/tv_config.h` 한 곳에서만
-변경한다.
+구름반경 `0.2387 m`는 둘레 1.50 m에서 계산한 실차 시험 시작값이다.
+운전자 탑승·실사용 공기압에서 누적 WSS 펄스와 실거리로 다시 보정한다.
+CarMaker의 `0.22606 m`는 BOM197 시뮬레이션 프로파일 값이므로 실차 코드에
+자동 복사하지 않는다.
 
 ## 검증 명령
 

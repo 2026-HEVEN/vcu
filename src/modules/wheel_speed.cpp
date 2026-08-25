@@ -8,7 +8,7 @@
 // ═════════════════════════════════════════════════════════════════════════
 
 // pulses_per_rev (WssCalib) = 바퀴 1회전당 센서 펄스 수 (하드웨어값).
-//   자석/톱니 개수로 결정 — app_wiring 의 WSS_CAL 에서 주입 (현재 45).
+//   자석/톱니 개수로 결정 — app_wiring 의 WSS_CAL 에서 주입 (현재 48).
 //   ★실차 보정: 바퀴 1회전 돌려 나온 펄스 수를 세서 이 값을 맞출 것.
 Rpm wheel_speed_compute(const WssReading &r, const WssCalib &c) {
     // 0으로 나누기/무효 입력 방지 (첫 읽기·정지 상태)
@@ -21,4 +21,23 @@ Rpm wheel_speed_compute(const WssReading &r, const WssCalib &c) {
 
     // Rpm 타입이 0..6000 으로 클램프 (글리치성 과대값 2차 방어)
     return Rpm(rpm);
+}
+
+Rpm wheel_speed_compute_filtered(const WssReading &r, const WssCalib &c,
+                                 WheelSpeedFilterState &state) {
+    if (r.dt_ms == 0 || c.pulses_per_rev <= 0.0f) {
+        return Rpm(state.initialized ? state.rpm : 0.0f);
+    }
+
+    const float raw_rpm = (float)wheel_speed_compute(r, c);
+    const float dt_s = (float)r.dt_ms * 0.001f;
+    if (!state.initialized || c.filter_time_constant_s <= 0.0f) {
+        state.rpm = raw_rpm;
+        state.initialized = true;
+        return Rpm(state.rpm);
+    }
+
+    const float alpha = dt_s / (c.filter_time_constant_s + dt_s);
+    state.rpm += alpha * (raw_rpm - state.rpm);
+    return Rpm(state.rpm);
 }

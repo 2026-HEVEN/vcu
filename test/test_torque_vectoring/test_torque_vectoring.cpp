@@ -37,6 +37,19 @@ void test_low_speed_explicitly_disables_yaw_feedback(void) {
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, s.integral);
 }
 
+void test_zero_gains_are_strict_5050_off_even_beyond_friction_model(void) {
+    TVYawState s{};
+    TVInput in = straight();
+    in.vehicle_speed = 15.0f;
+    in.steering_angle = 0.8f;
+    in.yaw_rate = -30.0f;
+    in.ay = 10.0f; // deliberately drives the Stage-4 diagnostic limit to zero
+    TVOutput o = tv_compute(in, s);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 10.0f, (float)o.torque_L);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 10.0f, (float)o.torque_R);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, o.yaw_moment);
+}
+
 void setUp(void) {}
 void tearDown(void) {}
 int main(int, char **) {
@@ -45,5 +58,6 @@ int main(int, char **) {
     RUN_TEST(test_split_sums_to_demand);
     RUN_TEST(test_intermediates_are_populated);
     RUN_TEST(test_low_speed_explicitly_disables_yaw_feedback);
+    RUN_TEST(test_zero_gains_are_strict_5050_off_even_beyond_friction_model);
     return UNITY_END();
 }

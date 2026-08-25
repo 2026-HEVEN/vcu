@@ -1,0 +1,52 @@
+#include <unity.h>
+#include "modules/realcar_calibration.h"
+#include "modules/vehicle_speed.h"
+#include "modules/tv/tv_config.h"
+
+void test_all_four_wss_channels_use_confirmed_48_ppr() {
+    TEST_ASSERT_EQUAL_FLOAT(48.0f, realcar_cal::confirmed::WSS_PULSES_PER_WHEEL_REV_FL);
+    TEST_ASSERT_EQUAL_FLOAT(48.0f, realcar_cal::confirmed::WSS_PULSES_PER_WHEEL_REV_FR);
+    TEST_ASSERT_EQUAL_FLOAT(48.0f, realcar_cal::confirmed::WSS_PULSES_PER_WHEEL_REV_RL);
+    TEST_ASSERT_EQUAL_FLOAT(48.0f, realcar_cal::confirmed::WSS_PULSES_PER_WHEEL_REV_RR);
+}
+
+void test_vehicle_speed_defaults_share_realcar_profile() {
+    const VehicleSpeedCalib c{};
+    TEST_ASSERT_FLOAT_WITHIN(0.0001f,
+        realcar_cal::provisional::WHEEL_SPEED_ROLLING_RADIUS_M, c.tire_radius_m);
+    TEST_ASSERT_FLOAT_WITHIN(0.0001f,
+        realcar_cal::provisional::FRONT_TRACK_M, c.track_m);
+}
+
+void test_tv_defaults_share_realcar_profile() {
+    TEST_ASSERT_FLOAT_WITHIN(0.0001f,
+        realcar_cal::provisional::VEHICLE_MASS_WITH_DRIVER_KG, TV_PARAMS.mass_kg);
+    TEST_ASSERT_FLOAT_WITHIN(0.0001f,
+        realcar_cal::provisional::WHEELBASE_M, TV_PARAMS.wheelbase_m);
+    TEST_ASSERT_FLOAT_WITHIN(0.0001f,
+        realcar_cal::provisional::REAR_TRACK_M, TV_PARAMS.track_m);
+    TEST_ASSERT_FLOAT_WITHIN(0.0001f,
+        realcar_cal::provisional::TV_FORCE_RADIUS_M, TV_PARAMS.tire_radius_m);
+    TEST_ASSERT_FLOAT_WITHIN(0.0001f,
+        realcar_cal::confirmed::GEAR_RATIO, TV_PARAMS.gear_ratio);
+    TEST_ASSERT_FLOAT_WITHIN(0.0001f,
+        realcar_cal::confirmed::MOTOR_KT_NM_PER_A, TV_PARAMS.motor_kt_nm_per_a);
+}
+
+void test_production_default_keeps_tv_master_off() {
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, TV_PARAMS.kp);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, TV_PARAMS.ki);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, TV_PARAMS.kd);
+}
+
+void setUp(void) {}
+void tearDown(void) {}
+
+int main(int, char **) {
+    UNITY_BEGIN();
+    RUN_TEST(test_all_four_wss_channels_use_confirmed_48_ppr);
+    RUN_TEST(test_vehicle_speed_defaults_share_realcar_profile);
+    RUN_TEST(test_tv_defaults_share_realcar_profile);
+    RUN_TEST(test_production_default_keeps_tv_master_off);
+    return UNITY_END();
+}
