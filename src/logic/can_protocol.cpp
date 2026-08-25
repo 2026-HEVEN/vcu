@@ -17,3 +17,12 @@ float raw_to_voltage(uint16_t raw) { return (float)raw * 0.1f; }
 float raw_to_current(uint16_t raw) { return (float)raw * 0.1f - 3200.0f; }
 int   raw_to_temp(uint8_t raw)     { return (int)raw - 40; }
 int   raw_to_speed(uint16_t raw)   { return (int)raw - 32000; }
+
+ClusterCommand decode_cluster_command(const uint8_t data[8]) {
+    ClusterCommand cmd;
+    cmd.tc_enabled         = (data[1] & 0x01) != 0;
+    cmd.regen_auto_enabled = (data[1] & 0x02) != 0;
+    cmd.debug_enabled      = (data[1] & 0x08) != 0;
+    cmd.paddock            = (data[2] & 0x01) != 0;
+    return cmd;
+}

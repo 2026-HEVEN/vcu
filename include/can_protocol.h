@@ -40,3 +40,15 @@ float raw_to_voltage(uint16_t raw);   // 0.1 V/bit, offset 0
 float raw_to_current(uint16_t raw);   // 0.1 A/bit, offset -3200 A
 int   raw_to_temp(uint8_t raw);       // 1 C/bit, offset -40 C
 int   raw_to_speed(uint16_t raw);     // 1 rpm/bit, offset -32000 rpm (VCU path)
+
+// Cluster -> VCU command payload (mirrors Cluster repo's include/cluster_command.h
+// and src/logic/can_protocol.cpp::encode_cluster_command byte layout exactly):
+//   byte[1] bit0 = tc_enabled, bit1 = regen_auto_enabled, bit3 = debug_enabled
+//   byte[2] bit0 = paddock
+struct ClusterCommand {
+    bool paddock            = false;
+    bool tc_enabled         = false;
+    bool regen_auto_enabled = false;
+    bool debug_enabled      = false;
+};
+ClusterCommand decode_cluster_command(const uint8_t data[8]);

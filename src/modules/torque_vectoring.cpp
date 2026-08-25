@@ -19,15 +19,17 @@ TVOutput tv_compute(const TVInput &in, TVYawState &s) {
                                std::fabs(TV_PARAMS.kd) > 1.0e-6f;
     const bool speed_enabled = std::isfinite(in.vehicle_speed) &&
         std::fabs(in.vehicle_speed) >= TV_PARAMS.tv_min_speed_mps;
-    const bool control_enabled = gains_enabled && speed_enabled;
+    const bool control_enabled = gains_enabled && speed_enabled && in.tv_enable_requested;
 
     float mz = 0.0f;
     if (control_enabled) {
         mz = tv_yaw_compute(desired_yaw, in.yaw_rate, in.dt, TV_PARAMS, s);
     } else {
-        // kp=ki=kd=0 is the production-safe master OFF until a dedicated
-        // enable signal is added to the locked interface.  Low/invalid speed
-        // also disables feedback.  Always clear history at either boundary.
+        // Strict 50:50 OFF whenever any gate fails: kp=ki=kd=0 (gains),
+        // low/invalid speed, or the dash TC/TV switch is off
+        // (in.tv_enable_requested, wired from state.tv_enable_requested,
+        // decoded from Cluster's CAN_ID_CLUSTER_CMD). Always clear history
+        // at any of these boundaries.
         s = TVYawState{};
     }
     // 3) 가속도 → 바퀴별 수직하중 Fz

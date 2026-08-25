@@ -101,11 +101,14 @@ static void longitudinal_update() {
         state.throttle_pct, state.brake_pct, state.pack_soc, drive_mode });
 }
 static void torque_vectoring_update() {
-    TVOutput o = tv_compute({
+    const TVInput tv_in{
         state.total_torque, state.yaw_rate, state.steering_angle,
         // 전륜 신호를 못 믿으면 차속 0 → reference stage의 저속 컷오프에 걸려 TV가 꺼진다.
         state.vehicle_speed_valid ? state.vehicle_speed_mps : 0.0f,
-        state.accel_x, state.accel_y, TV_DT_S }, tv_yaw_state);
+        state.accel_x, state.accel_y, TV_DT_S,
+        state.tv_enable_requested
+    };
+    TVOutput o = tv_compute(tv_in, tv_yaw_state);
     state.torque_L = o.torque_L; state.torque_R = o.torque_R;
     // 중간신호 관측용 복사 (debug_monitor / Cluster에서 튜닝에 사용)
     state.desired_yaw_rate = o.desired_yaw_rate;

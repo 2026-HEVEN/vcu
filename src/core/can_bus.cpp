@@ -105,6 +105,15 @@ void poll_rx() {
             continue;
         }
 
+        if (m.identifier == CAN_ID_CLUSTER_CMD && m.data_length_code == 8) {
+            // Dash TC/TV switch. torque_vectoring.cpp gates differential
+            // output on this (strict 50:50 when false) — see TVInput
+            // .tv_enable_requested. Does not touch total_torque/propulsion.
+            ClusterCommand cmd = decode_cluster_command(m.data);
+            state.tv_enable_requested = cmd.tc_enabled;
+            continue;
+        }
+
         // TODO(core): parse real controller feedback (voltage/current/speed
         // from CAN_ID_FB1_L/R, temp/status/err from CAN_ID_FB2_L/R) into
         // `state`. Needs new VehicleState fields (state.h) before this can
