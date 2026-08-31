@@ -1,25 +1,52 @@
-// Stage 3 — 하중 추정 테스트   담당: ______
-// stub·실구현 모두 성립하는 불변식으로 시작. 구현하며 TODO를 채우세요.
 #include <unity.h>
 #include "modules/tv/load.h"
 
-void test_no_accel_symmetric_load(void) {
-    // 가속 없음(ax=ay=0)이면 좌우 하중은 대칭.
-    WheelLoads fz = tv_load_compute(0.0f, 0.0f, TV_PARAMS);
+void test_static_load_is_symmetric() {
+    const WheelLoads fz = tv_load_compute(0.0f, 0.0f, TV_PARAMS);
     TEST_ASSERT_FLOAT_WITHIN(0.01f, fz.fz_L, fz.fz_R);
-    TEST_ASSERT_TRUE(fz.fz_L > 0.0f);   // 정적 하중은 양수
+    TEST_ASSERT_TRUE(fz.fz_L > 0.0f);
 }
 
-// TODO(담당자): 구현 후 아래를 추가하세요.
-//  - 횡가속 ay>0 이면 바깥 바퀴 Fz가 안쪽보다 크다 (하중 이동 방향)
-//  - 좌우 Fz 합이 대략 (구동축 정적하중) 근처로 보존된다
-//  - 큰 ay에서 안쪽 Fz가 0으로 clamp (바퀴 들림) 되고 음수가 안 나온다
-//  - ax(종가속)에 따른 구동축 하중 변화가 부호대로 반영된다
+void test_positive_lateral_g_loads_right_wheel() {
+    const WheelLoads fz = tv_load_compute(0.0f, 0.5f, TV_PARAMS);
+    TEST_ASSERT_TRUE(fz.fz_R > fz.fz_L);
+}
 
-void setUp(void) {}
-void tearDown(void) {}
+void test_forward_acceleration_increases_rear_load() {
+    const WheelLoads steady = tv_load_compute(0.0f, 0.0f, TV_PARAMS);
+    const WheelLoads accel = tv_load_compute(0.5f, 0.0f, TV_PARAMS);
+    TEST_ASSERT_TRUE(accel.fz_L + accel.fz_R > steady.fz_L + steady.fz_R);
+}
+
+void test_extreme_input_never_returns_negative_load() {
+    const WheelLoads fz = tv_load_compute(-10.0f, 10.0f, TV_PARAMS);
+    TEST_ASSERT_TRUE(fz.fz_L >= 0.0f && fz.fz_R >= 0.0f);
+}
+
+void test_lateral_transfer_conserves_rear_axle_sum() {
+    const WheelLoads steady = tv_load_compute(0.0f, 0.0f, TV_PARAMS);
+    const WheelLoads corner = tv_load_compute(0.0f, 0.7f, TV_PARAMS);
+    TEST_ASSERT_FLOAT_WITHIN(0.1f, steady.fz_L + steady.fz_R,
+                            corner.fz_L + corner.fz_R);
+}
+
+void test_lltd_is_independent_from_static_distribution() {
+    TVParams low = TV_PARAMS, high = TV_PARAMS;
+    low.lltd_r = 0.2f; high.lltd_r = 0.8f;
+    const WheelLoads a = tv_load_compute(0.0f, 0.5f, low);
+    const WheelLoads b = tv_load_compute(0.0f, 0.5f, high);
+    TEST_ASSERT_TRUE((b.fz_R - b.fz_L) > (a.fz_R - a.fz_L));
+}
+
+void setUp() {}
+void tearDown() {}
 int main(int, char **) {
     UNITY_BEGIN();
-    RUN_TEST(test_no_accel_symmetric_load);
+    RUN_TEST(test_static_load_is_symmetric);
+    RUN_TEST(test_positive_lateral_g_loads_right_wheel);
+    RUN_TEST(test_forward_acceleration_increases_rear_load);
+    RUN_TEST(test_extreme_input_never_returns_negative_load);
+    RUN_TEST(test_lateral_transfer_conserves_rear_axle_sum);
+    RUN_TEST(test_lltd_is_independent_from_static_distribution);
     return UNITY_END();
 }

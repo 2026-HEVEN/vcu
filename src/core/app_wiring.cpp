@@ -10,12 +10,14 @@
 #include "core/drivers/wss_driver.h"
 #include "core/drivers/imu_driver.h"
 #include "core/drivers/steering_encoder_driver.h"
+#include "core/board_pins.h"
 #include "modules/throttle.h"
 #include "modules/brake.h"
 #include "modules/steering.h"
 #include "modules/imu.h"
 #include "modules/wheel_speed.h"
 #include "modules/vehicle_speed.h"
+#include "modules/realcar_calibration.h"
 #include "modules/longitudinal.h"
 #include "modules/torque_vectoring.h"
 #include <Arduino.h>
@@ -26,39 +28,54 @@ VehicleState state;
 
 // --- per-module calibration (tune to the car) ---
 namespace {
-    // --- GPIO 배정: 노션 「하네스 설계 (v4)」 기준 ---
-    //     https://app.notion.com/p/399913e532e6810fa2ffeac09c02f0f9
-    //     핀을 바꾸려면 그 문서를 먼저 고치고 여기를 맞출 것 (문서가 기준).
-    constexpr int PIN_THROTTLE_ADC = 33;   // v4: 구 D35 → D33 이동
-    constexpr int PIN_BRAKE_ADC    = 32;   // v4: 12V→3.3V 분압
+    // --- GPIO 배정: 제작 완료 PCB / 하네스 v5 / origin/GPIO-fixed 기준 ---
+    //     실제 핀 번호는 core/board_pins.h 한 곳에서 관리한다.
     // WSS 4채널 — 전부 input-only 핀. LM393 오픈컬렉터라 외부 3.3V 풀업 필수.
     constexpr int PIN_WSS[WHEEL_COUNT] = {
-        36,   // WHEEL_FL
-        39,   // WHEEL_FR
-        34,   // WHEEL_RL
-        35,   // WHEEL_RR
+        board_pins::WSS_FL,
+        board_pins::WSS_FR,
+        board_pins::WSS_RL,
+        board_pins::WSS_RR,
     };
 
-    // TODO(배선팀): 자석 수 N이 확정되면 교체. 노션 「WSS 자석 수 계산기」의
-    //   시나리오가 아직 전부 "예시" 상태라 기존 값 45를 4륜에 그대로 둔다.
-    //   림 부착 방식이라 바퀴마다 자석 수가 다를 수 있으므로 채널별로 분리해 둠.
+    // 실차 확정값: 림 부착 자석 48개, PCNT 상승엣지만 카운트.
+    // 센서 장착반경은 RPM에 영향을 주지 않는다. 한 바퀴 실제 펄스 수가 바뀌면
+    // realcar_calibration.h의 채널별 값을 수정한다.
     const WssCalib WSS_CAL[WHEEL_COUNT] = {
-        { 45.0f }, { 45.0f }, { 45.0f }, { 45.0f },
+        { realcar_cal::confirmed::WSS_PULSES_PER_WHEEL_REV_FL,
+          realcar_cal::provisional::WSS_FILTER_TIME_CONSTANT_S },
+        { realcar_cal::confirmed::WSS_PULSES_PER_WHEEL_REV_FR,
+          realcar_cal::provisional::WSS_FILTER_TIME_CONSTANT_S },
+        { realcar_cal::confirmed::WSS_PULSES_PER_WHEEL_REV_RL,
+          realcar_cal::provisional::WSS_FILTER_TIME_CONSTANT_S },
+        { realcar_cal::confirmed::WSS_PULSES_PER_WHEEL_REV_RR,
+          realcar_cal::provisional::WSS_FILTER_TIME_CONSTANT_S },
     };
-    const VehicleSpeedCalib VSPEED_CAL{};   // 기본값: 구름반경 0.165m, 윤거 1.20m
+    WheelSpeedFilterState wheel_speed_filter_state[WHEEL_COUNT]{};
+    const VehicleSpeedCalib VSPEED_CAL{};   // 값은 realcar_calibration.h에서 관리
     VehicleSpeedState vspeed_state{};
-    const SteerCalib STEER_CAL { 8192, 4096.0f, false };
+    const SteerCalib STEER_CAL {
+        static_cast<uint16_t>(realcar_cal::provisional::STEERING_CENTER_COUNTS),
+        realcar_cal::provisional::STEERING_COUNTS_PER_UNIT,
+        realcar_cal::provisional::STEERING_INVERT,
+    };
     TVYawState       tv_yaw_state{};       // yaw 제어기 이력 (전역상태 아님, 여기서만 보유)
     DriveMode        drive_mode = DriveMode::Normal;
-    constexpr float  TV_DT_S = 0.01f;      // torque_vectoring_update 주기 (10ms task)
-    constexpr float  WHEEL_SPEED_DT_S = 0.01f;  // wheel/vehicle speed task 주기 (10ms)
+    constexpr float  TV_DT_S = realcar_cal::confirmed::CONTROL_PERIOD_S;
+    constexpr float  WHEEL_SPEED_DT_S = realcar_cal::confirmed::CONTROL_PERIOD_S;
 }
 
 static void throttle_update() {
-    state.throttle_pct = throttle_compute({ analogRead(PIN_THROTTLE_ADC) });
+    state.throttle_pct = throttle_compute({ analogRead(board_pins::THROTTLE_ADC) });
 }
 static void brake_update() {
-    BrakeOutput o = brake_compute({ analogRead(PIN_BRAKE_ADC) });
+    // Current bring-up vehicle has no brake sensor. Never read the floating
+    // PCB input: a random HIGH would otherwise request regen. Re-enable this
+    // path in realcar_calibration.h after the sensor polarity is verified.
+    const int raw = realcar_cal::bringup::BRAKE_SENSOR_INSTALLED
+        ? (digitalRead(board_pins::BRAKE_DIGITAL) == HIGH ? 4095 : 0)
+        : 0;
+    BrakeOutput o = brake_compute({ raw });
     state.brake_pct = o.pct; state.brake_active = o.active;
 }
 static void steering_update() {
@@ -70,7 +87,8 @@ static void imu_update() {
 }
 static void wheel_speed_update() {
     for (int ch = 0; ch < WHEEL_COUNT; ++ch) {
-        state.wheel_speed[ch] = wheel_speed_compute(wss_driver::read(ch), WSS_CAL[ch]);
+        state.wheel_speed[ch] = wheel_speed_compute_filtered(
+            wss_driver::read(ch), WSS_CAL[ch], wheel_speed_filter_state[ch]);
     }
 }
 static void vehicle_speed_update() {
@@ -87,11 +105,14 @@ static void longitudinal_update() {
         state.throttle_pct, state.brake_pct, state.pack_soc, drive_mode });
 }
 static void torque_vectoring_update() {
-    TVOutput o = tv_compute({
+    const TVInput tv_in{
         state.total_torque, state.yaw_rate, state.steering_angle,
         // 전륜 신호를 못 믿으면 차속 0 → reference stage의 저속 컷오프에 걸려 TV가 꺼진다.
         state.vehicle_speed_valid ? state.vehicle_speed_mps : 0.0f,
-        state.accel_x, state.accel_y, TV_DT_S }, tv_yaw_state);
+        state.accel_x, state.accel_y, TV_DT_S,
+        state.tv_enable_requested
+    };
+    TVOutput o = tv_compute(tv_in, tv_yaw_state);
     state.torque_L = o.torque_L; state.torque_R = o.torque_R;
     // 중간신호 관측용 복사 (debug_monitor / Cluster에서 튜닝에 사용)
     state.desired_yaw_rate = o.desired_yaw_rate;
@@ -123,6 +144,11 @@ const int G_TASK_COUNT = sizeof(g_tasks) / sizeof(g_tasks[0]);
 
 void modules_init() {
     analogReadResolution(12);
+    pinMode(board_pins::THROTTLE_ADC, INPUT);
+    if (realcar_cal::bringup::BRAKE_SENSOR_INSTALLED) {
+        pinMode(board_pins::BRAKE_DIGITAL, INPUT);
+    }
+    pinMode(board_pins::GEAR_ADC, INPUT);  // gear-ladder 모듈용 예약 입력
     for (int ch = 0; ch < WHEEL_COUNT; ++ch) wss_driver::begin(ch, PIN_WSS[ch]);
     imu_driver::begin();
     steering_encoder_driver::begin();

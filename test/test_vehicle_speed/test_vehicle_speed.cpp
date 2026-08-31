@@ -3,7 +3,7 @@
 #include "modules/vehicle_speed.h"
 #include <cmath>
 
-static const VehicleSpeedCalib CAL{};   // r=0.165m, track=1.20m, a_max=15 m/s^2
+static const VehicleSpeedCalib CAL{};   // 실차 시험 시작값은 realcar_calibration.h에서 관리
 
 // 차속[m/s] → 휠 rpm (테스트 입력 만들 때 쓰는 역환산)
 static float mps_to_rpm(float mps) {
@@ -26,6 +26,11 @@ void test_straight_uses_front_average(void) {
     VehicleSpeedOutput o = vehicle_speed_compute(in, CAL, s);
     TEST_ASSERT_TRUE(o.valid);
     TEST_ASSERT_FLOAT_WITHIN(0.05f, 10.0f, o.speed_mps);
+}
+
+void test_default_calibration_uses_rolling_tire_not_magnet_radius(void) {
+    TEST_ASSERT_FLOAT_WITHIN(0.0001f, 0.2387f, CAL.tire_radius_m);
+    TEST_ASSERT_FLOAT_WITHIN(0.0001f, 1.140f, CAL.track_m);
 }
 
 void test_driven_wheel_spin_is_ignored(void) {
@@ -154,6 +159,7 @@ void tearDown(void) {}
 int main(int, char **) {
     UNITY_BEGIN();
     RUN_TEST(test_straight_uses_front_average);
+    RUN_TEST(test_default_calibration_uses_rolling_tire_not_magnet_radius);
     RUN_TEST(test_driven_wheel_spin_is_ignored);
     RUN_TEST(test_cornering_yaw_component_cancels);
     RUN_TEST(test_single_front_wheel_dropout_is_yaw_corrected);

@@ -1,5 +1,6 @@
 #pragma once
 #include "types.h"
+#include "modules/realcar_calibration.h"
 // [FILL-IN] 4륜 휠속도 → 차속 추정. 어느 바퀴를 쓸지는 이 모듈이 정한다.
 //
 // 왜 별도 모듈인가:
@@ -12,12 +13,10 @@
 enum WheelIdx { WHEEL_FL = 0, WHEEL_FR = 1, WHEEL_RL = 2, WHEEL_RR = 3, WHEEL_COUNT = 4 };
 
 struct VehicleSpeedCalib {
-    // 구름반경 = 실측 구름둘레 1.50 m / 2π  (구름직경 477 mm)
-    //   ※ 이전 값 0.165 는 노션 WSS 계산기의 "구름직경 330mm"에서 왔는데,
-    //     330 mm 는 13.0 인치로 **림 지름**이다. 타이어 포함 구름직경이 아니다.
-    float tire_radius_m  = 0.2387f;
-    float track_m        = 1.20f;   // 전륜 윤거 (선회 시 좌우 속도차 보정용)
-    float max_accel_mps2 = 15.0f;   // 물리적으로 가능한 최대 가감속. 초과 변화는 센서 이상.
+    // WSS 자석 장착반경이 아니라 하중 상태의 타이어 유효 구름반경이다.
+    float tire_radius_m  = realcar_cal::provisional::WHEEL_SPEED_ROLLING_RADIUS_M;
+    float track_m        = realcar_cal::provisional::FRONT_TRACK_M;
+    float max_accel_mps2 = realcar_cal::provisional::VEHICLE_SPEED_MAX_ACCEL_MPS2;
 };
 
 struct VehicleSpeedInput {

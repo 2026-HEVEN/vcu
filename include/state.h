@@ -25,9 +25,11 @@ struct VehicleState {
     // controller feedback (from CAN)
     Rpm       motor_speed_L;
     Rpm       motor_speed_R;
+    // Cluster -> VCU command (from CAN_ID_CLUSTER_CMD, decoded in can_bus.cpp)
+    bool      tv_enable_requested = false;   // dash TC/TV switch; false until first frame arrives
     // control outputs
     float     total_torque = 0.0f;   // signed A demand
-    Amp       torque_L;           // 상전류 명령 [A] (백분율 아님)
+    Amp       torque_L;              // motor phase-current command [A]
     Amp       torque_R;
     // TV intermediate signals (관측/튜닝용; app_wiring이 TVOutput에서 복사)
     float     desired_yaw_rate = 0.0f;   // reference stage

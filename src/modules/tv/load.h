@@ -4,7 +4,7 @@
 
 struct WheelLoads { float fz_L; float fz_R; };   // 구동 두 바퀴의 수직하중 [N]
 
-// ax : 종가속도 [m/s^2]   (IMU, 부호 규약 통일)
-// ay : 횡가속도 [m/s^2]
+// ax_g : 종가속도 [g], +는 전방 가속(후축 하중 증가)
+// ay_g : 횡가속도 [g], +는 좌향 가속(우측 하중 증가)
 // 반환 : 좌/우 구동 바퀴 Fz [N]
-WheelLoads tv_load_compute(float ax, float ay, const TVParams &p);
+WheelLoads tv_load_compute(float ax_g, float ay_g, const TVParams &p);

@@ -5,10 +5,13 @@
 // ============================================================
 #include "core/can_bus.h"
 #include <Arduino.h>
+#include <cstring>
 #include "driver/twai.h"
 #include "can_protocol.h"
 #include "state.h"
 #include "safety_logic.h"   // torque_allowed()
+#include "core/board_pins.h"
+#include "modules/realcar_calibration.h"
 
 // [LOCKED] Bit layout of EZkontrol control frames follows
 // EZkontrol-CANBUS-MCU-to-VCU.pdf and the reference 2026/Can_driver/CAN_DRIVER.ino.
@@ -29,6 +32,8 @@ namespace {
     constexpr uint32_t DEADMAN_MS = 200;
     volatile uint32_t  g_last_cmd_ms = 0;
     volatile bool      g_handshaked  = false;
+    volatile bool      g_handshaked_L = false;
+    volatile bool      g_handshaked_R = false;
     uint8_t            g_life = 0;
 
     void transmit_ext(uint32_t id, const uint8_t data[8]) {
@@ -57,8 +62,10 @@ namespace {
                          (millis() - g_last_cmd_ms < DEADMAN_MS);
             float l = allow ? (float)state.torque_L : 0.0f;
             float r = allow ? (float)state.torque_R : 0.0f;
-            send_torque(CAN_ID_TORQUE_L, l);
-            send_torque(CAN_ID_TORQUE_R, r);
+            // Do not place normal command frames on a controller ID before
+            // that controller has completed its 0x55/0xAA handshake.
+            if (g_handshaked_L) send_torque(CAN_ID_TORQUE_L, l);
+            if (g_handshaked_R) send_torque(CAN_ID_TORQUE_R, r);
             g_life++;
             vTaskDelayUntil(&next, period);   // exact 50ms cadence
         }
@@ -68,7 +75,10 @@ namespace {
 namespace can_bus {
 
 void begin() {
-    twai_general_config_t g = TWAI_GENERAL_CONFIG_DEFAULT(GPIO_NUM_5, GPIO_NUM_4, TWAI_MODE_NORMAL);
+    twai_general_config_t g = TWAI_GENERAL_CONFIG_DEFAULT(
+        static_cast<gpio_num_t>(board_pins::CAN_TX),
+        static_cast<gpio_num_t>(board_pins::CAN_RX),
+        TWAI_MODE_NORMAL);
     twai_timing_config_t  t = TWAI_TIMING_CONFIG_250KBITS();
     twai_filter_config_t  f = TWAI_FILTER_CONFIG_ACCEPT_ALL();
     twai_driver_install(&g, &t, &f);
@@ -89,12 +99,56 @@ void send_vehicle_speed() {
 }
 
 void poll_rx() {
+    // EZkontrol handshake (docs/CAN_PROTOCOL.md §6): each controller sends its
+    // feedback-Part-I ID (CAN_ID_FB1_L/R) with all 8 data bytes = 0x55 at
+    // startup (50ms/20Hz) until the VCU replies on the matching torque-command
+    // ID (CAN_ID_TORQUE_L/R) with all 8 data bytes = 0xAA. That reply frame
+    // carries no real torque; the life_task's normal 50ms torque frames take
+    // over once running. A 0x55-pattern frame is a handshake probe, not real
+    // feedback, so it must be intercepted before feedback parsing.
+    static const uint8_t HANDSHAKE_PATTERN[8] = {0x55,0x55,0x55,0x55,0x55,0x55,0x55,0x55};
     twai_message_t m;
     while (twai_receive(&m, 0) == ESP_OK) {
-        // TODO(core): parse controller feedback (speed/temp/err) + handshake
-        // (8x 0x55 request -> reply 0x55) into `state`. Set g_handshaked on success.
+        const bool from_l = (m.identifier == CAN_ID_FB1_L);
+        const bool from_r = (m.identifier == CAN_ID_FB1_R);
+
+        if ((from_l || from_r) && m.data_length_code == 8 &&
+            memcmp(m.data, HANDSHAKE_PATTERN, 8) == 0) {
+            twai_message_t reply = {};
+            reply.identifier = from_l ? CAN_ID_TORQUE_L : CAN_ID_TORQUE_R;
+            reply.extd = 1;
+            reply.data_length_code = 8;
+            memset(reply.data, 0xAA, 8);
+            const esp_err_t tx_result = twai_transmit(&reply, pdMS_TO_TICKS(5));
+            if (tx_result == ESP_OK) {
+                if (from_l) g_handshaked_L = true; else g_handshaked_R = true;
+                Serial.printf("[CAN] controller %c handshake reply sent\n",
+                              from_l ? 'L' : 'R');
+            } else {
+                Serial.printf("[CAN] controller %c handshake reply failed: %d\n",
+                              from_l ? 'L' : 'R', static_cast<int>(tx_result));
+            }
+            continue;
+        }
+
+        if (m.identifier == CAN_ID_CLUSTER_CMD && m.data_length_code == 8) {
+            // Dash TC/TV switch. torque_vectoring.cpp gates differential
+            // output on this (strict 50:50 when false) — see TVInput
+            // .tv_enable_requested. Does not touch total_torque/propulsion.
+            ClusterCommandRequest cmd = decode_cluster_command(m.data);
+            state.tv_enable_requested = cmd.tc_enabled;
+            continue;
+        }
+
+        // TODO(core): parse real controller feedback (voltage/current/speed
+        // from CAN_ID_FB1_L/R, temp/status/err from CAN_ID_FB2_L/R) into
+        // `state`. Needs new VehicleState fields (state.h) before this can
+        // be filled in — out of scope for the handshake fix.
         (void)m;
     }
+    g_handshaked = realcar_cal::bringup::REQUIRE_BOTH_MOTOR_CONTROLLERS
+        ? (g_handshaked_L && g_handshaked_R)
+        : (g_handshaked_L || g_handshaked_R);
 }
 
 bool handshaked() { return g_handshaked; }

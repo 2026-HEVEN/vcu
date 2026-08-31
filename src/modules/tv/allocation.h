@@ -5,8 +5,9 @@
 
 struct TVAllocOutput { Amp torque_L; Amp torque_R; };
 
-// total_torque : longitudinal이 준 부호 있는 총 토크 요구
-// yaw_moment   : yaw_control이 준 Mz (좌우 차등의 근거)
-// limit        : traction이 준 바퀴별 최대 종토크
-// 반환          : 좌/우 토크 명령 [A] (Amp — 모터 상전류, ±300 자동 clamp)
-TVAllocOutput tv_alloc_compute(float total_torque, float yaw_moment, MaxTorque limit);
+// total_current_a : longitudinal이 준 부호 있는 총 상전류 요구 [A]
+// yaw_moment_nm   : yaw_control이 준 Mz [N·m]
+// limit           : traction이 준 모터별 상전류 한계 [A]
+// 반환            : 좌/우 상전류 명령 [A] (Amp 타입, ±300 domain clamp)
+TVAllocOutput tv_alloc_compute(float total_current_a, float yaw_moment_nm,
+                               MaxTorque limit, const TVParams &p);

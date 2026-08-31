@@ -5,7 +5,7 @@
 // ============================================================
 #pragma once
 #include "modules/imu.h"   // for ImuRaw
-// [LOCKED] Xsens MTi-320 over UART2 (VCU RX=GPIO16, TX=GPIO17), Xbus/MTData2.
+// [LOCKED] Xsens MTi-320 over UART2 (VCU RX=GPIO22, TX=GPIO21), Xbus/MTData2.
 
 namespace imu_driver {
     bool   begin();        // returns true once UART is configured

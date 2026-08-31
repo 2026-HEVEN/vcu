@@ -1,31 +1,62 @@
-// [FILL-IN] Stage 5/5 — 토크 배분   담당: ______
 #include "modules/tv/allocation.h"
+#include <cmath>
 
-// ── 이 함수가 하는 일 ─────────────────────────────────────────────
-//   총토크를 좌우로 나눈다. 단, yaw_moment(Mz)만큼 좌우 차등을 주고,
-//   각 바퀴의 트랙션 상한(limit)을 넘지 않게 제한한다. 파이프라인의 마지막 단.
-//
-// ── 구현 가이드 ──────────────────────────────────────────────────
-//   float base = total_torque * 0.5f;                 // 기본 좌우 균등
-//   float diff = yaw_moment / p.track_m / 2.0f;        // Mz → 좌우 토크차 (단위 규약 통일)
-//   float tL = base - diff;                            // 부호는 좌표계에 맞춰
-//   float tR = base + diff;
-//   // 트랙션 상한 적용:
-//   tL = clamp(tL, -limit.max_L, +limit.max_L);
-//   tR = clamp(tR, -limit.max_R, +limit.max_R);
-//   //  ★ 한쪽이 상한에 걸리면? 총토크 유지를 위해 반대쪽/전체를 스케일다운할지
-//   //    (yaw 우선 vs 총량 우선) 정책을 팀에서 정할 것.
-//   return { Amp(tL), Amp(tR) };                       // Amp가 ±300 자동 clamp
-//
-// ── 주의 ─────────────────────────────────────────────────────────
-//   * diff의 부호 규약을 reference/yaw/load와 하나로 통일(좌회전 + 등).
-//   * track_m 등 제원이 필요하면 tv_config.h(TV_PARAMS)를 인자로 받도록 시그니처 확장
-//     가능(코어 담당과 상의). 지금은 stub이라 미사용.
-//
-// ── SAFE STUB ────────────────────────────────────────────────────
-//   50:50 (Mz·limit 무시) → 현재 차 거동과 완전히 동일.
-TVAllocOutput tv_alloc_compute(float total_torque, float yaw_moment, MaxTorque limit) {
-    (void)yaw_moment; (void)limit;
-    float half = total_torque * 0.5f;
-    return { Amp(half), Amp(half) };
+namespace {
+float clampf(float value, float lo, float hi) {
+    return value < lo ? lo : (value > hi ? hi : value);
+}
+}
+
+TVAllocOutput tv_alloc_compute(float total_current_a, float yaw_moment_nm,
+                               MaxTorque limit, const TVParams &p) {
+    if (!std::isfinite(total_current_a) || !std::isfinite(yaw_moment_nm) ||
+        !std::isfinite(limit.max_L) || !std::isfinite(limit.max_R) ||
+        std::fabs(total_current_a) < 1.0e-6f || p.track_m <= 0.0f ||
+        p.tire_radius_m <= 0.0f || p.gear_ratio <= 0.0f ||
+        p.motor_kt_nm_per_a <= 0.0f || p.motor_current_max_a <= 0.0f) {
+        return {Amp(0.0f), Amp(0.0f)};
+    }
+
+    const float max_l = clampf(limit.max_L, 0.0f, p.motor_current_max_a);
+    const float max_r = clampf(limit.max_R, 0.0f, p.motor_current_max_a);
+
+    // With I_L=base-diff and I_R=base+diff:
+    // Mz=(F_R-F_L)*track/2 = diff*Kt*gear*track/tire_radius.
+    float diff = yaw_moment_nm * p.tire_radius_m /
+                 (p.track_m * p.motor_kt_nm_per_a * p.gear_ratio);
+
+    float lo_l, hi_l, lo_r, hi_r;
+    if (total_current_a > 0.0f) {
+        lo_l = lo_r = 0.0f;
+        hi_l = max_l; hi_r = max_r;
+        diff = clampf(diff, -0.5f * max_l, 0.5f * max_r);
+    } else {
+        lo_l = -max_l; hi_l = 0.0f;
+        lo_r = -max_r; hi_r = 0.0f;
+        diff = clampf(diff, -0.5f * max_r, 0.5f * max_l);
+    }
+
+    // No-add safety: the motor-limit clamps above bound diff by how much
+    // current a single motor can carry, but say nothing about how much the
+    // *driver* actually asked for. Left unchecked, a small total_current_a
+    // (e.g. coasting) combined with a large yaw_moment_nm demand pulls base
+    // toward base_lo/base_hi below, which can be far from 0.5*total_current_a
+    // -- i.e. current_l+current_r ends up *manufacturing* current the driver
+    // never requested (reproduced: total=1A, mz=100Nm -> sum came out ~93A).
+    // Capping |diff| at half the driver's own total demand guarantees
+    // current_l+current_r never exceeds total_current_a in magnitude: TV
+    // authority degrades gracefully at low throttle instead of inventing
+    // propulsion/regen current from nothing.
+    const float total_half = 0.5f * std::fabs(total_current_a);
+    diff = clampf(diff, -total_half, total_half);
+
+    const float base_lo = (lo_l + diff) > (lo_r - diff)
+        ? (lo_l + diff) : (lo_r - diff);
+    const float base_hi = (hi_l + diff) < (hi_r - diff)
+        ? (hi_l + diff) : (hi_r - diff);
+    const float base = clampf(0.5f * total_current_a, base_lo, base_hi);
+
+    const float current_l = clampf(base - diff, lo_l, hi_l);
+    const float current_r = clampf(base + diff, lo_r, hi_r);
+    return {Amp(current_l), Amp(current_r)};
 }
