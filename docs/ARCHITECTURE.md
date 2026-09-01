@@ -283,12 +283,17 @@ ImuOutput imu_compute(const ImuRaw &raw, ImuFilterState &s);  // s에 이전값 
 
 ## 알려진 미완성 (의도된 TODO)
 
-- `can_bus.cpp::poll_rx()`의 EZkontrol 좌/우 핸드셰이크와 Cluster command 수신은
-  구현되어 있다. 컨트롤러의 실제 전류·RPM·온도·오류 피드백을 `VehicleState`로
-  디코딩하는 경로는 아직 미구현이다.
+- `can_bus.cpp::poll_rx()`는 좌/우 핸드셰이크, Cluster command, EZkontrol Part I/II,
+  Cluster BMS 진단 프레임을 디코딩한다. Part I/II freshness·fault·온도와 9 kW
+  소프트 전력 제한은 `drive_supervisor`가 최종 좌우 전류 명령에 적용한다.
 - `longitudinal_compute` — Normal/Efficiency 구동·회생 전류와 SOC taper,
   brake override가 구현되어 있다. 현재 브레이크 센서가 없어 bring-up 설정에서는
-  회생 입력을 0으로 고정한다.
+  회생 입력을 0으로 고정한다. `REGEN_HARDWARE_VALIDATED`도 false라 Cluster의
+  Regen Auto 요청만 관찰되고 음의 상전류는 생성되지 않는다.
+- 기어 ADC 판정과 100 ms 안정화는 구현돼 있지만, GPIO27 전압 실측 전에는
+  `GEAR_SELECTOR_INSTALLED=false`로 전진 고정 D bring-up 상태를 사용한다.
+- 브레이크 압력, LV 전압, AIR 릴레이 모니터는 핀만 예약됐다. 센서 배선·스케일링과
+  CAN ID가 확정된 뒤 구현한다.
 - **토크벡터링**은 `tv_compute` 하나가 아니라 `src/modules/tv/` 5개 stage
   (reference/yaw_control/load/traction/allocation)로 분리되어 구현되어 있다. 실차 기본
   PID 게인이 0이므로 현재 거동은 strict 50:50 OFF다. 온보딩·담당표는

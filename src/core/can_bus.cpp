@@ -6,6 +6,7 @@
 #include "core/can_bus.h"
 #include <Arduino.h>
 #include <cstring>
+#include <cmath>
 #include "driver/twai.h"
 #include "can_protocol.h"
 #include "state.h"
@@ -37,6 +38,7 @@ namespace {
     volatile bool      g_handshaked_L = false;
     volatile bool      g_handshaked_R = false;
     uint8_t            g_life = 0;
+    uint8_t            g_status_life = 0;
 
     void transmit_ext(uint32_t id, const uint8_t data[8]) {
         twai_message_t m = {};
@@ -106,6 +108,27 @@ void send_vehicle_speed() {
     transmit_ext(CAN_ID_VCU_VEHICLE_SPEED, data);
 }
 
+void send_cluster_status() {
+    uint8_t data[8];
+    const bool hv_active = state.controller_feedback_fresh &&
+        (state.controller_fb1_L.bus_voltage_v > 20.0f ||
+         state.controller_fb1_R.bus_voltage_v > 20.0f);
+    // SOC remains invalid because the current BLE-forwarded BMS frame is
+    // diagnostic/display-only and its source parser is not authoritative.
+    encode_vcu_cluster_status(static_cast<uint8_t>(state.gear),
+                              state.brake_active, hv_active,
+                              false, 0, g_status_life++, data);
+    transmit_ext(CAN_ID_VCU_CLUSTER_STATUS, data);
+}
+
+void send_sensor_telemetry() {
+    uint8_t data[8];
+    encode_vcu_steering((float)state.steering_angle, data);
+    transmit_ext(CAN_ID_VCU_STEERING, data);
+    encode_vcu_imu(state.yaw_rate, state.accel_x, state.accel_y, data);
+    transmit_ext(CAN_ID_VCU_IMU, data);
+}
+
 void poll_rx() {
     // EZkontrol handshake (docs/CAN_PROTOCOL.md §6): each controller sends its
     // feedback-Part-I ID (CAN_ID_FB1_L/R) with all 8 data bytes = 0x55 at
@@ -117,6 +140,7 @@ void poll_rx() {
     static const uint8_t HANDSHAKE_PATTERN[8] = {0x55,0x55,0x55,0x55,0x55,0x55,0x55,0x55};
     twai_message_t m;
     while (twai_receive(&m, 0) == ESP_OK) {
+        if (!m.extd) continue;
         const bool from_l = (m.identifier == CAN_ID_FB1_L);
         const bool from_r = (m.identifier == CAN_ID_FB1_R);
 
@@ -140,20 +164,80 @@ void poll_rx() {
         }
 
         if (m.identifier == CAN_ID_CLUSTER_CMD && m.data_length_code == 8) {
-            // Dash TC/TV switch. torque_vectoring.cpp gates differential
-            // output on this (strict 50:50 when false) — see TVInput
-            // .tv_enable_requested. Does not touch total_torque/propulsion.
             ClusterCommandRequest cmd = decode_cluster_command(m.data);
-            state.tv_enable_requested = cmd.tc_enabled;
+            state.tc_requested = cmd.tc_enabled;
+            state.regen_auto_requested = cmd.regen_auto_enabled;
+            state.paddock_requested = cmd.paddock_request;
+            state.debug_requested = cmd.debug_enabled;
+            state.cluster_cmd_last_rx_ms = millis();
+            state.cluster_cmd_alive = true;
             continue;
         }
 
-        // TODO(core): parse real controller feedback (voltage/current/speed
-        // from CAN_ID_FB1_L/R, temp/status/err from CAN_ID_FB2_L/R) into
-        // `state`. Needs new VehicleState fields (state.h) before this can
-        // be filled in — out of scope for the handshake fix.
-        (void)m;
+        const uint32_t now = millis();
+        if (m.data_length_code == 8 && m.identifier == CAN_ID_FB1_L) {
+            state.controller_fb1_L = decode_controller_feedback_part1(m.data);
+            state.controller_fb1_last_ms_L = now;
+            if (std::fabs(state.controller_fb1_L.phase_current_a) >
+                realcar_cal::bringup::PHASE_CURRENT_HARD_CUTOFF_A) {
+                state.controller_fault_latched = true;
+            }
+            continue;
+        }
+        if (m.data_length_code == 8 && m.identifier == CAN_ID_FB1_R) {
+            state.controller_fb1_R = decode_controller_feedback_part1(m.data);
+            state.controller_fb1_last_ms_R = now;
+            if (std::fabs(state.controller_fb1_R.phase_current_a) >
+                realcar_cal::bringup::PHASE_CURRENT_HARD_CUTOFF_A) {
+                state.controller_fault_latched = true;
+            }
+            continue;
+        }
+        if (m.data_length_code == 8 && m.identifier == CAN_ID_FB2_L) {
+            state.controller_fb2_L = decode_controller_feedback_part2(m.data);
+            state.controller_fb2_last_ms_L = now;
+            if (state.controller_fb2_L.any_fault()) state.controller_fault_latched = true;
+            continue;
+        }
+        if (m.data_length_code == 8 && m.identifier == CAN_ID_FB2_R) {
+            state.controller_fb2_R = decode_controller_feedback_part2(m.data);
+            state.controller_fb2_last_ms_R = now;
+            if (state.controller_fb2_R.any_fault()) state.controller_fault_latched = true;
+            continue;
+        }
+        if (m.data_length_code == 8 && m.identifier == CAN_ID_CLUSTER_BMS_STATUS) {
+            const ClusterBmsStatus bms = decode_cluster_bms_status(m.data);
+            state.pack_data_valid = bms.valid && bms.ble_connected;
+            state.pack_soc = (float)bms.soc_pct / 100.0f;
+            state.pack_voltage_v = bms.pack_voltage_v;
+            state.pack_current_a = bms.pack_current_a;
+            state.pack_temperature_c = bms.temperature_c;
+            state.bms_last_rx_ms = now;
+            continue;
+        }
     }
+    const uint32_t now = millis();
+    const auto fresh = [now](uint32_t timestamp, uint32_t max_age_ms) {
+        return timestamp != 0 && (now - timestamp) <= max_age_ms;
+    };
+    const uint32_t feedback_stale_ms =
+        (uint32_t)realcar_cal::bringup::CONTROLLER_FEEDBACK_STALE_MS;
+    state.controller_feedback_fresh =
+        fresh(state.controller_fb1_last_ms_L, feedback_stale_ms) &&
+        fresh(state.controller_fb1_last_ms_R, feedback_stale_ms) &&
+        fresh(state.controller_fb2_last_ms_L, feedback_stale_ms) &&
+        fresh(state.controller_fb2_last_ms_R, feedback_stale_ms);
+
+    const uint32_t cluster_stale_ms =
+        (uint32_t)realcar_cal::bringup::CLUSTER_COMMAND_STALE_MS;
+    if (!fresh(state.cluster_cmd_last_rx_ms, cluster_stale_ms)) {
+        state.cluster_cmd_alive = false;
+        state.tc_requested = false;
+        state.regen_auto_requested = false;
+        state.debug_requested = false;
+        state.paddock_requested = false;
+    }
+    if (!fresh(state.bms_last_rx_ms, 5000U)) state.pack_data_valid = false;
     g_handshaked = realcar_cal::bringup::REQUIRE_BOTH_MOTOR_CONTROLLERS
         ? (g_handshaked_L && g_handshaked_R)
         : (g_handshaked_L || g_handshaked_R);

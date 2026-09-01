@@ -8,6 +8,7 @@ struct LongInput {
     float brake_pct;      // 0..100
     float pack_soc;       // 0..1
     DriveMode mode;
+    bool regen_auto_enabled;
 };
 
 float longitudinal_compute(const LongInput &in);   // + = drive, - = regen

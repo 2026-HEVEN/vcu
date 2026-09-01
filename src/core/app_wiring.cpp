@@ -20,6 +20,8 @@
 #include "modules/realcar_calibration.h"
 #include "modules/longitudinal.h"
 #include "modules/torque_vectoring.h"
+#include "modules/gear.h"
+#include "modules/drive_supervisor.h"
 #include <Arduino.h>
 
 // [LOCKED] The ONLY translation unit that touches `state`. All update() wiring
@@ -63,6 +65,27 @@ namespace {
     DriveMode        drive_mode = DriveMode::Normal;
     constexpr float  TV_DT_S = realcar_cal::confirmed::CONTROL_PERIOD_S;
     constexpr float  WHEEL_SPEED_DT_S = realcar_cal::confirmed::CONTROL_PERIOD_S;
+    const GearCalib GEAR_CAL {
+        (uint16_t)realcar_cal::bringup::GEAR_NEUTRAL_ADC,
+        (uint16_t)realcar_cal::bringup::GEAR_REVERSE_ADC,
+        (uint16_t)realcar_cal::bringup::GEAR_DRIVE_ADC,
+        (uint16_t)realcar_cal::bringup::GEAR_ADC_TOLERANCE,
+    };
+    GearFilterState gear_filter_state{};
+    const DriveSupervisorParams DRIVE_SUPERVISOR_PARAMS {
+        realcar_cal::bringup::DRIVE_POWER_SOFT_LIMIT_W,
+        realcar_cal::bringup::DRIVETRAIN_EFFICIENCY,
+        realcar_cal::confirmed::MOTOR_KT_NM_PER_A,
+        realcar_cal::bringup::PADDOCK_CURRENT_MAX_PER_MOTOR_A,
+        realcar_cal::bringup::PADDOCK_SPEED_LIMIT_MPS,
+        realcar_cal::bringup::TC_MIN_SPEED_MPS,
+        realcar_cal::bringup::TC_SLIP_START,
+        realcar_cal::bringup::TC_SLIP_FULL_CUT,
+        realcar_cal::bringup::CONTROLLER_DERATE_START_C,
+        realcar_cal::bringup::CONTROLLER_CUTOFF_C,
+        realcar_cal::bringup::MOTOR_DERATE_START_C,
+        realcar_cal::bringup::MOTOR_CUTOFF_C,
+    };
 }
 
 static void throttle_update() {
@@ -84,7 +107,10 @@ static void steering_update() {
 }
 static void imu_update() {
     ImuOutput o = imu_compute(imu_driver::read());
-    state.yaw_rate = o.yaw_rate; state.accel_x = o.accel_x; state.accel_y = o.accel_y;
+    state.imu_valid = !imu_driver::stale();
+    state.yaw_rate = state.imu_valid ? o.yaw_rate : 0.0f;
+    state.accel_x = state.imu_valid ? o.accel_x : 0.0f;
+    state.accel_y = state.imu_valid ? o.accel_y : 0.0f;
 }
 static void wheel_speed_update() {
     for (int ch = 0; ch < WHEEL_COUNT; ++ch) {
@@ -101,9 +127,44 @@ static void vehicle_speed_update() {
     state.vehicle_speed_mps   = o.speed_mps;
     state.vehicle_speed_valid = o.valid;
 }
+static void gear_update_task() {
+    if (!realcar_cal::bringup::GEAR_SELECTOR_INSTALLED) {
+        // Current test vehicle is intentionally forward-only until the ADC
+        // voltages are measured on the completed PCB.
+        state.gear = Gear::Drive;
+        return;
+    }
+    state.gear_raw_adc = (uint16_t)analogRead(board_pins::GEAR_ADC);
+    state.gear = gear_update(state.gear_raw_adc, GEAR_CAL,
+                             realcar_cal::bringup::GEAR_STABLE_SAMPLES,
+                             gear_filter_state);
+}
+static void paddock_update() {
+    if (!state.cluster_cmd_alive) {
+        // Do not unexpectedly remove an already-active limit when the dash
+        // disappears. At boot the default remains inactive.
+        return;
+    }
+    if (!state.paddock_requested) {
+        state.paddock_active = false;
+        return;
+    }
+    if (!state.paddock_active &&
+        state.vehicle_speed_mps <= realcar_cal::bringup::PADDOCK_ENTRY_SPEED_MAX_MPS &&
+        (float)state.throttle_pct <= realcar_cal::bringup::THROTTLE_ARM_MAX_PCT) {
+        state.paddock_active = true;
+    }
+}
 static void longitudinal_update() {
     state.total_torque = longitudinal_compute({
-        state.throttle_pct, state.brake_pct, state.pack_soc, drive_mode });
+        state.throttle_pct, state.brake_pct, state.pack_soc, drive_mode,
+        state.regen_auto_requested &&
+            realcar_cal::bringup::REGEN_HARDWARE_VALIDATED });
+    // Current bring-up supports forward only. Neutral/Reverse/Park cannot
+    // create propulsion until reverse-direction control is separately tested.
+    if (state.gear != Gear::Drive) {
+        state.total_torque = 0.0f;
+    }
 }
 static void torque_vectoring_update() {
     const TVInput tv_in{
@@ -111,34 +172,72 @@ static void torque_vectoring_update() {
         // 전륜 신호를 못 믿으면 차속 0 → reference stage의 저속 컷오프에 걸려 TV가 꺼진다.
         state.vehicle_speed_valid ? state.vehicle_speed_mps : 0.0f,
         state.accel_x, state.accel_y, TV_DT_S,
-        state.tv_enable_requested
+        state.tv_enable_requested && state.imu_valid
     };
     TVOutput o = tv_compute(tv_in, tv_yaw_state);
-    state.torque_L = o.torque_L; state.torque_R = o.torque_R;
+    state.requested_torque_L = o.torque_L;
+    state.requested_torque_R = o.torque_R;
     // 중간신호 관측용 복사 (debug_monitor / Cluster에서 튜닝에 사용)
     state.desired_yaw_rate = o.desired_yaw_rate;
     state.yaw_moment       = o.yaw_moment;
     state.fz_L = o.fz_L; state.fz_R = o.fz_R;
     state.max_torque_L = o.max_torque_L; state.max_torque_R = o.max_torque_R;
-    can_bus::note_command();   // refresh deadman
+}
+static void drive_supervisor_update() {
+    const DriveSupervisorInput in {
+        (float)state.requested_torque_L, (float)state.requested_torque_R,
+        state.controller_feedback_fresh,
+        state.controller_fault_latched ||
+            state.controller_fb2_L.speed_mode || state.controller_fb2_R.speed_mode,
+        state.controller_fb1_L.bus_voltage_v, state.controller_fb1_R.bus_voltage_v,
+        state.controller_fb1_L.bus_current_a, state.controller_fb1_R.bus_current_a,
+        state.controller_fb1_L.phase_current_a, state.controller_fb1_R.phase_current_a,
+        state.controller_fb1_L.motor_speed_rpm, state.controller_fb1_R.motor_speed_rpm,
+        (float)state.controller_fb2_L.controller_temp_c,
+        (float)state.controller_fb2_R.controller_temp_c,
+        (float)state.controller_fb2_L.motor_temp_c,
+        (float)state.controller_fb2_R.motor_temp_c,
+        state.paddock_active, state.vehicle_speed_mps,
+        state.tc_requested, state.vehicle_speed_valid,
+        (float)state.wheel_speed[WHEEL_FL], (float)state.wheel_speed[WHEEL_FR],
+        (float)state.wheel_speed[WHEEL_RL], (float)state.wheel_speed[WHEEL_RR],
+    };
+    const DriveSupervisorOutput out =
+        drive_supervisor_compute(in, DRIVE_SUPERVISOR_PARAMS);
+    state.torque_L = out.left_a;
+    state.torque_R = out.right_a;
+    state.measured_bus_power_w = out.measured_bus_power_w;
+    state.estimated_input_power_w = out.estimated_input_power_w;
+    state.drive_limit_scale = out.applied_scale;
+    state.power_limited = out.power_limited;
+    state.thermal_limited = out.thermal_limited;
+    state.traction_limited = out.traction_limited;
+    can_bus::note_command();
 }
 static void can_rx_update()  { can_bus::poll_rx(); }
 static void vehicle_speed_can_tx_update() { can_bus::send_vehicle_speed(); }
+static void cluster_status_can_tx_update() { can_bus::send_cluster_status(); }
+static void sensor_telemetry_can_tx_update() { can_bus::send_sensor_telemetry(); }
 static void safety_task()    { safety_update(); }
 
 // --- task table: add a new module here (one line) ---
 Task g_tasks[] = {
+    { can_rx_update,            5, 0 },   // 200 Hz drain; feedback precedes control
     { throttle_update,         10, 0 },   // 100 Hz
     { brake_update,            10, 0 },
     { steering_update,         10, 0 },
     { imu_update,              10, 0 },
     { wheel_speed_update,      10, 0 },
     { vehicle_speed_update,    10, 0 },   // 반드시 wheel_speed 다음
+    { gear_update_task,        10, 0 },
+    { paddock_update,          10, 0 },
     { longitudinal_update,     10, 0 },
     { torque_vectoring_update, 10, 0 },
+    { drive_supervisor_update, 10, 0 },
     { safety_task,             10, 0 },
-    { can_rx_update,            5, 0 },   // 200 Hz drain
     { vehicle_speed_can_tx_update, 50, 0 }, // 20 Hz VCU -> Cluster/TMA-1 single speed telemetry
+    { cluster_status_can_tx_update, 50, 0 }, // 20 Hz gear/brake/HV display status
+    { sensor_telemetry_can_tx_update, 50, 0 }, // 20 Hz steering/IMU logger telemetry
     { debug_update,           200, 0 },   // 5 Hz serial debug
 };
 const int G_TASK_COUNT = sizeof(g_tasks) / sizeof(g_tasks[0]);

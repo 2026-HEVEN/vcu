@@ -46,7 +46,58 @@ void test_ids(void) {
     TEST_ASSERT_EQUAL_HEX32(0x1801D0F0, CAN_ID_FB1_R);
     TEST_ASSERT_EQUAL_HEX32(0x1802D0F0, CAN_ID_FB2_R);
     TEST_ASSERT_EQUAL_HEX32(0x1801D0C0, CAN_ID_CLUSTER_CMD);
+    TEST_ASSERT_EQUAL_HEX32(0x1801C0D0, CAN_ID_VCU_CLUSTER_STATUS);
     TEST_ASSERT_EQUAL_HEX32(0x1803C0D0, CAN_ID_VCU_VEHICLE_SPEED);
+    TEST_ASSERT_EQUAL_HEX32(0x1804C0D0, CAN_ID_VCU_STEERING);
+    TEST_ASSERT_EQUAL_HEX32(0x1805C0D0, CAN_ID_VCU_IMU);
+    TEST_ASSERT_EQUAL_HEX32(0x18F3FFC0, CAN_ID_CLUSTER_BMS_STATUS);
+}
+
+void test_decode_controller_feedback(void) {
+    uint8_t part1[8] = {0x3A,0x02, 0x16,0x7D, 0xF0,0x7D, 0xB8,0x0B};
+    ControllerFeedbackPart1 fb1 = decode_controller_feedback_part1(part1);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 57.0f, fb1.bus_voltage_v);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 2.2f, fb1.bus_current_a);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 24.0f, fb1.phase_current_a);
+    TEST_ASSERT_EQUAL_INT(-29000, fb1.motor_speed_rpm);
+
+    uint8_t part2[8] = {80, 90, 0x01, 0x01, 0x02, 0x04, 0, 9};
+    ControllerFeedbackPart2 fb2 = decode_controller_feedback_part2(part2);
+    TEST_ASSERT_EQUAL_INT(40, fb2.controller_temp_c);
+    TEST_ASSERT_EQUAL_INT(50, fb2.motor_temp_c);
+    TEST_ASSERT_TRUE(fb2.running);
+    TEST_ASSERT_TRUE(fb2.any_fault());
+    TEST_ASSERT_EQUAL_UINT8(9, fb2.life);
+}
+
+void test_encode_vcu_cluster_status(void) {
+    uint8_t out[8];
+    encode_vcu_cluster_status(2, true, true, false, 88, 0x5A, out);
+    TEST_ASSERT_EQUAL_UINT8(2, out[0]);
+    TEST_ASSERT_EQUAL_UINT8(0x03, out[1]);
+    TEST_ASSERT_EQUAL_UINT8(0, out[2]);
+    TEST_ASSERT_EQUAL_UINT8(0x5A, out[7]);
+}
+
+void test_sensor_telemetry_encoders(void) {
+    uint8_t out[8];
+    encode_vcu_steering(-0.25f, out);
+    TEST_ASSERT_EQUAL_INT16(-250, (int16_t)(out[0] | (out[1] << 8)));
+    encode_vcu_imu(12.34f, -0.5f, 1.25f, out);
+    TEST_ASSERT_EQUAL_INT16(1234, (int16_t)(out[0] | (out[1] << 8)));
+    TEST_ASSERT_EQUAL_INT16(-50, (int16_t)(out[2] | (out[3] << 8)));
+    TEST_ASSERT_EQUAL_INT16(125, (int16_t)(out[4] | (out[5] << 8)));
+}
+
+void test_decode_cluster_bms_status_is_diagnostic(void) {
+    uint8_t data[8] = {0x03, 78, 0x00,0x02, 0x05,0x7D, 75, 4};
+    ClusterBmsStatus bms = decode_cluster_bms_status(data);
+    TEST_ASSERT_TRUE(bms.valid);
+    TEST_ASSERT_TRUE(bms.ble_connected);
+    TEST_ASSERT_EQUAL_UINT8(78, bms.soc_pct);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 51.2f, bms.pack_voltage_v);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.5f, bms.pack_current_a);
+    TEST_ASSERT_EQUAL_INT(35, bms.temperature_c);
 }
 
 void test_decode_cluster_command_bits(void) {
@@ -105,6 +156,10 @@ int main(int, char **) {
     RUN_TEST(test_ids);
     RUN_TEST(test_decode_cluster_command_bits);
     RUN_TEST(test_decode_cluster_command_regen_off);
+    RUN_TEST(test_decode_controller_feedback);
+    RUN_TEST(test_encode_vcu_cluster_status);
+    RUN_TEST(test_sensor_telemetry_encoders);
+    RUN_TEST(test_decode_cluster_bms_status_is_diagnostic);
     RUN_TEST(test_vehicle_speed_kph_to_raw_clamps_and_rounds);
     RUN_TEST(test_encode_vcu_vehicle_speed);
     return UNITY_END();

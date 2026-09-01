@@ -19,6 +19,12 @@
 
 - `BRAKE_SENSOR_INSTALLED = false`: 미장착 GPIO33을 읽지 않고 브레이크/회생 입력을 0으로 고정
 - `REQUIRE_BOTH_MOTOR_CONTROLLERS = true`: 좌·우 컨트롤러가 모두 핸드셰이크되어야 시험 허용
+- 좌·우 Part I/II 피드백이 모두 250 ms 이내 fresh여야 최종 상전류 명령 허용
+- 컨트롤러 fault 또는 실제 상전류 330 A 초과를 한 번이라도 받으면 전원 재인가까지 구동 차단
+- 컨트롤러 75→85 ℃, 모터 100→120 ℃ 구간에서 선형 감쇠 후 차단
+- `DRIVE_POWER_SOFT_LIMIT_W = 9000`: 공식 10 kW 한계 아래에서 여유를 둔 실시간 제한
+- `GEAR_SELECTOR_INSTALLED = false`: ADC 실측 전에는 전진 고정 D 상태
+- `REGEN_HARDWARE_VALIDATED = false`: Cluster 요청은 수신하지만 음의 상전류는 생성하지 않음
 - 핸드셰이크 전에는 해당 컨트롤러 ID로 일반 토크 프레임을 보내지 않음
 - `0xAA` 응답 전송이 `ESP_OK`일 때만 해당 컨트롤러를 연결 완료로 표시
 - 시리얼 모니터 115200 bps에서 좌/우 핸드셰이크 성공·실패를 확인
@@ -106,11 +112,11 @@ P_battery ~= P_mech / efficiency
 예를 들어 57 V에서는 10 kW가 약 175 A BUS, 58 V에서는 약 172 A BUS지만,
 전압강하와 효율·손실에 따라 Phase/BUS 전류 관계가 계속 달라진다.
 
-현재 `dev`는 컨트롤러 피드백을 아직 상태로 디코딩하지 않으므로 이 10 kW를
-폐루프로 보장하지 못한다. 최초 시험에서는 에너지미터/BMS 또는 외부 CAN logger로
-`V_bus`, 좌·우 `I_bus`, 좌·우 `I_phase`, 실제 RPM을 함께 기록한다. 이후 로그로
-`P_bus=V_pack*I_pack`의 순간값과 500 ms 이동평균을 검증한 뒤 RPM별 Phase-current
-상한곡선을 VCU에 넣는다.
+현재 `dev`는 좌·우 컨트롤러 Part I/II를 20 Hz로 디코딩한다. 최종 명령 앞단에서
+`max(좌우 양의 DC bus power 합, Kt×목표상전류×실제RPM/효율 추정)`이 9 kW를
+넘으면 양의 상전류 명령을 같은 비율로 낮춘다. 이는 공식 Energy Meter의 10 kW
+판정을 대체하지 않는다. 최초 시험에서 Energy Meter, BMS, 컨트롤러 값을 함께
+기록해 전류 부호·지연·오차를 검증한 뒤 9 kW 여유값과 온도 기준을 보정한다.
 
 ## WSS 48 PPR와 구름반경
 

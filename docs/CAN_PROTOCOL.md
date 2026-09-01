@@ -1,7 +1,8 @@
 # HEVEN CAN 프로토콜 명세서 (단일 출처)
 
-> **이 문서는 VCU·Cluster 양 레포가 공유하는 단일 출처(single source of truth)입니다.**
-> 코드(`include/can_protocol.h`)와 이 문서는 항상 일치해야 하며, 수정 시 **양 레포에 동일하게 반영**합니다. (담당: 김도현)
+> **CAN ID와 wire layout은 VCU·Cluster·Monolith가 공유하는 계약입니다.**
+> 양 레포의 구현 헬퍼까지 글자 단위로 같을 필요는 없지만, 버스에 보이는 ID·bit·scaling을
+> 바꿀 때는 세 시스템을 함께 갱신합니다. (담당: 김도현)
 > 출처: `EZkontrol-CANBUS-MCU-to-VCU.pdf V1.0`, `EZkontrol-CANBUS-MCU-to-METER.pdf V1.1`, 시스템 설계.
 
 ---
@@ -74,7 +75,11 @@
 | MCU → METER | 계기 메시지 I | `0x180117EF` | `0x180117F0` | 100ms | 6 |
 | MCU → METER | 계기 메시지 II | `0x180217EF` | `0x180217F0` | 100ms | 6 |
 | Cluster → VCU | 커맨드 (TC/Regen Auto/Debug/Paddock) | `0x1801D0C0` (신규) | — | ~20ms | 8 |
+| VCU → Cluster | 기어/브레이크/HV 상태 | `0x1801C0D0` (신규) | — | 50ms | 6 |
 | VCU → Cluster/TMA-1 | 단일 차량속도 | `0x1803C0D0` (신규) | — | 50ms | 6 |
+| VCU → TMA-1 | 조향 텔레메트리 | `0x1804C0D0` (신규) | — | 50ms | 6 |
+| VCU → TMA-1 | IMU 텔레메트리 | `0x1805C0D0` (신규) | — | 50ms | 6 |
+| Cluster → logger | BMS 상태 요약 | `0x18F3FFC0` | — | 100ms | 6 |
 
 > ID에서 PS(목적지)·SA(송신)만 컨트롤러별로 바뀜. 위 표의 ID는 `PF<<16 | PS<<8 | SA`로 조립됨(+ Priority).
 
@@ -176,7 +181,21 @@
 > ⚠️ TC/Paddock/Regen Auto/Debug는 모두 **요청 신호**다. 실제 토크 제한, 패독 진입 조건, 회생 전류/차단 여부는 VCU가 안전 조건을 기준으로 최종 판단해야 한다.
 > Debug bit는 유지하되, VCU가 현재처럼 Serial debug를 항상 출력한다면 무시해도 된다. 단, 파싱 시 bit 위치는 보존한다.
 
-### 5.8 VCU → Cluster/TMA-1 : 단일 차량속도 `0x1803C0D0` (HEVEN 정의) · 50ms
+### 5.8 VCU → Cluster : 표시 상태 `0x1801C0D0` (HEVEN 정의) · 50ms
+
+| 바이트 | 항목 | 의미 |
+|--------|------|------|
+| 0 | Gear | 0=N, 1=R, 2=D, 3=P |
+| 1 | Flags | bit0 Brake, bit1 HV active, bit2 SOC valid |
+| 2 | SOC | 0~100, bit2가 1일 때만 유효 |
+| 3~6 | 예약 | 0 |
+| 7 | Life | 0~255 |
+
+현재 VCU는 Cluster가 BLE BMS를 직접 표시하므로 SOC valid를 0으로 보낸다.
+기어 셀렉터 실측 전 bring-up 프로파일에서는 전진 고정 상태를 D로 송신한다.
+HV active는 좌·우 컨트롤러 피드백이 fresh이고 DC bus가 20V를 넘을 때 1이다.
+
+### 5.9 VCU → Cluster/TMA-1 : 단일 차량속도 `0x1803C0D0` (HEVEN 정의) · 50ms
 
 > VCU의 `vehicle_speed_compute()`가 산출한 단일 차량속도를 Cluster LCD 표시와 TMA-1 Control Hub 그래프/로깅용으로 전달한다.
 > 개별 4채널 WSS RPM은 VCU 내부 계산용으로만 사용하며, CAN telemetry로 내보내지 않는다.
@@ -191,6 +210,24 @@
 - 인코딩: `encode_vcu_vehicle_speed()`
 - 송신: `can_bus::send_vehicle_speed()`
 - 주기: `app_wiring.cpp` scheduler에서 50ms, 20Hz
+
+### 5.10 VCU → TMA-1 : 조향 `0x1804C0D0` · 50ms
+
+- Byte 0~1: signed int16 little-endian, 정규화 조향값 ×1000
+- Byte 2~7: 0
+
+### 5.11 VCU → TMA-1 : IMU `0x1805C0D0` · 50ms
+
+- Byte 0~1: yaw rate [deg/s] ×100, signed int16 little-endian
+- Byte 2~3: accel X [g] ×100, signed int16 little-endian
+- Byte 4~5: accel Y [g] ×100, signed int16 little-endian
+- Byte 6~7: 0
+
+### 5.12 Cluster → logger/VCU 진단 : BMS 상태 `0x18F3FFC0` · 100ms
+
+VCU도 이 프레임을 관찰해 시리얼 진단 상태에 보관하지만 **안전 제어 입력으로
+사용하지 않는다**. 현재 경로는 BLE 원천 약 1Hz이고 Cluster 파서와 전류 부호가
+실차에서 완전히 검증되지 않았기 때문이다.
 
 ---
 
@@ -214,20 +251,12 @@ MCU: 메시지 I·II 송신 시작 + VCU 제어명령(메시지 I) 대기·실�
 
 ---
 
-## 7. ⚠️ 미결정: 계기 데이터 수신 경로
+## 7. 확정: VCU 모드 피드백을 Cluster와 TMA-1이 스니핑
 
-EZkontrol 컨트롤러는 **METER 모드**일 때 피드백을 `0x1801xxEF`(VCU용)가 아니라
-`0x180117EF`/`0x180217EF`(METER용, §5.5/5.6)로 보낸다. 현재 동방 테스트 컨트롤러가 METER 모드로 설정돼 있음.
-
-두 가지 경로 중 하나를 팀이 확정해야 한다:
-
-| 경로 | 설명 | 장단점 |
-|------|------|--------|
-| **A. Cluster = METER 직수신** | Cluster를 SA=0x17(METER)로 동작시켜 MCU 계기 프레임을 직접 받음 | 컨트롤러 재설정 불필요, but VCU가 피드백을 따로 받으려면 컨트롤러를 VCU모드로도 보내게 설정해야 함(이중) |
-| **B. VCU 게이트웨이** | 컨트롤러를 VCU모드로 설정 → VCU가 0x1801/0x1802 수신 후, Cluster용 차량상태 프레임을 CAN으로 재방송 | VCU 펌웨어가 단일 진실원, but 컨트롤러 EZkontrol 앱 재설정 필요 |
-
-> 관련 메모: "Can_driver 테스트 컨트롤러는 METER 모드. 제어하려면 앱 재설정 필요."
-> → **B로 가려면 컨트롤러를 VCU모드로 재설정**해야 함. 결정 후 이 절을 확정하고 `state` 채우는 RX 파싱을 그에 맞게 구현.
+두 컨트롤러를 VCU 모드로 설정하고, 좌측 SA는 `0xEF`, 우측 SA는 `0xF0`을
+사용한다. VCU는 `0x1801D0EF/F0`, `0x1802D0EF/F0`을 직접 수신해 제어 감독에
+사용한다. Cluster와 TMA-1은 같은 멀티드롭 CAN 버스에서 해당 프레임을 읽기만
+하며, VCU가 컨트롤러 피드백을 별도 게이트웨이 프레임으로 재방송하지 않는다.
 
 ---
 
@@ -238,6 +267,10 @@ EZkontrol 컨트롤러는 **METER 모드**일 때 피드백을 `0x1801xxEF`(VCU�
 constexpr uint32_t CAN_ID_TORQUE_L = 0x0C01EFD0;  // VCU→MCU1
 constexpr uint32_t CAN_ID_TORQUE_R = 0x0C01F0D0;  // VCU→MCU2
 constexpr uint32_t CAN_ID_VCU_VEHICLE_SPEED = 0x1803C0D0; // VCU→Cluster/TMA-1 speed
+constexpr uint32_t CAN_ID_VCU_CLUSTER_STATUS = 0x1801C0D0;
+constexpr uint32_t CAN_ID_VCU_STEERING = 0x1804C0D0;
+constexpr uint32_t CAN_ID_VCU_IMU = 0x1805C0D0;
+constexpr uint32_t CAN_ID_CLUSTER_BMS_STATUS = 0x18F3FFC0;
 uint16_t torque_to_raw(float amps);   // (amps+3200)*10
 float    raw_to_torque(uint16_t raw);
 uint16_t vehicle_speed_kph_to_raw(float kph);
@@ -245,16 +278,13 @@ void     encode_vcu_vehicle_speed(float speed_kph, bool valid, uint8_t out[8]);
 // SA 상수: SA_VCU=0xD0, SA_CLUSTER=0xC0, SA_CONTROLLER_L=0xEF, SA_CONTROLLER_R=0xF0, SA_ENERGY_METER=0x17
 ```
 
-아직 코드에 추가해야 할 것 (이 문서 기준):
-- 피드백 ID 상수: `CAN_ID_FB1_L=0x1801D0EF` 등
-- METER ID 상수 (경로 A 선택 시)
-- `CAN_ID_CLUSTER_CMD = 0x1801D0C0` 및 `decode_cluster_command()`
-- 디코딩 헬퍼: `raw_to_voltage` (×0.1), `raw_to_current` (×0.1, −3200), `raw_to_temp` (−40), 속도(경로별 1 또는 0.1 rpm/bit)
+현재 `dev`에는 좌·우 Part I/II 디코더, Cluster 명령 디코더, 상태/차속/조향/IMU
+인코더가 모두 구현돼 있다. METER 경로는 사용하지 않는다.
 
 ---
 
 ## 9. 변경 관리
 
-- 이 파일과 `include/can_protocol.h`는 **글자 단위로 일치**해야 한다.
-- 수정 시: ① 이 문서 갱신 → ② 양 레포의 `can_protocol.h` 동기화 → ③ 변경 요약을 팀 공지.
+- ID·byte·bit·scaling 계약은 양 레포와 Monolith decoder에서 동일해야 한다.
+- 수정 시: ① 이 문서 갱신 → ② 필요한 송수신 레포 갱신 → ③ Monolith decoder 갱신 → ④ 팀 공지.
 - 새 메시지 ID는 J1939 규칙(PF/PS/SA)에 맞게 할당하고 §4 표에 추가.

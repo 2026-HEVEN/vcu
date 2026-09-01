@@ -17,6 +17,8 @@ void test_state_defaults_safe(void) {
     TEST_ASSERT_EQUAL_FLOAT(0.0f, (float)s.throttle_pct);
     TEST_ASSERT_EQUAL_FLOAT(0.0f, (float)s.torque_L);
     TEST_ASSERT_FALSE(s.brake_active);
+    TEST_ASSERT_FALSE(s.controller_feedback_fresh);
+    TEST_ASSERT_TRUE(s.gear == Gear::Neutral);
 }
 
 void setUp(void) {}

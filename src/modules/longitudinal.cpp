@@ -38,7 +38,9 @@ float longitudinal_compute(const LongInput &in) {
 
     // 3. 최종 토크(전류) 계산
     float drive = (in.throttle_pct / 100.0f) * drive_max_a;
-    float regen = (in.brake_pct / 100.0f) * regen_max_a;
+    float regen = in.regen_auto_enabled
+        ? (in.brake_pct / 100.0f) * regen_max_a
+        : 0.0f;
 
     // 4. 안전 로직: Brake Override (양발 운전 급발진 방지)
     // [권장 피드백 반영] 센서 노이즈나 발을 살짝 올려둔 상태(데드존)를 무시하기 위해 5% 초과일 때만 구동 차단

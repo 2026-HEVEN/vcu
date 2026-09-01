@@ -18,6 +18,20 @@ namespace realcar_cal {
 // Set these back to production requirements as hardware is installed.
 namespace bringup {
 constexpr bool BRAKE_SENSOR_INSTALLED = false;
+// Current vehicle bring-up is forward-only. Set true only after GPIO27 has
+// been measured at N/R/D on the completed PCB and the bands below updated.
+constexpr bool GEAR_SELECTOR_INSTALLED = false;
+constexpr unsigned GEAR_STABLE_SAMPLES = 10U;  // 100 ms at 100 Hz
+// Initial values assume the PCB scales 0/2.5/5 V to approximately
+// 0/half/full ESP32 ADC range. They are placeholders until measured.
+constexpr unsigned GEAR_NEUTRAL_ADC = 0U;
+constexpr unsigned GEAR_REVERSE_ADC = 2048U;
+constexpr unsigned GEAR_DRIVE_ADC = 4095U;
+constexpr unsigned GEAR_ADC_TOLERANCE = 450U;
+// Brake/BMS/current polarity and charge limits are not validated yet. Keeping
+// this false makes a Cluster Regen-Auto request observable but unable to
+// produce negative phase current.
+constexpr bool REGEN_HARDWARE_VALIDATED = false;
 // Do not arm or send propulsion until both independently addressed
 // EZkontrol units have completed their 0x55/0xAA handshake.
 constexpr bool REQUIRE_BOTH_MOTOR_CONTROLLERS = true;
@@ -26,6 +40,23 @@ constexpr bool REQUIRE_BOTH_MOTOR_CONTROLLERS = true;
 // checking controller, motor, battery/BMS and energy-meter data.
 constexpr float DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A = 300.0f;
 constexpr float DRIVE_PHASE_CURRENT_EFF_PER_MOTOR_A = 200.0f;
+// The official Energy Meter remains authoritative. 9 kW gives transient,
+// estimation and auxiliary-load margin below the 10 kW competition ceiling.
+constexpr float DRIVE_POWER_SOFT_LIMIT_W = 9000.0f;
+constexpr float DRIVETRAIN_EFFICIENCY = 0.92f;
+constexpr float CONTROLLER_FEEDBACK_STALE_MS = 250.0f;
+constexpr float CLUSTER_COMMAND_STALE_MS = 200.0f;
+constexpr float PHASE_CURRENT_HARD_CUTOFF_A = 330.0f;
+constexpr float CONTROLLER_DERATE_START_C = 75.0f;
+constexpr float CONTROLLER_CUTOFF_C = 85.0f;
+constexpr float MOTOR_DERATE_START_C = 100.0f;
+constexpr float MOTOR_CUTOFF_C = 120.0f;
+constexpr float PADDOCK_CURRENT_MAX_PER_MOTOR_A = 30.0f;
+constexpr float PADDOCK_SPEED_LIMIT_MPS = 10.0f / 3.6f;
+constexpr float PADDOCK_ENTRY_SPEED_MAX_MPS = 3.0f / 3.6f;
+constexpr float TC_MIN_SPEED_MPS = 2.0f;
+constexpr float TC_SLIP_START = 0.12f;
+constexpr float TC_SLIP_FULL_CUT = 0.25f;
 // Vehicle cannot enter Drive until the released throttle has stayed below
 // this threshold for THROTTLE_ARM_CONSECUTIVE_TICKS scheduler passes.
 constexpr float THROTTLE_ARM_MAX_PCT = 1.0f;

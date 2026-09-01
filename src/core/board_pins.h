@@ -17,6 +17,12 @@ constexpr int WSS_RR = 35;
 
 constexpr int STEERING_ADC = 25;
 
+// Harness v5.1 reserves these, but acquisition/scaling and CAN IDs are not
+// finalized. Do not read the floating inputs until the sensors are installed.
+constexpr int LV_VOLTAGE_ADC_RESERVED = 13;
+constexpr int AIR_RELAY_MONITOR_RESERVED = 14;
+constexpr int BRAKE_PRESSURE_ADC_RESERVED = 26;
+
 // Harness v5 lists the MTi UART pair as D22/D21. RX is listed first.
 constexpr int IMU_RX = 22;
 constexpr int IMU_TX = 21;
