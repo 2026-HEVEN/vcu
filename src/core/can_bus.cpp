@@ -30,6 +30,8 @@
 
 namespace {
     constexpr uint32_t DEADMAN_MS = 200;
+    constexpr int DRIVE_TARGET_SPEED_RPM = 4000;
+    constexpr int REGEN_TARGET_SPEED_RPM = 0;
     volatile uint32_t  g_last_cmd_ms = 0;
     volatile bool      g_handshaked  = false;
     volatile bool      g_handshaked_L = false;
@@ -45,12 +47,18 @@ namespace {
         twai_transmit(&m, pdMS_TO_TICKS(5));
     }
 
-    void send_torque(uint32_t id, float amps) {
-        uint16_t raw = torque_to_raw(amps);
+    void send_torque(uint32_t id, float amps, bool running) {
+        // Confirmed on the vehicle: propulsion uses +4000 rpm while regen
+        // uses 0 rpm. Byte4 must be 0x01 or EZkontrol remains HALTED.
+        const int target_rpm = amps < 0.0f
+            ? REGEN_TARGET_SPEED_RPM
+            : (running ? DRIVE_TARGET_SPEED_RPM : 0);
+        uint8_t data[8];
+        encode_motor_control(amps, target_rpm, running, g_life, data);
+
         twai_message_t m = {};
         m.identifier = id; m.extd = 1; m.data_length_code = 8;
-        m.data[0] = raw & 0xFF; m.data[1] = (raw >> 8) & 0xFF;
-        m.data[7] = g_life;                 // life counter byte (per EZkontrol spec)
+        for (int i = 0; i < 8; ++i) m.data[i] = data[i];
         twai_transmit(&m, pdMS_TO_TICKS(5));
     }
 
@@ -64,8 +72,8 @@ namespace {
             float r = allow ? (float)state.torque_R : 0.0f;
             // Do not place normal command frames on a controller ID before
             // that controller has completed its 0x55/0xAA handshake.
-            if (g_handshaked_L) send_torque(CAN_ID_TORQUE_L, l);
-            if (g_handshaked_R) send_torque(CAN_ID_TORQUE_R, r);
+            if (g_handshaked_L) send_torque(CAN_ID_TORQUE_L, l, allow);
+            if (g_handshaked_R) send_torque(CAN_ID_TORQUE_R, r, allow);
             g_life++;
             vTaskDelayUntil(&next, period);   // exact 50ms cadence
         }

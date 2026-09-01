@@ -25,6 +25,14 @@ constexpr uint32_t CAN_ID_TORQUE_R = 0x0C01F0D0;
 // --- Torque scaling: raw = (amps + 3200) * 10 ---
 uint16_t torque_to_raw(float amps);
 float    raw_to_torque(uint16_t raw);
+uint16_t motor_speed_to_raw(int rpm);
+
+// VCU -> EZkontrol normal control frame (8 bytes):
+//   byte0..1 target phase current, byte2..3 target speed,
+//   byte4 bit0 RUNNING/HALTED, byte7 life counter.
+// Handshake frames (all 0xAA) are deliberately handled separately.
+void encode_motor_control(float amps, int target_rpm, bool running,
+                          uint8_t life, uint8_t out[8]);
 
 // --- Cluster additions (mirror back into the VCU repo's can_protocol.h) ---
 // MCU -> VCU feedback (Controller_L). Controller_R replaces SA 0xEF with 0xF0.

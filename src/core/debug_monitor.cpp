@@ -5,15 +5,19 @@
 // ============================================================
 #include "core/debug_monitor.h"
 #include <Arduino.h>
+#include "can_bus.h"
+#include "safety_logic.h"
 #include "state.h"
 
 void debug_update() {
 #if DEBUG_MONITOR
     Serial.printf(
-        "thr=%5.1f brk=%5.1f str=%+5.2f yaw=%+7.1f | totT=%+6.1f L=%+6.1f R=%+6.1f\n"
+        "ARM=%d HS=%d DM=%d | thrRaw=%4d thr=%5.1f brk=%5.1f str=%+5.2f yaw=%+7.1f | totT=%+6.1f L=%+6.1f R=%+6.1f\n"
         "  WSS(FL/FR/RL/RR)=%5.0f/%5.0f/%5.0f/%5.0f rpm  V=%5.2f m/s %s\n"
         "  TV: yaw*=%+6.1f Mz=%+7.1f Fz(L/R)=%6.0f/%6.0f Tmax(L/R)=%7.0f/%7.0f\n",
-        (float)state.throttle_pct, (float)state.brake_pct, (float)state.steering_angle,
+        torque_allowed(), can_bus::handshaked(), can_bus::deadman_ok(),
+        state.throttle_raw_adc, (float)state.throttle_pct, (float)state.brake_pct,
+        (float)state.steering_angle,
         state.yaw_rate,
         state.total_torque, (float)state.torque_L, (float)state.torque_R,
         (float)state.wheel_speed[WHEEL_FL], (float)state.wheel_speed[WHEEL_FR],

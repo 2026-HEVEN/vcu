@@ -1,5 +1,6 @@
 // [FILL-IN] Edit this file. Implement the *_compute() function below.
 #include "modules/throttle.h"
+#include "modules/realcar_calibration.h"
 
 // ══════ [변경 표시] 원본 대비 바뀐 부분 ═══════════════════════════════════
 //  ① RAW_MIN/RAW_MAX 보정 상수 신규 추가 (아래)
@@ -13,8 +14,8 @@
 //   RAW_MIN : 0% 지점 = 쉼 상태 raw + 약간의 여유(노이즈/오프셋 흡수, 데드존)
 //   RAW_MAX : 100% 지점 = 풀로 밟았을 때 raw
 // 예) 홀 스로틀(0.5~4.5V)을 12bit ADC로 바로 읽으면 대략 RAW_MIN≈620, RAW_MAX≈3720.
-static constexpr float RAW_MIN = 200.0f;   // ★변경(신규): 0% 지점 보정
-static constexpr float RAW_MAX = 3900.0f;  // ★변경(신규): 100% 지점 보정
+static constexpr float RAW_MIN = realcar_cal::provisional::THROTTLE_RAW_MIN;
+static constexpr float RAW_MAX = realcar_cal::provisional::THROTTLE_RAW_MAX;
 
 Percent throttle_compute(const ThrottleInput &in) {
     // 데드존 아래(쉼 근처)는 0% — 음수/떨림 방지   ★변경: 기준을 frac<0.05 → raw<=RAW_MIN 으로

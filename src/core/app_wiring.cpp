@@ -66,7 +66,8 @@ namespace {
 }
 
 static void throttle_update() {
-    state.throttle_pct = throttle_compute({ analogRead(board_pins::THROTTLE_ADC) });
+    state.throttle_raw_adc = analogRead(board_pins::THROTTLE_ADC);
+    state.throttle_pct = throttle_compute({ state.throttle_raw_adc });
 }
 static void brake_update() {
     // Current bring-up vehicle has no brake sensor. Never read the floating

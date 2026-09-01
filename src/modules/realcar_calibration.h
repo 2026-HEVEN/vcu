@@ -19,6 +19,10 @@ namespace realcar_cal {
 namespace bringup {
 constexpr bool BRAKE_SENSOR_INSTALLED = false;
 constexpr bool REQUIRE_BOTH_MOTOR_CONTROLLERS = false;
+// Vehicle cannot enter Drive until the released throttle has stayed below
+// this threshold for THROTTLE_ARM_CONSECUTIVE_TICKS scheduler passes.
+constexpr float THROTTLE_ARM_MAX_PCT = 1.0f;
+constexpr unsigned THROTTLE_ARM_CONSECUTIVE_TICKS = 30U;  // about 300 ms at 100 Hz
 }  // namespace bringup
 
 namespace confirmed {
@@ -35,6 +39,12 @@ constexpr float CONTROL_PERIOD_S = 0.01f;  // 100 Hz
 }  // namespace confirmed
 
 namespace provisional {
+// Initial Hall-throttle calibration. These values are deliberately
+// conservative and MUST be replaced with the actual released/full ADC
+// readings from the 5 Hz serial diagnostics before a driven test.
+constexpr float THROTTLE_RAW_MIN = 620.0f;
+constexpr float THROTTLE_RAW_MAX = 3720.0f;
+
 // 초기값: 구름둘레 1.50 m / 2pi. 운전자 탑승·실사용 공기압 상태에서
 // 누적 WSS 펄스와 실주행 거리로 다시 식별한다.
 constexpr float WHEEL_SPEED_ROLLING_RADIUS_M = 0.2387f;

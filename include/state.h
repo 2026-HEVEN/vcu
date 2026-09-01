@@ -11,6 +11,7 @@
 
 struct VehicleState {
     // inputs
+    int       throttle_raw_adc = 0; // diagnostics/calibration; 0..4095
     Percent   throttle_pct;       // 0..100 (clamped both ways)
     Pct0to100 brake_pct;
     bool      brake_active = false;

@@ -10,7 +10,7 @@
 
 - **스택**: PlatformIO + Arduino-ESP32, ESP32 내장 TWAI(CAN)
 - **구조**: 잠긴 코어(CAN·안전·타이밍) + 팀원이 채우는 순수 모듈(`src/modules/`). 자세히는 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- **상태**: ESP32 빌드 그린, 호스트 테스트 116개 통과
+- **상태**: ESP32 빌드 그린, 호스트 테스트 120개 통과
 
 ## 빠른 시작
 
@@ -62,9 +62,16 @@ pio device monitor
 | [`docs/REALCAR_CALIBRATION.md`](docs/REALCAR_CALIBRATION.md) | 실차 확정값·초기값·측정/튜닝 절차 |
 | [`src/core/board_pins.h`](src/core/board_pins.h) | 하네스 v5 GPIO 단일 기준 (`GPIO-fixed` 동기화) |
 
-## 아직 미구현 (의도된 TODO)
+## 현재 bring-up 범위와 남은 작업
 
-- **CAN RX 파싱 + 핸드셰이크** — `src/core/can_bus.cpp` `poll_rx()` 스텁. 구현 전엔 안전 FSM이 `Idle`에 머물러 차량이 arm되지 않음.
+- **구동 경로 구현 완료** — 좌/우 EZkontrol 핸드셰이크, 50 ms life frame,
+  목표속도/RUNNING bit, deadman, 스로틀-release arm 조건이 연결되어 있다.
+- **컨트롤러 피드백 파싱 미구현** — 실제 전류·RPM·온도·오류 프레임을 아직
+  `VehicleState`와 진단 CAN으로 전달하지 않는다. 최초 시험은 CAN analyzer와
+  컨트롤러/BMS 로그를 함께 사용한다.
+- **현재 프로파일은 단일 모터 저속 시험용** — 브레이크 센서는 비활성화,
+  한 컨트롤러만 핸드셰이크해도 arm 가능하다. 두 번째 모터와 센서 장착 후
+  `realcar_calibration.h`의 bring-up 플래그를 생산 조건으로 되돌린다.
 - **토크벡터링 실차 활성화** — 5-stage 로직은 구현되어 있지만 기본 PID는
   `0/0/0`이라 strict 50:50 OFF다. 실차 캘리브레이션과 단계별 검증 후 활성화한다.
 

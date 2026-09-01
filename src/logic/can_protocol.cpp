@@ -13,6 +13,26 @@ float raw_to_torque(uint16_t raw) {
     return (float)raw / 10.0f - 3200.0f;
 }
 
+uint16_t motor_speed_to_raw(int rpm) {
+    if (rpm < -32000) rpm = -32000;
+    if (rpm >  32000) rpm =  32000;
+    return (uint16_t)(rpm + 32000);
+}
+
+void encode_motor_control(float amps, int target_rpm, bool running,
+                          uint8_t life, uint8_t out[8]) {
+    for (int i = 0; i < 8; ++i) out[i] = 0;
+
+    const uint16_t current_raw = torque_to_raw(amps);
+    const uint16_t speed_raw = motor_speed_to_raw(target_rpm);
+    out[0] = (uint8_t)(current_raw & 0xFF);
+    out[1] = (uint8_t)((current_raw >> 8) & 0xFF);
+    out[2] = (uint8_t)(speed_raw & 0xFF);
+    out[3] = (uint8_t)((speed_raw >> 8) & 0xFF);
+    out[4] = running ? 0x01 : 0x00;  // bit0 RUNNING, bit1=0 Torque Control
+    out[7] = life;
+}
+
 float raw_to_voltage(uint16_t raw) { return (float)raw * 0.1f; }
 float raw_to_current(uint16_t raw) { return (float)raw * 0.1f - 3200.0f; }
 int   raw_to_temp(uint8_t raw)     { return (int)raw - 40; }
