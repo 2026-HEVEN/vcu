@@ -11,6 +11,7 @@
 #include "core/drivers/imu_driver.h"
 #include "core/drivers/steering_encoder_driver.h"
 #include "core/board_pins.h"
+#include "safety_logic.h"
 #include "modules/throttle.h"
 #include "modules/brake.h"
 #include "modules/steering.h"
@@ -22,6 +23,7 @@
 #include "modules/torque_vectoring.h"
 #include "modules/gear.h"
 #include "modules/drive_supervisor.h"
+#include "modules/time_sync_pulse.h"
 #include <Arduino.h>
 
 // [LOCKED] The ONLY translation unit that touches `state`. All update() wiring
@@ -84,6 +86,16 @@ namespace {
         realcar_cal::bringup::MOTOR_DERATE_START_C,
         realcar_cal::bringup::MOTOR_CUTOFF_C,
     };
+    const TimeSyncPulseParams TIME_SYNC_PARAMS {
+        realcar_cal::bringup::ENABLE_TIME_SYNC_PULSE,
+        realcar_cal::bringup::TIME_SYNC_PHASE_CURRENT_PER_MOTOR_A,
+        realcar_cal::bringup::TIME_SYNC_PULSE_ON_S,
+        realcar_cal::bringup::TIME_SYNC_PULSE_OFF_S,
+        realcar_cal::bringup::TIME_SYNC_PULSE_COUNT,
+        realcar_cal::bringup::TIME_SYNC_ARM_TIMEOUT_S,
+    };
+    TimeSyncPulseState time_sync_state{};
+    TimeSyncPulseOutput time_sync_output{};
 }
 
 static void throttle_update() {
@@ -181,9 +193,43 @@ static void torque_vectoring_update() {
     state.fz_L = o.fz_L; state.fz_R = o.fz_R;
     state.max_torque_L = o.max_torque_L; state.max_torque_R = o.max_torque_R;
 }
+static void time_sync_pulse_update() {
+    const bool throttle_released =
+        (float)state.throttle_pct <= realcar_cal::bringup::THROTTLE_ARM_MAX_PCT;
+    const bool mode_requests_off = !state.tv_enable_requested &&
+        !state.regen_auto_requested && !state.paddock_active &&
+        !state.paddock_requested;
+    const bool runtime_ok = can_bus::handshaked() && torque_allowed() &&
+        state.controller_feedback_fresh && !state.controller_fault_latched &&
+        throttle_released && !state.brake_active &&
+        state.gear == Gear::Drive && mode_requests_off &&
+        state.vehicle_speed_valid &&
+        state.vehicle_speed_mps <=
+            realcar_cal::bringup::TIME_SYNC_START_SPEED_MAX_MPS;
+    const bool start_ok = runtime_ok;
+
+    time_sync_output = time_sync_pulse_step({
+        debug_consume_time_sync_arm_request(),
+        debug_consume_time_sync_run_request(),
+        debug_consume_time_sync_cancel_request(),
+        start_ok,
+        runtime_ok,
+        realcar_cal::confirmed::CONTROL_PERIOD_S,
+    }, TIME_SYNC_PARAMS, time_sync_state);
+
+    state.time_sync_armed = time_sync_output.armed;
+    state.time_sync_active = time_sync_output.running;
+    state.time_sync_command_a = time_sync_output.left_a;
+    if (time_sync_output.completed_event) ++state.time_sync_completed_count;
+    if (time_sync_output.aborted_event) ++state.time_sync_aborted_count;
+}
 static void drive_supervisor_update() {
+    const float requested_left_a = time_sync_output.override_active
+        ? time_sync_output.left_a : (float)state.requested_torque_L;
+    const float requested_right_a = time_sync_output.override_active
+        ? time_sync_output.right_a : (float)state.requested_torque_R;
     const DriveSupervisorInput in {
-        (float)state.requested_torque_L, (float)state.requested_torque_R,
+        requested_left_a, requested_right_a,
         state.controller_feedback_fresh,
         state.controller_fault_latched ||
             state.controller_fb2_L.speed_mode || state.controller_fb2_R.speed_mode,
@@ -227,6 +273,7 @@ Task g_tasks[] = {
     { paddock_update,          10, 0 },
     { longitudinal_update,     10, 0 },
     { torque_vectoring_update, 10, 0 },
+    { time_sync_pulse_update,  10, 0 },
     { drive_supervisor_update, 10, 0 },
     { safety_task,             10, 0 },
     { vehicle_speed_can_tx_update, 50, 0 }, // 20 Hz VCU -> Cluster/TMA-1 single speed telemetry

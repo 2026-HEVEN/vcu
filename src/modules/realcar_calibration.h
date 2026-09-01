@@ -51,6 +51,18 @@ constexpr float DRIVETRAIN_EFFICIENCY = 0.92f;
 constexpr float CONTROLLER_FEEDBACK_STALE_MS = 250.0f;
 constexpr float CLUSTER_COMMAND_STALE_MS = 200.0f;
 constexpr float PHASE_CURRENT_HARD_CUTOFF_A = 330.0f;
+// Energy Meter (100 Hz) and Monolith/controller feedback (20 Hz) time-axis
+// marker. It never runs automatically: Serial SYNC_ARM followed by SYNC_RUN
+// is required, and the runtime safety conditions are checked every 10 ms.
+// The initial 20 A per motor is provisional; calibrate on stands/rollers so
+// the HV bus-current pulse is visible without an unsafe wheel acceleration.
+constexpr bool ENABLE_TIME_SYNC_PULSE = true;
+constexpr float TIME_SYNC_PHASE_CURRENT_PER_MOTOR_A = 20.0f;
+constexpr float TIME_SYNC_PULSE_ON_S = 0.5f;
+constexpr float TIME_SYNC_PULSE_OFF_S = 0.5f;
+constexpr unsigned TIME_SYNC_PULSE_COUNT = 3U;
+constexpr float TIME_SYNC_ARM_TIMEOUT_S = 10.0f;
+constexpr float TIME_SYNC_START_SPEED_MAX_MPS = 1.0f / 3.6f;
 constexpr float CONTROLLER_DERATE_START_C = 75.0f;
 constexpr float CONTROLLER_CUTOFF_C = 85.0f;
 constexpr float MOTOR_DERATE_START_C = 100.0f;

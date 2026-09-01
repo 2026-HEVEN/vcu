@@ -10,7 +10,7 @@
 
 - **스택**: PlatformIO + Arduino-ESP32, ESP32 내장 TWAI(CAN)
 - **구조**: 잠긴 코어(CAN·안전·타이밍) + 팀원이 채우는 순수 모듈(`src/modules/`). 자세히는 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- **상태**: ESP32 빌드 그린, 호스트 테스트 124개 통과
+- **상태**: ESP32 빌드 그린, 호스트 테스트 145개 통과
 
 ## 빠른 시작
 
@@ -60,6 +60,7 @@ pio device monitor
 | [`docs/CAN_PROTOCOL.md`](docs/CAN_PROTOCOL.md) | CAN 메시지 명세 (VCU/Cluster 공유 단일 출처) |
 | [`docs/TORQUE_VECTORING.md`](docs/TORQUE_VECTORING.md) | 5-stage 토크벡터링 설계와 안전 동작 |
 | [`docs/REALCAR_CALIBRATION.md`](docs/REALCAR_CALIBRATION.md) | 실차 확정값·초기값·측정/튜닝 절차 |
+| [`docs/TIME_SYNC_PULSE.md`](docs/TIME_SYNC_PULSE.md) | Energy Meter–Monolith 시간축 동기화 시험 절차 |
 | [`src/core/board_pins.h`](src/core/board_pins.h) | 하네스 v5 GPIO 단일 기준 (`GPIO-fixed` 동기화) |
 
 ## 현재 bring-up 범위와 남은 작업

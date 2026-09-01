@@ -66,6 +66,13 @@ struct VehicleState {
     float     drive_limit_scale = 0.0f;
     bool      power_limited = false;
     bool      thermal_limited = false;
+    // Energy Meter/Monolith time-axis marker diagnostics. The state machine
+    // itself is private to app_wiring; these fields are observation only.
+    bool      time_sync_armed = false;
+    bool      time_sync_active = false;
+    float     time_sync_command_a = 0.0f;
+    unsigned  time_sync_completed_count = 0U;
+    unsigned  time_sync_aborted_count = 0U;
     // TV intermediate signals (관측/튜닝용; app_wiring이 TVOutput에서 복사)
     float     desired_yaw_rate = 0.0f;   // reference stage
     float     yaw_moment       = 0.0f;   // yaw_control stage (Mz)

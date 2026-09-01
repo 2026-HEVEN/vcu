@@ -100,6 +100,10 @@
 **토크 스케일링**: `raw16 = (target_A + 3200) × 10` (리틀엔디언). 음수 = 회생제동.
 → 0A=32000, +32A=32320, −32A=31680. **`include/can_protocol.h`의 `torque_to_raw()`와 동일.**
 
+> 시험 전용 시간축 동기화도 이 기존 프레임에 좌·우 동일 전류 펄스를 실어
+> Energy Meter HV Current와 Monolith 컨트롤러 전류 로그를 정합한다. 별도 CAN
+> ID는 추가하지 않는다. 실행 조건과 절차는 `docs/TIME_SYNC_PULSE.md`를 따른다.
+
 ### 5.2 VCU → MCU : 핸드셰이크 응답  `0x0C01EFD0` / `0x0C01F0D0`
 
 8바이트 **전부 `0xAA`**. (MCU의 0x55 요청에 대한 응답 — §6 참고)
