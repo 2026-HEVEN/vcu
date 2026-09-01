@@ -73,14 +73,12 @@ namespace {
     };
     GearFilterState gear_filter_state{};
     const DriveSupervisorParams DRIVE_SUPERVISOR_PARAMS {
-        realcar_cal::bringup::DRIVE_POWER_SOFT_LIMIT_W,
+        realcar_cal::bringup::ENABLE_DRIVE_POWER_LIMIT
+            ? realcar_cal::bringup::DRIVE_POWER_SOFT_LIMIT_W : 0.0f,
         realcar_cal::bringup::DRIVETRAIN_EFFICIENCY,
         realcar_cal::confirmed::MOTOR_KT_NM_PER_A,
         realcar_cal::bringup::PADDOCK_CURRENT_MAX_PER_MOTOR_A,
         realcar_cal::bringup::PADDOCK_SPEED_LIMIT_MPS,
-        realcar_cal::bringup::TC_MIN_SPEED_MPS,
-        realcar_cal::bringup::TC_SLIP_START,
-        realcar_cal::bringup::TC_SLIP_FULL_CUT,
         realcar_cal::bringup::CONTROLLER_DERATE_START_C,
         realcar_cal::bringup::CONTROLLER_CUTOFF_C,
         realcar_cal::bringup::MOTOR_DERATE_START_C,
@@ -198,9 +196,6 @@ static void drive_supervisor_update() {
         (float)state.controller_fb2_L.motor_temp_c,
         (float)state.controller_fb2_R.motor_temp_c,
         state.paddock_active, state.vehicle_speed_mps,
-        state.tc_requested, state.vehicle_speed_valid,
-        (float)state.wheel_speed[WHEEL_FL], (float)state.wheel_speed[WHEEL_FR],
-        (float)state.wheel_speed[WHEEL_RL], (float)state.wheel_speed[WHEEL_RR],
     };
     const DriveSupervisorOutput out =
         drive_supervisor_compute(in, DRIVE_SUPERVISOR_PARAMS);
@@ -211,7 +206,6 @@ static void drive_supervisor_update() {
     state.drive_limit_scale = out.applied_scale;
     state.power_limited = out.power_limited;
     state.thermal_limited = out.thermal_limited;
-    state.traction_limited = out.traction_limited;
     can_bus::note_command();
 }
 static void can_rx_update()  { can_bus::poll_rx(); }

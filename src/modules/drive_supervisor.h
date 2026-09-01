@@ -6,9 +6,6 @@ struct DriveSupervisorParams {
     float motor_kt_nm_per_a;
     float paddock_current_per_motor_a;
     float paddock_speed_limit_mps;
-    float tc_min_speed_mps;
-    float tc_slip_start;
-    float tc_slip_full_cut;
     float controller_derate_start_c;
     float controller_cutoff_c;
     float motor_derate_start_c;
@@ -34,12 +31,6 @@ struct DriveSupervisorInput {
     float motor_temp_right_c;
     bool paddock_active;
     float vehicle_speed_mps;
-    bool tc_enabled;
-    bool vehicle_speed_valid;
-    float wheel_rpm_fl;
-    float wheel_rpm_fr;
-    float wheel_rpm_rl;
-    float wheel_rpm_rr;
 };
 
 struct DriveSupervisorOutput {
@@ -51,7 +42,6 @@ struct DriveSupervisorOutput {
     bool controller_blocked = false;
     bool power_limited = false;
     bool thermal_limited = false;
-    bool traction_limited = false;
     bool paddock_limited = false;
 };
 

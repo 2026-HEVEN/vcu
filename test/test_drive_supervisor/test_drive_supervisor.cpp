@@ -3,7 +3,7 @@
 
 static DriveSupervisorParams params() {
     return {9000.0f, 0.92f, 0.1266f, 30.0f, 2.7778f,
-            2.0f, 0.12f, 0.25f, 75.0f, 85.0f, 100.0f, 120.0f};
+            75.0f, 85.0f, 100.0f, 120.0f};
 }
 
 static DriveSupervisorInput nominal() {
@@ -49,6 +49,20 @@ void test_power_limit_scales_both_motors(void) {
     TEST_ASSERT_FLOAT_WITHIN(0.01f, out.left_a, out.right_a);
 }
 
+void test_zero_power_limit_disables_power_limiting(void) {
+    DriveSupervisorInput in = nominal();
+    in.requested_left_a = 300.0f;
+    in.requested_right_a = 300.0f;
+    in.motor_rpm_left = 2500;
+    in.motor_rpm_right = 2500;
+    DriveSupervisorParams p = params();
+    p.power_soft_limit_w = 0.0f;
+    auto out = drive_supervisor_compute(in, p);
+    TEST_ASSERT_FALSE(out.power_limited);
+    TEST_ASSERT_EQUAL_FLOAT(300.0f, out.left_a);
+    TEST_ASSERT_EQUAL_FLOAT(300.0f, out.right_a);
+}
+
 void test_paddock_clamps_current_and_speed(void) {
     DriveSupervisorInput in = nominal();
     in.paddock_active = true;
@@ -57,20 +71,6 @@ void test_paddock_clamps_current_and_speed(void) {
     in.vehicle_speed_mps = 3.0f;
     out = drive_supervisor_compute(in, params());
     TEST_ASSERT_EQUAL_FLOAT(0.0f, out.left_a);
-}
-
-void test_tc_reduces_only_slipping_side(void) {
-    DriveSupervisorInput in = nominal();
-    in.tc_enabled = true;
-    in.vehicle_speed_valid = true;
-    in.vehicle_speed_mps = 5.0f;
-    in.wheel_rpm_fl = 100.0f;
-    in.wheel_rpm_fr = 100.0f;
-    in.wheel_rpm_rl = 130.0f;
-    in.wheel_rpm_rr = 100.0f;
-    auto out = drive_supervisor_compute(in, params());
-    TEST_ASSERT_TRUE(out.traction_limited);
-    TEST_ASSERT_TRUE(out.left_a < out.right_a);
 }
 
 void test_thermal_cutoff_also_blocks_regen(void) {
@@ -91,8 +91,8 @@ int main(int, char **) {
     RUN_TEST(test_stale_feedback_blocks_all_current);
     RUN_TEST(test_fault_blocks_all_current);
     RUN_TEST(test_power_limit_scales_both_motors);
+    RUN_TEST(test_zero_power_limit_disables_power_limiting);
     RUN_TEST(test_paddock_clamps_current_and_speed);
-    RUN_TEST(test_tc_reduces_only_slipping_side);
     RUN_TEST(test_thermal_cutoff_also_blocks_regen);
     return UNITY_END();
 }

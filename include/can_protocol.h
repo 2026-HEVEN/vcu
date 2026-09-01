@@ -41,7 +41,8 @@ constexpr uint32_t CAN_ID_FB1_L = 0x1801D0EF;   // Part I: voltage/current/speed
 constexpr uint32_t CAN_ID_FB2_L = 0x1802D0EF;   // Part II: temps/status/errors
 constexpr uint32_t CAN_ID_FB1_R = 0x1801D0F0;   // Part I, Controller_R
 constexpr uint32_t CAN_ID_FB2_R = 0x1802D0F0;   // Part II, Controller_R
-// Cluster -> VCU command (TC/Regen Auto/Debug/Paddock). HEVEN-defined.
+// Cluster -> VCU command. The physical/UI label "TC" means TV enable in the
+// current HEVEN project contract.
 constexpr uint32_t CAN_ID_CLUSTER_CMD = 0x1801D0C0;
 // VCU -> Cluster confirmed vehicle state.
 constexpr uint32_t CAN_ID_VCU_CLUSTER_STATUS = 0x1801C0D0;
@@ -55,14 +56,14 @@ constexpr uint32_t CAN_ID_VCU_IMU = 0x1805C0D0;
 constexpr uint32_t CAN_ID_CLUSTER_BMS_STATUS = 0x18F3FFC0;
 
 struct ClusterCommandRequest {
-    bool tc_enabled = false;
+    bool tv_enabled = false;
     bool regen_auto_enabled = false;
     bool debug_enabled = false;
     bool paddock_request = false;
 };
 
 // Cluster -> VCU command frame (0x1801D0C0):
-// byte1 bit0=TC, bit1=Regen Auto, bit2=reserved, bit3=Debug,
+// byte1 bit0=TC-labelled TV enable, bit1=Regen Auto, bit2=reserved, bit3=Debug,
 // byte2 bit0=Paddock. Debug is kept as a request bit even if VCU ignores it.
 ClusterCommandRequest decode_cluster_command(const uint8_t data[8]);
 

@@ -16,15 +16,6 @@ float temperature_scale(float value, float derate_start, float cutoff) {
     return (cutoff - value) / (cutoff - derate_start);
 }
 
-float tc_scale(float driven_rpm, float reference_rpm,
-               float slip_start, float slip_full_cut) {
-    if (reference_rpm <= 1.0f) return 1.0f;
-    const float slip = (driven_rpm - reference_rpm) / reference_rpm;
-    if (slip <= slip_start) return 1.0f;
-    if (slip >= slip_full_cut || slip_full_cut <= slip_start) return 0.0f;
-    return (slip_full_cut - slip) / (slip_full_cut - slip_start);
-}
-
 void scale_positive(float &value, float scale) {
     if (value > 0.0f) value *= scale;
 }
@@ -86,22 +77,6 @@ DriveSupervisorOutput drive_supervisor_compute(
             if (out.right_a > 0.0f) out.right_a = 0.0f;
         }
         out.paddock_limited = true;
-    }
-
-    if (in.tc_enabled && in.vehicle_speed_valid &&
-        in.vehicle_speed_mps >= params.tc_min_speed_mps) {
-        const float front_reference = 0.5f * (in.wheel_rpm_fl + in.wheel_rpm_fr);
-        const float left_scale = clamp01(tc_scale(
-            in.wheel_rpm_rl, front_reference,
-            params.tc_slip_start, params.tc_slip_full_cut));
-        const float right_scale = clamp01(tc_scale(
-            in.wheel_rpm_rr, front_reference,
-            params.tc_slip_start, params.tc_slip_full_cut));
-        if (left_scale < 1.0f || right_scale < 1.0f) {
-            scale_positive(out.left_a, left_scale);
-            scale_positive(out.right_a, right_scale);
-            out.traction_limited = true;
-        }
     }
 
     constexpr float TWO_PI_OVER_60 = 0.104719755f;

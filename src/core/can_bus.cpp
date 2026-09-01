@@ -165,7 +165,9 @@ void poll_rx() {
 
         if (m.identifier == CAN_ID_CLUSTER_CMD && m.data_length_code == 8) {
             ClusterCommandRequest cmd = decode_cluster_command(m.data);
-            state.tc_requested = cmd.tc_enabled;
+            // Cluster UI/PCB calls this switch "TC", but the agreed project
+            // meaning is the torque-vectoring enable request.
+            state.tv_enable_requested = cmd.tv_enabled;
             state.regen_auto_requested = cmd.regen_auto_enabled;
             state.paddock_requested = cmd.paddock_request;
             state.debug_requested = cmd.debug_enabled;
@@ -232,7 +234,7 @@ void poll_rx() {
         (uint32_t)realcar_cal::bringup::CLUSTER_COMMAND_STALE_MS;
     if (!fresh(state.cluster_cmd_last_rx_ms, cluster_stale_ms)) {
         state.cluster_cmd_alive = false;
-        state.tc_requested = false;
+        state.tv_enable_requested = false;
         state.regen_auto_requested = false;
         state.debug_requested = false;
         state.paddock_requested = false;

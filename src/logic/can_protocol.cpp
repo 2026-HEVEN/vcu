@@ -40,7 +40,7 @@ int   raw_to_speed(uint16_t raw)   { return (int)raw - 32000; }
 
 ClusterCommandRequest decode_cluster_command(const uint8_t data[8]) {
     ClusterCommandRequest cmd;
-    cmd.tc_enabled = (data[1] & 0x01) != 0;
+    cmd.tv_enabled = (data[1] & 0x01) != 0;
     cmd.regen_auto_enabled = (data[1] & 0x02) != 0;
     cmd.debug_enabled = (data[1] & 0x08) != 0;
     cmd.paddock_request = (data[2] & 0x01) != 0;

@@ -284,8 +284,9 @@ ImuOutput imu_compute(const ImuRaw &raw, ImuFilterState &s);  // s에 이전값 
 ## 알려진 미완성 (의도된 TODO)
 
 - `can_bus.cpp::poll_rx()`는 좌/우 핸드셰이크, Cluster command, EZkontrol Part I/II,
-  Cluster BMS 진단 프레임을 디코딩한다. Part I/II freshness·fault·온도와 9 kW
-  소프트 전력 제한은 `drive_supervisor`가 최종 좌우 전류 명령에 적용한다.
+  Cluster BMS 진단 프레임을 디코딩한다. Part I/II freshness·fault·온도는
+  `drive_supervisor`가 최종 좌우 전류 명령에 적용한다. 추정 9 kW 전력 제한은
+  계산·관측 코드만 유지하고 bring-up 기본값에서는 OFF다.
 - `longitudinal_compute` — Normal/Efficiency 구동·회생 전류와 SOC taper,
   brake override가 구현되어 있다. 현재 브레이크 센서가 없어 bring-up 설정에서는
   회생 입력을 0으로 고정한다. `REGEN_HARDWARE_VALIDATED`도 false라 Cluster의
@@ -299,5 +300,7 @@ ImuOutput imu_compute(const ImuRaw &raw, ImuFilterState &s);  // s에 이전값 
   PID 게인이 0이므로 현재 거동은 strict 50:50 OFF다. 온보딩·담당표는
   [`TORQUE_VECTORING.md`](TORQUE_VECTORING.md). 중간신호(목표yaw·Mz·Fz·최대토크)는
   `VehicleState`로 노출되어 debug monitor/Cluster에서 관측 가능.
+- Cluster와 PCB의 `TC` 표기는 이 프로젝트에서 별도 휠슬립 TC가 아니라 위 TV의
+  활성 요청을 의미한다. VCU에는 독립적인 TC 감쇠 알고리즘을 두지 않는다.
 - deadman은 현재 "스케줄러 살아있음"을 추적한다(자세한 NOTE는 `can_bus.cpp` 참고).
   향후 외부 토크 명령원이 생기면 유효 명령의 신선도로 게이팅해야 한다.

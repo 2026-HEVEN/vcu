@@ -106,7 +106,7 @@ void test_decode_cluster_command_bits(void) {
     data[2] = 0x01; // Paddock
 
     ClusterCommandRequest cmd = decode_cluster_command(data);
-    TEST_ASSERT_TRUE(cmd.tc_enabled);
+    TEST_ASSERT_TRUE(cmd.tv_enabled);
     TEST_ASSERT_TRUE(cmd.regen_auto_enabled);
     TEST_ASSERT_TRUE(cmd.debug_enabled);
     TEST_ASSERT_TRUE(cmd.paddock_request);
@@ -116,7 +116,7 @@ void test_decode_cluster_command_regen_off(void) {
     uint8_t data[8] = {};
     data[1] = 0x04; // reserved bit must not imply regen auto
     ClusterCommandRequest cmd = decode_cluster_command(data);
-    TEST_ASSERT_FALSE(cmd.tc_enabled);
+    TEST_ASSERT_FALSE(cmd.tv_enabled);
     TEST_ASSERT_FALSE(cmd.regen_auto_enabled);
     TEST_ASSERT_FALSE(cmd.debug_enabled);
     TEST_ASSERT_FALSE(cmd.paddock_request);

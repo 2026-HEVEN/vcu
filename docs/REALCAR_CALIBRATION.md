@@ -22,7 +22,10 @@
 - 좌·우 Part I/II 피드백이 모두 250 ms 이내 fresh여야 최종 상전류 명령 허용
 - 컨트롤러 fault 또는 실제 상전류 330 A 초과를 한 번이라도 받으면 전원 재인가까지 구동 차단
 - 컨트롤러 75→85 ℃, 모터 100→120 ℃ 구간에서 선형 감쇠 후 차단
-- `DRIVE_POWER_SOFT_LIMIT_W = 9000`: 공식 10 kW 한계 아래에서 여유를 둔 실시간 제한
+- `ENABLE_DRIVE_POWER_LIMIT = false`: 최초 실차 로깅 중에는 추정 전력 제한 OFF
+- `DRIVE_POWER_SOFT_LIMIT_W = 9000`: 추정 모델 검증 후 위 플래그를 켤 때 사용할 후보값
+- Paddock은 유지하되 `PADDOCK_CURRENT_MAX_PER_MOTOR_A = 30`은 임시값이다. 완성차가
+  평지·출발저항·운전자 탑승 조건에서 안정적으로 굴러가는 최소 상전류를 실측해 교체한다.
 - `GEAR_SELECTOR_INSTALLED = false`: ADC 실측 전에는 전진 고정 D 상태
 - `REGEN_HARDWARE_VALIDATED = false`: Cluster 요청은 수신하지만 음의 상전류는 생성하지 않음
 - 핸드셰이크 전에는 해당 컨트롤러 ID로 일반 토크 프레임을 보내지 않음
@@ -112,11 +115,28 @@ P_battery ~= P_mech / efficiency
 예를 들어 57 V에서는 10 kW가 약 175 A BUS, 58 V에서는 약 172 A BUS지만,
 전압강하와 효율·손실에 따라 Phase/BUS 전류 관계가 계속 달라진다.
 
-현재 `dev`는 좌·우 컨트롤러 Part I/II를 20 Hz로 디코딩한다. 최종 명령 앞단에서
-`max(좌우 양의 DC bus power 합, Kt×목표상전류×실제RPM/효율 추정)`이 9 kW를
-넘으면 양의 상전류 명령을 같은 비율로 낮춘다. 이는 공식 Energy Meter의 10 kW
-판정을 대체하지 않는다. 최초 시험에서 Energy Meter, BMS, 컨트롤러 값을 함께
-기록해 전류 부호·지연·오차를 검증한 뒤 9 kW 여유값과 온도 기준을 보정한다.
+현재 `dev`는 좌·우 컨트롤러 Part I/II를 20 Hz로 디코딩하고 전력 계산값을
+시리얼 상태에 남기지만, `ENABLE_DRIVE_POWER_LIMIT=false`라 전류 명령을 줄이지 않는다.
+최초 시험에서 Energy Meter, BMS, 컨트롤러 값을 함께 기록해 전류 부호·지연·오차를
+검증한다. 이후 `max(좌우 양의 DC bus power 합, Kt×목표상전류×실제RPM/효율 추정)`이
+공식 Energy Meter와 충분히 일치할 때만 플래그를 켜고 9 kW 후보값을 보정한다.
+
+### Paddock 최소 구동전류 캘리브레이션
+
+현재 30 A/모터는 기능 배선과 속도 제한을 확인하기 위한 시작값일 뿐 확정값이 아니다.
+바퀴를 지면에 내리고 운전자 탑승·정상 타이어 공기압 상태에서 다음 순서로 정한다.
+
+1. 평지에서 Paddock을 켜고 매우 낮은 전류부터 단계적으로 올린다.
+2. 정지마찰을 이기고 양쪽 모터가 반복해서 출발하는 최소값을 기록한다.
+3. 약한 경사와 조향 상태에서도 출발 가능한지 확인한다.
+4. 좌·우 목표/실제 상전류와 BUS 전류, 속도를 함께 기록한다.
+5. 반복 출발이 가능한 최소값에 작은 여유를 더해
+   `PADDOCK_CURRENT_MAX_PER_MOTOR_A`로 확정하고
+   `PADDOCK_CURRENT_CALIBRATED=true`로 바꾼다.
+
+Paddock의 10 km/h 제한은 현재 경계에서 구동전류를 0으로 자르는 단순 방식이다.
+실측 중 울컥임이 크면 제한속도 접근 구간에서 전류를 점진적으로 줄이는 폐루프 제어를
+후속 구현한다.
 
 ## WSS 48 PPR와 구름반경
 

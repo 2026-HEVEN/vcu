@@ -45,8 +45,10 @@ struct VehicleState {
     bool      controller_feedback_fresh = false;
     bool      controller_fault_latched = false;
     // Cluster -> VCU command (from CAN_ID_CLUSTER_CMD, decoded in can_bus.cpp)
-    bool      tc_requested = false;
-    bool      tv_enable_requested = false;   // no longer aliases the TC bit
+    // The Cluster labels its torque-vectoring request bit as "TC". In this
+    // project that bit enables the existing TV pipeline; it is not a separate
+    // wheel-slip traction-control algorithm.
+    bool      tv_enable_requested = false;
     bool      regen_auto_requested = false;
     bool      paddock_requested = false;
     bool      paddock_active = false;
@@ -64,7 +66,6 @@ struct VehicleState {
     float     drive_limit_scale = 0.0f;
     bool      power_limited = false;
     bool      thermal_limited = false;
-    bool      traction_limited = false;
     // TV intermediate signals (관측/튜닝용; app_wiring이 TVOutput에서 복사)
     float     desired_yaw_rate = 0.0f;   // reference stage
     float     yaw_moment       = 0.0f;   // yaw_control stage (Mz)

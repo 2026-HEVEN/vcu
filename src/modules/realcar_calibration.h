@@ -40,8 +40,12 @@ constexpr bool REQUIRE_BOTH_MOTOR_CONTROLLERS = true;
 // checking controller, motor, battery/BMS and energy-meter data.
 constexpr float DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A = 300.0f;
 constexpr float DRIVE_PHASE_CURRENT_EFF_PER_MOTOR_A = 200.0f;
-// The official Energy Meter remains authoritative. 9 kW gives transient,
-// estimation and auxiliary-load margin below the 10 kW competition ceiling.
+// Keep the estimated power limiter OFF during bring-up so logged controller
+// feedback and the official Energy Meter can be compared without the estimator
+// changing the test. Set true only after the power model is validated.
+constexpr bool ENABLE_DRIVE_POWER_LIMIT = false;
+// Candidate limit used when ENABLE_DRIVE_POWER_LIMIT is true. The official
+// Energy Meter remains authoritative.
 constexpr float DRIVE_POWER_SOFT_LIMIT_W = 9000.0f;
 constexpr float DRIVETRAIN_EFFICIENCY = 0.92f;
 constexpr float CONTROLLER_FEEDBACK_STALE_MS = 250.0f;
@@ -51,12 +55,12 @@ constexpr float CONTROLLER_DERATE_START_C = 75.0f;
 constexpr float CONTROLLER_CUTOFF_C = 85.0f;
 constexpr float MOTOR_DERATE_START_C = 100.0f;
 constexpr float MOTOR_CUTOFF_C = 120.0f;
+// Provisional starting point only. Measure the minimum per-motor phase current
+// that reliably moves the complete vehicle, then recalibrate this value.
+constexpr bool PADDOCK_CURRENT_CALIBRATED = false;
 constexpr float PADDOCK_CURRENT_MAX_PER_MOTOR_A = 30.0f;
 constexpr float PADDOCK_SPEED_LIMIT_MPS = 10.0f / 3.6f;
 constexpr float PADDOCK_ENTRY_SPEED_MAX_MPS = 3.0f / 3.6f;
-constexpr float TC_MIN_SPEED_MPS = 2.0f;
-constexpr float TC_SLIP_START = 0.12f;
-constexpr float TC_SLIP_FULL_CUT = 0.25f;
 // Vehicle cannot enter Drive until the released throttle has stayed below
 // this threshold for THROTTLE_ARM_CONSECUTIVE_TICKS scheduler passes.
 constexpr float THROTTLE_ARM_MAX_PCT = 1.0f;

@@ -54,6 +54,8 @@ void test_bringup_phase_current_ceiling_is_300_a_per_motor() {
 void test_unverified_inputs_are_fail_closed() {
     TEST_ASSERT_FALSE(realcar_cal::bringup::GEAR_SELECTOR_INSTALLED);
     TEST_ASSERT_FALSE(realcar_cal::bringup::REGEN_HARDWARE_VALIDATED);
+    TEST_ASSERT_FALSE(realcar_cal::bringup::ENABLE_DRIVE_POWER_LIMIT);
+    TEST_ASSERT_FALSE(realcar_cal::bringup::PADDOCK_CURRENT_CALIBRATED);
     TEST_ASSERT_EQUAL_FLOAT(9000.0f,
         realcar_cal::bringup::DRIVE_POWER_SOFT_LIMIT_W);
 }
