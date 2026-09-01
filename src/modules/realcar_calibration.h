@@ -21,6 +21,11 @@ constexpr bool BRAKE_SENSOR_INSTALLED = false;
 // Do not arm or send propulsion until both independently addressed
 // EZkontrol units have completed their 0x55/0xAA handshake.
 constexpr bool REQUIRE_BOTH_MOTOR_CONTROLLERS = true;
+// Throttle command ceiling, per motor. This is a software test limit, not a
+// competition-rule or battery-current limit. Raise/lower only here after
+// checking controller, motor, battery/BMS and energy-meter data.
+constexpr float DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A = 300.0f;
+constexpr float DRIVE_PHASE_CURRENT_EFF_PER_MOTOR_A = 200.0f;
 // Vehicle cannot enter Drive until the released throttle has stayed below
 // this threshold for THROTTLE_ARM_CONSECUTIVE_TICKS scheduler passes.
 constexpr float THROTTLE_ARM_MAX_PCT = 1.0f;

@@ -10,7 +10,7 @@
 
 - **스택**: PlatformIO + Arduino-ESP32, ESP32 내장 TWAI(CAN)
 - **구조**: 잠긴 코어(CAN·안전·타이밍) + 팀원이 채우는 순수 모듈(`src/modules/`). 자세히는 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- **상태**: ESP32 빌드 그린, 호스트 테스트 121개 통과
+- **상태**: ESP32 빌드 그린, 호스트 테스트 124개 통과
 
 ## 빠른 시작
 

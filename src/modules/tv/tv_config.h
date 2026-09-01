@@ -28,9 +28,10 @@ struct TVParams {
     // --- HPM05KW + 감속기: 모터 상전류[A] <-> 휠 종력 변환 ---
     float gear_ratio             = realcar_cal::confirmed::GEAR_RATIO;
     float motor_kt_nm_per_a      = realcar_cal::confirmed::MOTOR_KT_NM_PER_A;
-    // HPM05KW continuous torque 13 N·m / measured Kt 0.1266 ~= 103 A.
-    // Peak 300 A remains representable by Amp but is not enabled here.
-    float motor_current_max_a    = realcar_cal::confirmed::MOTOR_CONTINUOUS_CURRENT_MAX_A;
+    // Bring-up software ceiling. The separate 103 A value in confirmed is
+    // the estimated continuous motor operating point, not this short test cap.
+    float motor_current_max_a    =
+        realcar_cal::bringup::DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A;
 
     // --- 노면 / 타이어 ---
     float mu             = 1.0f;     // 노면 마찰계수 (지금은 상수; 추후 추정 확장 여지)

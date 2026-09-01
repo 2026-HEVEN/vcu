@@ -1,5 +1,15 @@
 #include <unity.h>
 #include "modules/longitudinal.h"
+#include "modules/realcar_calibration.h"
+
+void test_full_throttle_requests_configured_current_for_both_motors(void) {
+    const float total = longitudinal_compute(
+        {100.0f, 0.0f, 0.5f, DriveMode::Normal});
+    TEST_ASSERT_FLOAT_WITHIN(
+        0.01f,
+        2.0f * realcar_cal::bringup::DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A,
+        total);
+}
 
 void test_regen_taper_midpoint(void) {
     float t = longitudinal_compute({0.0f, 100.0f, 0.925f, DriveMode::Normal});
@@ -48,6 +58,7 @@ void setUp(void) {}
 void tearDown(void) {}
 int main(int, char **) {
     UNITY_BEGIN();
+    RUN_TEST(test_full_throttle_requests_configured_current_for_both_motors);
     RUN_TEST(test_throttle_drives_positive);
     RUN_TEST(test_brake_regens_negative);
     RUN_TEST(test_idle_is_zero);

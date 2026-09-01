@@ -43,6 +43,14 @@ void test_dual_motor_bringup_requires_both_controllers() {
     TEST_ASSERT_TRUE(realcar_cal::bringup::REQUIRE_BOTH_MOTOR_CONTROLLERS);
 }
 
+void test_bringup_phase_current_ceiling_is_300_a_per_motor() {
+    TEST_ASSERT_EQUAL_FLOAT(
+        300.0f, realcar_cal::bringup::DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A);
+    TEST_ASSERT_EQUAL_FLOAT(
+        realcar_cal::bringup::DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A,
+        TV_PARAMS.motor_current_max_a);
+}
+
 void setUp(void) {}
 void tearDown(void) {}
 
@@ -53,5 +61,6 @@ int main(int, char **) {
     RUN_TEST(test_tv_defaults_share_realcar_profile);
     RUN_TEST(test_production_default_keeps_tv_master_off);
     RUN_TEST(test_dual_motor_bringup_requires_both_controllers);
+    RUN_TEST(test_bringup_phase_current_ceiling_is_300_a_per_motor);
     return UNITY_END();
 }

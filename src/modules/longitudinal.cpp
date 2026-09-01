@@ -1,10 +1,16 @@
 // [FILL-IN] Edit this file. Implement the *_compute() function below.
 #include "modules/longitudinal.h"
+#include "modules/realcar_calibration.h"
 
 float longitudinal_compute(const LongInput &in) {
-    constexpr float DRIVE_MAX_A_NORMAL = 30.0f;
+    // This module outputs the SUM of the two motor phase-current demands.
+    // TV OFF divides it 50:50, so 2 * per-motor limit gives each controller
+    // exactly the configured per-motor ceiling at full throttle.
+    constexpr float DRIVE_MAX_A_NORMAL =
+        2.0f * realcar_cal::bringup::DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A;
     constexpr float REGEN_MAX_A_NORMAL = 20.0f;
-    constexpr float DRIVE_MAX_A_EFF = 20.0f;
+    constexpr float DRIVE_MAX_A_EFF =
+        2.0f * realcar_cal::bringup::DRIVE_PHASE_CURRENT_EFF_PER_MOTOR_A;
     constexpr float REGEN_MAX_A_EFF = 30.0f;
     
     constexpr float SOC_TAPER_START = 0.90f; // 회생제동 감소 시작
