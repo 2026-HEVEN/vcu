@@ -39,6 +39,10 @@ void test_production_default_keeps_tv_master_off() {
     TEST_ASSERT_EQUAL_FLOAT(0.0f, TV_PARAMS.kd);
 }
 
+void test_dual_motor_bringup_requires_both_controllers() {
+    TEST_ASSERT_TRUE(realcar_cal::bringup::REQUIRE_BOTH_MOTOR_CONTROLLERS);
+}
+
 void setUp(void) {}
 void tearDown(void) {}
 
@@ -48,5 +52,6 @@ int main(int, char **) {
     RUN_TEST(test_vehicle_speed_defaults_share_realcar_profile);
     RUN_TEST(test_tv_defaults_share_realcar_profile);
     RUN_TEST(test_production_default_keeps_tv_master_off);
+    RUN_TEST(test_dual_motor_bringup_requires_both_controllers);
     return UNITY_END();
 }

@@ -14,11 +14,13 @@
 
 namespace realcar_cal {
 
-// Temporary bring-up profile for the current single-motor vehicle.
+// Temporary bring-up profile for the current dual-motor vehicle.
 // Set these back to production requirements as hardware is installed.
 namespace bringup {
 constexpr bool BRAKE_SENSOR_INSTALLED = false;
-constexpr bool REQUIRE_BOTH_MOTOR_CONTROLLERS = false;
+// Do not arm or send propulsion until both independently addressed
+// EZkontrol units have completed their 0x55/0xAA handshake.
+constexpr bool REQUIRE_BOTH_MOTOR_CONTROLLERS = true;
 // Vehicle cannot enter Drive until the released throttle has stayed below
 // this threshold for THROTTLE_ARM_CONSECUTIVE_TICKS scheduler passes.
 constexpr float THROTTLE_ARM_MAX_PCT = 1.0f;
