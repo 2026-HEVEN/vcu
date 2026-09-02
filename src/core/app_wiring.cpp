@@ -285,7 +285,7 @@ Task g_tasks[] = {
     { vehicle_speed_can_tx_update, 50, 0 }, // 20 Hz VCU -> Cluster/TMA-1 single speed telemetry
     { cluster_status_can_tx_update, 50, 0 }, // 20 Hz gear/brake/HV display status
     { sensor_telemetry_can_tx_update, 50, 0 }, // 20 Hz steering/IMU logger telemetry
-    { debug_update,           200, 0 },   // 5 Hz serial debug
+    { debug_update,            50, 0 },   // 20 Hz compact test log; 1 Hz idle summary
 };
 const int G_TASK_COUNT = sizeof(g_tasks) / sizeof(g_tasks[0]);
 

@@ -66,6 +66,10 @@ void test_unverified_inputs_are_fail_closed() {
         realcar_cal::bringup::DRIVE_POWER_SOFT_LIMIT_W);
 }
 
+void test_can_rx_queue_has_burst_margin_for_debug_logging() {
+    TEST_ASSERT_EQUAL_UINT(32U, realcar_cal::bringup::CAN_RX_QUEUE_LENGTH);
+}
+
 void setUp(void) {}
 void tearDown(void) {}
 
@@ -78,5 +82,6 @@ int main(int, char **) {
     RUN_TEST(test_dual_motor_bringup_requires_both_controllers);
     RUN_TEST(test_bringup_phase_current_ceiling_is_150_a_per_motor);
     RUN_TEST(test_unverified_inputs_are_fail_closed);
+    RUN_TEST(test_can_rx_queue_has_burst_margin_for_debug_logging);
     return UNITY_END();
 }

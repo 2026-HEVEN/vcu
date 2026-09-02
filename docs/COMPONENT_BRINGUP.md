@@ -45,16 +45,21 @@ MOTOR_BOTH 10 300
 
 ## 로그 판독
 
-- `CAN HS=L/R`: 각 컨트롤러 핸드셰이크
-- `fresh=L/R`, `age1`, `age2`: Part I/II 수신 여부와 마지막 수신 이후 ms
+- 평상시에는 `STAT`, `MCU`, `CAN` 세 줄 요약을 1 Hz로 출력한다.
+- 모터 또는 동기화 시험 중에는 `FAST_CSV` 한 줄을 20 Hz로 출력한다.
+- `hs`, `fb`, `age1`, `age2`: 좌·우 핸드셰이크/피드백과 마지막 수신 이후 ms
 - `err`: 컨트롤러 error1/2/3
-- `twai`, `txFail`, `rxMiss`, `busErr`, `arbLost`: ESP32 CAN 드라이버 상태/누적 오류
+- `state`, `txFail`, `rxMiss`, `busErr`, `arbLost`: ESP32 CAN 드라이버 상태/누적 오류
+- `q`, `peak`: 32프레임 RX 큐의 현재 적재량과 부팅 이후 최대 관측 적재량
 - `MCU Ibus/Iph/rpm`: 좌·우 컨트롤러 실측값
-- `TEST active/side/cmd/remain`: 현재 펄스 상태
+- `FAST_CSV`의 `cmd_l/r`, `out_l/r`: 요청값과 실제 CAN life-task 송신값
 - `gear`: 실제 제어에 사용하는 기어. 이 브랜치에서는 D(2) 고정
 - `sensed/raw`: 임시 ADC 구간으로 판정한 기어와 실제 GPIO27 ADC
 - `IMU=ok|STALE`: MTi-320 데이터 freshness
 - `WSS`, `pulses`: 네 바퀴 RPM과 부팅 이후 누적 상승엣지. 한 바퀴당 48 증가 예상
+
+`rxMiss`는 누적값이므로 재부팅 직후 0에서 증가하는지 확인한다. 짧은 시험 중에도
+계속 증가하거나 `peak`가 32에 가까워지면 시험 전류를 올리지 않는다.
 
 기어 ADC의 N/R/D 기준값은 아직 임시값이다. 세 위치에서 `raw` 안정 구간을 먼저
 기록하고 `realcar_calibration.h`의 기준값과 허용폭을 보정한 뒤에만

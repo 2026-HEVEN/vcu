@@ -153,6 +153,10 @@ namespace {
             }
             // Do not place normal command frames on a controller ID before
             // that controller has completed its 0x55/0xAA handshake.
+            state.can_commanded_current_L = l;
+            state.can_commanded_current_R = r;
+            state.can_commanded_running_L = run_l;
+            state.can_commanded_running_R = run_r;
             if (g_handshaked_L) send_torque(CAN_ID_TORQUE_L, l, run_l);
             if (g_handshaked_R) send_torque(CAN_ID_TORQUE_R, r, run_r);
             g_life++;
@@ -168,6 +172,7 @@ void begin() {
         static_cast<gpio_num_t>(board_pins::CAN_TX),
         static_cast<gpio_num_t>(board_pins::CAN_RX),
         TWAI_MODE_NORMAL);
+    g.rx_queue_len = realcar_cal::bringup::CAN_RX_QUEUE_LENGTH;
     twai_timing_config_t  t = TWAI_TIMING_CONFIG_250KBITS();
     twai_filter_config_t  f = TWAI_FILTER_CONFIG_ACCEPT_ALL();
     twai_driver_install(&g, &t, &f);
@@ -217,6 +222,11 @@ void poll_rx() {
     // over once running. A 0x55-pattern frame is a handshake probe, not real
     // feedback, so it must be intercepted before feedback parsing.
     static const uint8_t HANDSHAKE_PATTERN[8] = {0x55,0x55,0x55,0x55,0x55,0x55,0x55,0x55};
+    twai_status_info_t before_drain{};
+    if (twai_get_status_info(&before_drain) == ESP_OK &&
+        before_drain.msgs_to_rx > state.can_rx_queue_peak) {
+        state.can_rx_queue_peak = before_drain.msgs_to_rx;
+    }
     twai_message_t m;
     while (twai_receive(&m, 0) == ESP_OK) {
         if (!m.extd) continue;
@@ -325,6 +335,7 @@ void poll_rx() {
         state.can_rx_missed_count = can_status.rx_missed_count;
         state.can_bus_error_count = can_status.bus_error_count;
         state.can_arb_lost_count = can_status.arb_lost_count;
+        state.can_rx_queued_count = can_status.msgs_to_rx;
         state.can_state = static_cast<uint8_t>(can_status.state);
     }
 

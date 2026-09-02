@@ -54,6 +54,8 @@ struct VehicleState {
     uint32_t  can_rx_missed_count = 0;
     uint32_t  can_bus_error_count = 0;
     uint32_t  can_arb_lost_count = 0;
+    uint32_t  can_rx_queued_count = 0;
+    uint32_t  can_rx_queue_peak = 0;
     uint8_t   can_state = 0;
     // Cluster -> VCU command (from CAN_ID_CLUSTER_CMD, decoded in can_bus.cpp)
     // The Cluster labels its torque-vectoring request bit as "TC". In this
@@ -72,6 +74,10 @@ struct VehicleState {
     Amp       requested_torque_R;
     Amp       torque_L;              // motor phase-current command [A]
     Amp       torque_R;
+    float     can_commanded_current_L = 0.0f; // actual life-task frame value
+    float     can_commanded_current_R = 0.0f;
+    bool      can_commanded_running_L = false;
+    bool      can_commanded_running_R = false;
     float     measured_bus_power_w = 0.0f;
     float     estimated_input_power_w = 0.0f;
     float     drive_limit_scale = 0.0f;

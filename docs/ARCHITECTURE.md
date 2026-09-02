@@ -152,7 +152,7 @@ Task g_tasks[] = {
     { throttle_update,         10, 0 },  // 100Hz
     { torque_vectoring_update, 10, 0 },  // 100Hz
     { can_rx_update,            5, 0 },  // 200Hz
-    { debug_update,           200, 0 },  // 5Hz
+    { debug_update,            50, 0 },  // active test CSV 20Hz; idle summary 1Hz
 };
 ```
 
@@ -263,7 +263,7 @@ ImuOutput imu_compute(const ImuRaw &raw, ImuFilterState &s);  // s에 이전값 
 2. `test/`에 테스트 쓰고 `pio test -e native -f test_<name>` 로 확인
 3. (코어 담당) `app_wiring.cpp`에 `*_update()` + `g_tasks[]` 한 줄 추가
 4. `pio run -e esp32dev` 로 빌드 → 보드에 업로드
-5. `pio device monitor` 로 `debug_monitor`(5Hz)가 뿌리는 state 실시간 확인
+5. `pio device monitor` 로 평상시 1Hz 요약/시험 중 20Hz CSV 상태 확인
 
 상세 절차: [`ADDING_A_MODULE.md`](ADDING_A_MODULE.md)
 

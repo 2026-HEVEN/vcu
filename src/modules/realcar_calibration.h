@@ -58,6 +58,7 @@ constexpr float DRIVE_POWER_SOFT_LIMIT_W = 9000.0f;
 constexpr float DRIVETRAIN_EFFICIENCY = 0.92f;
 constexpr float CONTROLLER_FEEDBACK_STALE_MS = 250.0f;
 constexpr float CLUSTER_COMMAND_STALE_MS = 200.0f;
+constexpr unsigned CAN_RX_QUEUE_LENGTH = 32U;
 constexpr float PHASE_CURRENT_HARD_CUTOFF_A = 330.0f;
 // Energy Meter (100 Hz) and Monolith/controller feedback (20 Hz) time-axis
 // marker. It never runs automatically: Serial SYNC_ARM followed by SYNC_RUN

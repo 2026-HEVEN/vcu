@@ -28,7 +28,7 @@ pio test -e native
 # 4. 보드에 빌드 & 업로드 (ESP32 연결 상태에서)
 pio run -e esp32dev -t upload
 
-# 5. 실시간 상태 모니터 (throttle/torque 등 5Hz 출력)
+# 5. 실시간 상태 모니터 (평상시 1Hz 요약, 시험 중 20Hz CSV)
 pio device monitor
 ```
 
