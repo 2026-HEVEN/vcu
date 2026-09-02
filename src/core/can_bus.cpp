@@ -68,14 +68,93 @@ namespace {
         const TickType_t period = pdMS_TO_TICKS(50);
         TickType_t next = xTaskGetTickCount();
         for (;;) {
-            bool allow = torque_allowed() &&
-                         (millis() - g_last_cmd_ms < DEADMAN_MS);
-            float l = allow ? (float)state.torque_L : 0.0f;
-            float r = allow ? (float)state.torque_R : 0.0f;
+            const uint32_t now = millis();
+            const bool scheduler_alive = (now - g_last_cmd_ms < DEADMAN_MS);
+            if (state.component_test_normal_inhibit) {
+                if (!state.component_test_active &&
+                    (float)state.throttle_pct <=
+                        realcar_cal::bringup::THROTTLE_ARM_MAX_PCT) {
+                    if (state.component_test_release_ticks < 6U) {
+                        ++state.component_test_release_ticks;
+                    }
+                    if (state.component_test_release_ticks >= 6U) {
+                        state.component_test_normal_inhibit = false;
+                    }
+                } else {
+                    state.component_test_release_ticks = 0U;
+                }
+            }
+            bool normal_allow = torque_allowed() && scheduler_alive &&
+                                !state.component_test_normal_inhibit;
+            float l = normal_allow ? (float)state.torque_L : 0.0f;
+            float r = normal_allow ? (float)state.torque_R : 0.0f;
+            bool run_l = normal_allow;
+            bool run_r = normal_allow;
+
+            // Branch-only component test path. While a test is active it has
+            // exclusive ownership of both command outputs: the unselected
+            // motor is explicitly HALTED and normal throttle cannot mix in.
+            if (state.component_test_active) {
+                normal_allow = false;
+                l = 0.0f;
+                r = 0.0f;
+                run_l = false;
+                run_r = false;
+
+                const bool before_deadline =
+                    static_cast<int32_t>(state.component_test_deadline_ms - now) > 0;
+                if (!before_deadline) {
+                    state.component_test_active = false;
+                    ++state.component_test_completed_count;
+                } else {
+                    const bool common_ok = scheduler_alive &&
+                        component_test_safety_allowed() &&
+                        !state.controller_fault_latched &&
+                        (float)state.throttle_pct <=
+                            realcar_cal::bringup::THROTTLE_ARM_MAX_PCT &&
+                        !state.brake_active && state.gear == Gear::Drive;
+                    const bool left_ok = !state.component_test_left ||
+                        (g_handshaked_L && state.controller_feedback_fresh_L &&
+                         !state.controller_fb2_L.any_fault() &&
+                         state.controller_fb2_L.controller_temp_c <
+                            realcar_cal::bringup::CONTROLLER_CUTOFF_C &&
+                         state.controller_fb2_L.motor_temp_c <
+                            realcar_cal::bringup::MOTOR_CUTOFF_C &&
+                         !state.controller_fb2_L.speed_mode &&
+                         std::fabs(state.controller_fb1_L.phase_current_a) <
+                            realcar_cal::bringup::PHASE_CURRENT_HARD_CUTOFF_A);
+                    const bool right_ok = !state.component_test_right ||
+                        (g_handshaked_R && state.controller_feedback_fresh_R &&
+                         !state.controller_fb2_R.any_fault() &&
+                         state.controller_fb2_R.controller_temp_c <
+                            realcar_cal::bringup::CONTROLLER_CUTOFF_C &&
+                         state.controller_fb2_R.motor_temp_c <
+                            realcar_cal::bringup::MOTOR_CUTOFF_C &&
+                         !state.controller_fb2_R.speed_mode &&
+                         std::fabs(state.controller_fb1_R.phase_current_a) <
+                            realcar_cal::bringup::PHASE_CURRENT_HARD_CUTOFF_A);
+                    if (!common_ok || !left_ok || !right_ok) {
+                        state.component_test_active = false;
+                        ++state.component_test_aborted_count;
+                    } else {
+                        const float test_a = std::fmax(0.0f, std::fmin(
+                            state.component_test_current_a,
+                            realcar_cal::bringup::COMPONENT_TEST_CURRENT_MAX_PER_MOTOR_A));
+                        if (state.component_test_left) {
+                            l = test_a;
+                            run_l = true;
+                        }
+                        if (state.component_test_right) {
+                            r = test_a;
+                            run_r = true;
+                        }
+                    }
+                }
+            }
             // Do not place normal command frames on a controller ID before
             // that controller has completed its 0x55/0xAA handshake.
-            if (g_handshaked_L) send_torque(CAN_ID_TORQUE_L, l, allow);
-            if (g_handshaked_R) send_torque(CAN_ID_TORQUE_R, r, allow);
+            if (g_handshaked_L) send_torque(CAN_ID_TORQUE_L, l, run_l);
+            if (g_handshaked_R) send_torque(CAN_ID_TORQUE_R, r, run_r);
             g_life++;
             vTaskDelayUntil(&next, period);   // exact 50ms cadence
         }
@@ -153,7 +232,13 @@ void poll_rx() {
             memset(reply.data, 0xAA, 8);
             const esp_err_t tx_result = twai_transmit(&reply, pdMS_TO_TICKS(5));
             if (tx_result == ESP_OK) {
-                if (from_l) g_handshaked_L = true; else g_handshaked_R = true;
+                if (from_l) {
+                    g_handshaked_L = true;
+                    state.controller_handshaked_L = true;
+                } else {
+                    g_handshaked_R = true;
+                    state.controller_handshaked_R = true;
+                }
                 Serial.printf("[CAN] controller %c handshake reply sent\n",
                               from_l ? 'L' : 'R');
             } else {
@@ -224,11 +309,24 @@ void poll_rx() {
     };
     const uint32_t feedback_stale_ms =
         (uint32_t)realcar_cal::bringup::CONTROLLER_FEEDBACK_STALE_MS;
-    state.controller_feedback_fresh =
+    state.controller_feedback_fresh_L =
         fresh(state.controller_fb1_last_ms_L, feedback_stale_ms) &&
+        fresh(state.controller_fb2_last_ms_L, feedback_stale_ms);
+    state.controller_feedback_fresh_R =
         fresh(state.controller_fb1_last_ms_R, feedback_stale_ms) &&
-        fresh(state.controller_fb2_last_ms_L, feedback_stale_ms) &&
         fresh(state.controller_fb2_last_ms_R, feedback_stale_ms);
+    state.controller_feedback_fresh =
+        state.controller_feedback_fresh_L &&
+        state.controller_feedback_fresh_R;
+
+    twai_status_info_t can_status{};
+    if (twai_get_status_info(&can_status) == ESP_OK) {
+        state.can_tx_failed_count = can_status.tx_failed_count;
+        state.can_rx_missed_count = can_status.rx_missed_count;
+        state.can_bus_error_count = can_status.bus_error_count;
+        state.can_arb_lost_count = can_status.arb_lost_count;
+        state.can_state = static_cast<uint8_t>(can_status.state);
+    }
 
     const uint32_t cluster_stale_ms =
         (uint32_t)realcar_cal::bringup::CLUSTER_COMMAND_STALE_MS;

@@ -23,6 +23,7 @@ struct VehicleState {
     float     accel_y  = 0.0f;
     bool      imu_valid = false;
     Rpm       wheel_speed[WHEEL_COUNT];   // FL, FR, RL, RR (개별 휠속)
+    uint32_t  wheel_pulse_total[WHEEL_COUNT]{}; // hand-spin sensor check
     float     vehicle_speed_mps  = 0.0f;  // 전륜 기준 추정 차속 (vehicle_speed 모듈)
     bool      vehicle_speed_valid = false;// false = 전륜 신호 불신 → TV 비활성
     float     pack_soc = 0.0f;    // 0..1, diagnostic BLE mirror only
@@ -32,6 +33,7 @@ struct VehicleState {
     int       pack_temperature_c = -40;
     uint32_t  bms_last_rx_ms = 0;
     uint16_t  gear_raw_adc = 0;
+    Gear      gear_sensed = Gear::Neutral; // diagnostic; never grants authority
     Gear      gear = Gear::Neutral;
     // controller feedback (from CAN)
     ControllerFeedbackPart1 controller_fb1_L;
@@ -42,8 +44,17 @@ struct VehicleState {
     uint32_t  controller_fb1_last_ms_R = 0;
     uint32_t  controller_fb2_last_ms_L = 0;
     uint32_t  controller_fb2_last_ms_R = 0;
+    bool      controller_handshaked_L = false;
+    bool      controller_handshaked_R = false;
+    bool      controller_feedback_fresh_L = false;
+    bool      controller_feedback_fresh_R = false;
     bool      controller_feedback_fresh = false;
     bool      controller_fault_latched = false;
+    uint32_t  can_tx_failed_count = 0;
+    uint32_t  can_rx_missed_count = 0;
+    uint32_t  can_bus_error_count = 0;
+    uint32_t  can_arb_lost_count = 0;
+    uint8_t   can_state = 0;
     // Cluster -> VCU command (from CAN_ID_CLUSTER_CMD, decoded in can_bus.cpp)
     // The Cluster labels its torque-vectoring request bit as "TC". In this
     // project that bit enables the existing TV pipeline; it is not a separate
@@ -73,6 +84,18 @@ struct VehicleState {
     float     time_sync_command_a = 0.0f;
     unsigned  time_sync_completed_count = 0U;
     unsigned  time_sync_aborted_count = 0U;
+    // Bench-only, time-bounded motor pulse. The CAN life task owns expiry and
+    // applies per-side live feedback/fault/temperature gates before output.
+    bool      component_test_active = false;
+    bool      component_test_left = false;
+    bool      component_test_right = false;
+    bool      component_test_normal_inhibit = false;
+    unsigned  component_test_release_ticks = 0U;
+    float     component_test_current_a = 0.0f;
+    uint32_t  component_test_deadline_ms = 0;
+    unsigned  component_test_completed_count = 0U;
+    unsigned  component_test_aborted_count = 0U;
+    unsigned  component_test_rejected_count = 0U;
     // TV intermediate signals (관측/튜닝용; app_wiring이 TVOutput에서 복사)
     float     desired_yaw_rate = 0.0f;   // reference stage
     float     yaw_moment       = 0.0f;   // yaw_control stage (Mz)

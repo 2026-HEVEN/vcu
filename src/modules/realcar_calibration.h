@@ -38,8 +38,16 @@ constexpr bool REQUIRE_BOTH_MOTOR_CONTROLLERS = true;
 // Throttle command ceiling, per motor. This is a software test limit, not a
 // competition-rule or battery-current limit. Raise/lower only here after
 // checking controller, motor, battery/BMS and energy-meter data.
-constexpr float DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A = 300.0f;
-constexpr float DRIVE_PHASE_CURRENT_EFF_PER_MOTOR_A = 200.0f;
+constexpr float DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A = 150.0f;
+constexpr float DRIVE_PHASE_CURRENT_EFF_PER_MOTOR_A = 100.0f;
+// Bench-only serial motor pulse used by bringup/component-test. A pulse is
+// accepted only with released throttle, fresh CAN feedback, no controller
+// fault and a nearly stopped selected motor. The CAN life task re-checks the
+// runtime gates every 50 ms and always expires the pulse at the deadline.
+constexpr float COMPONENT_TEST_CURRENT_MAX_PER_MOTOR_A = 150.0f;
+constexpr unsigned COMPONENT_TEST_DURATION_MIN_MS = 100U;
+constexpr unsigned COMPONENT_TEST_DURATION_MAX_MS = 3000U;
+constexpr int COMPONENT_TEST_START_MAX_MOTOR_RPM = 50;
 // Keep the estimated power limiter OFF during bring-up so logged controller
 // feedback and the official Energy Meter can be compared without the estimator
 // changing the test. Set true only after the power model is validated.

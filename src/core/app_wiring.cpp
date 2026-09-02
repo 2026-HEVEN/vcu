@@ -124,8 +124,10 @@ static void imu_update() {
 }
 static void wheel_speed_update() {
     for (int ch = 0; ch < WHEEL_COUNT; ++ch) {
+        const WssReading reading = wss_driver::read(ch);
+        state.wheel_pulse_total[ch] += reading.pulse_delta;
         state.wheel_speed[ch] = wheel_speed_compute_filtered(
-            wss_driver::read(ch), WSS_CAL[ch], wheel_speed_filter_state[ch]);
+            reading, WSS_CAL[ch], wheel_speed_filter_state[ch]);
     }
 }
 static void vehicle_speed_update() {
@@ -138,16 +140,20 @@ static void vehicle_speed_update() {
     state.vehicle_speed_valid = o.valid;
 }
 static void gear_update_task() {
+    // Read the raw ladder on every build so the wiring can be checked before
+    // enabling gear authority. With the selector disabled, propulsion remains
+    // intentionally forward-only regardless of this diagnostic value.
+    state.gear_raw_adc = (uint16_t)analogRead(board_pins::GEAR_ADC);
+    state.gear_sensed = gear_update(state.gear_raw_adc, GEAR_CAL,
+                                    realcar_cal::bringup::GEAR_STABLE_SAMPLES,
+                                    gear_filter_state);
     if (!realcar_cal::bringup::GEAR_SELECTOR_INSTALLED) {
         // Current test vehicle is intentionally forward-only until the ADC
         // voltages are measured on the completed PCB.
         state.gear = Gear::Drive;
         return;
     }
-    state.gear_raw_adc = (uint16_t)analogRead(board_pins::GEAR_ADC);
-    state.gear = gear_update(state.gear_raw_adc, GEAR_CAL,
-                             realcar_cal::bringup::GEAR_STABLE_SAMPLES,
-                             gear_filter_state);
+    state.gear = state.gear_sensed;
 }
 static void paddock_update() {
     if (!state.cluster_cmd_alive) {

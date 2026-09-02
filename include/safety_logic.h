@@ -18,3 +18,6 @@ struct SafetyInputs {
 SafetyState safety_step(SafetyState cur, const SafetyInputs &in);
 
 bool torque_allowed();   // runtime helper, defined in core/safety.cpp
+// Bench component tests may run before the aggregate two-controller Drive
+// state, but never after the safety FSM has latched Halt.
+bool component_test_safety_allowed();

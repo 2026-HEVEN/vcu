@@ -43,12 +43,18 @@ void test_dual_motor_bringup_requires_both_controllers() {
     TEST_ASSERT_TRUE(realcar_cal::bringup::REQUIRE_BOTH_MOTOR_CONTROLLERS);
 }
 
-void test_bringup_phase_current_ceiling_is_300_a_per_motor() {
+void test_bringup_phase_current_ceiling_is_150_a_per_motor() {
     TEST_ASSERT_EQUAL_FLOAT(
-        300.0f, realcar_cal::bringup::DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A);
+        150.0f, realcar_cal::bringup::DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A);
     TEST_ASSERT_EQUAL_FLOAT(
         realcar_cal::bringup::DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A,
         TV_PARAMS.motor_current_max_a);
+    TEST_ASSERT_TRUE(
+        realcar_cal::bringup::DRIVE_PHASE_CURRENT_EFF_PER_MOTOR_A <=
+        realcar_cal::bringup::DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A);
+    TEST_ASSERT_EQUAL_FLOAT(
+        realcar_cal::bringup::DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A,
+        realcar_cal::bringup::COMPONENT_TEST_CURRENT_MAX_PER_MOTOR_A);
 }
 
 void test_unverified_inputs_are_fail_closed() {
@@ -70,7 +76,7 @@ int main(int, char **) {
     RUN_TEST(test_tv_defaults_share_realcar_profile);
     RUN_TEST(test_production_default_keeps_tv_master_off);
     RUN_TEST(test_dual_motor_bringup_requires_both_controllers);
-    RUN_TEST(test_bringup_phase_current_ceiling_is_300_a_per_motor);
+    RUN_TEST(test_bringup_phase_current_ceiling_is_150_a_per_motor);
     RUN_TEST(test_unverified_inputs_are_fail_closed);
     return UNITY_END();
 }

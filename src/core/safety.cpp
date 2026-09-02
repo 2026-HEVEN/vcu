@@ -15,6 +15,7 @@ namespace {
 }
 
 bool torque_allowed() { return g_state == SafetyState::Drive; }
+bool component_test_safety_allowed() { return g_state != SafetyState::Halt; }
 
 void safety_update() {
     if ((float)state.throttle_pct <= realcar_cal::bringup::THROTTLE_ARM_MAX_PCT) {
