@@ -13,6 +13,7 @@ struct SafetyInputs {
     bool handshaked;     // controller handshake done
     bool deadman_ok;     // control commands fresh
     bool start_pressed;  // Start button latched
+    bool throttle_valid; // false = disconnected/failed throttle signal
 };
 
 SafetyState safety_step(SafetyState cur, const SafetyInputs &in);

@@ -15,6 +15,7 @@ void test_amp_allows_peak_limit(void) { Amp a = 300.0f; TEST_ASSERT_EQUAL_FLOAT(
 void test_state_defaults_safe(void) {
     VehicleState s;
     TEST_ASSERT_EQUAL_FLOAT(0.0f, (float)s.throttle_pct);
+    TEST_ASSERT_FALSE(s.throttle_signal_valid);
     TEST_ASSERT_EQUAL_FLOAT(0.0f, (float)s.torque_L);
     TEST_ASSERT_FALSE(s.brake_active);
     TEST_ASSERT_FALSE(s.controller_feedback_fresh);

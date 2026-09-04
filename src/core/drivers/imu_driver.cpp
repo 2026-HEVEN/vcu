@@ -53,6 +53,9 @@ namespace {
 
     ImuRaw   latest_{ 0.0f, 0.0f, 0.0f };
     uint32_t last_valid_ms_ = 0;  // millis() of last checksum-valid MTData2 frame; 0 = none yet
+    uint32_t rx_bytes_ = 0;
+    uint32_t valid_mtdata2_frames_ = 0;
+    uint32_t checksum_errors_ = 0;
 
     float be_float(const uint8_t *p) {
         uint8_t sw[4] = { p[3], p[2], p[1], p[0] };  // MTi floats are big-endian
@@ -110,6 +113,9 @@ namespace {
                 if (checksum_ == 0 && mid_ == MID_MTDATA2) {
                     handle_mtdata2_payload();
                     last_valid_ms_ = millis();
+                    ++valid_mtdata2_frames_;
+                } else if (checksum_ != 0) {
+                    ++checksum_errors_;
                 }
                 state_ = State::WAIT_PRE;
                 break;
@@ -125,13 +131,20 @@ bool begin() {
 }
 
 ImuRaw read() {
-    while (mti.available()) feed((uint8_t)mti.read());
+    while (mti.available()) {
+        ++rx_bytes_;
+        feed((uint8_t)mti.read());
+    }
     return latest_;  // most recent fully-validated MTData2 sample
 }
 
 bool stale() {
     // last_valid_ms_ == 0 (no frame ever received) also reads as stale.
     return millis() - last_valid_ms_ > STALE_TIMEOUT_MS;
+}
+
+Diagnostics diagnostics() {
+    return Diagnostics{rx_bytes_, valid_mtdata2_frames_, checksum_errors_};
 }
 
 } // namespace imu_driver

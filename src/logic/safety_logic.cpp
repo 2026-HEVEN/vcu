@@ -7,7 +7,7 @@
 
 SafetyState safety_step(SafetyState cur, const SafetyInputs &in) {
     // Any loss of the shutdown loop or deadman -> immediate Halt (hard rule).
-    if (!in.shutdown_ok) return SafetyState::Halt;
+    if (!in.shutdown_ok || !in.throttle_valid) return SafetyState::Halt;
     switch (cur) {
         case SafetyState::Idle:
             return in.handshaked ? SafetyState::Ready : SafetyState::Idle;

@@ -58,7 +58,7 @@ void test_bringup_phase_current_ceiling_is_150_a_per_motor() {
 }
 
 void test_unverified_inputs_are_fail_closed() {
-    TEST_ASSERT_FALSE(realcar_cal::bringup::GEAR_SELECTOR_INSTALLED);
+    TEST_ASSERT_TRUE(realcar_cal::bringup::GEAR_SELECTOR_INSTALLED);
     TEST_ASSERT_FALSE(realcar_cal::bringup::REGEN_HARDWARE_VALIDATED);
     TEST_ASSERT_FALSE(realcar_cal::bringup::ENABLE_DRIVE_POWER_LIMIT);
     TEST_ASSERT_FALSE(realcar_cal::bringup::PADDOCK_CURRENT_CALIBRATED);
@@ -68,6 +68,17 @@ void test_unverified_inputs_are_fail_closed() {
 
 void test_can_rx_queue_has_burst_margin_for_debug_logging() {
     TEST_ASSERT_EQUAL_UINT(32U, realcar_cal::bringup::CAN_RX_QUEUE_LENGTH);
+}
+
+void test_throttle_signal_and_zero_percent_thresholds() {
+    TEST_ASSERT_EQUAL_UINT(400U,
+        realcar_cal::bringup::THROTTLE_SIGNAL_VALID_MIN_ADC);
+    TEST_ASSERT_EQUAL_FLOAT(500.0f,
+        realcar_cal::provisional::THROTTLE_RAW_MIN);
+    TEST_ASSERT_EQUAL_FLOAT(3000.0f,
+        realcar_cal::provisional::THROTTLE_RAW_MAX);
+    TEST_ASSERT_TRUE(realcar_cal::bringup::THROTTLE_SIGNAL_VALID_MIN_ADC <
+        realcar_cal::provisional::THROTTLE_RAW_MIN);
 }
 
 void setUp(void) {}
@@ -83,5 +94,6 @@ int main(int, char **) {
     RUN_TEST(test_bringup_phase_current_ceiling_is_150_a_per_motor);
     RUN_TEST(test_unverified_inputs_are_fail_closed);
     RUN_TEST(test_can_rx_queue_has_burst_margin_for_debug_logging);
+    RUN_TEST(test_throttle_signal_and_zero_percent_thresholds);
     return UNITY_END();
 }

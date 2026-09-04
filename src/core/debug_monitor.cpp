@@ -8,6 +8,7 @@
 #include "can_bus.h"
 #include "safety_logic.h"
 #include "state.h"
+#include "core/drivers/imu_driver.h"
 #include "modules/realcar_calibration.h"
 #include <cmath>
 #include <cstdio>
@@ -46,6 +47,10 @@ void request_motor_test(bool left, bool right, float current_a,
             realcar_cal::bringup::THROTTLE_ARM_MAX_PCT ||
         state.brake_active || state.gear != Gear::Drive) {
         reject_motor_test("release throttle/brake and keep bring-up gear in D");
+        return;
+    }
+    if (!state.throttle_signal_valid) {
+        reject_motor_test("throttle signal raw is below the valid floor");
         return;
     }
     if (state.controller_fault_latched) {
@@ -211,17 +216,20 @@ void debug_update() {
         }
         if (last_summary_ms == 0U || now - last_summary_ms >= 1000U) {
             last_summary_ms = now;
+            const imu_driver::Diagnostics imu_diag = imu_driver::diagnostics();
             Serial.printf(
-                "STAT arm=%d dm=%d hs=%d/%d fb=%d/%d fault=%d gear=%u/%u raw=%u thr=%d/%.1f imu=%d sync=%d/%d test=%d/%u\n"
+                "STAT arm=%d dm=%d hs=%d/%d fb=%d/%d fault=%d gear=%u/%u raw=%u thr=%d/%d/%.1f imu=%d sync=%d/%d test=%d/%u\n"
                 "MCU V=%.1f/%.1f Ibus=%+.1f/%+.1f Iph=%+.1f/%+.1f rpm=%d/%d tempC=%d/%d,%d/%d err=%02X%02X%02X/%02X%02X%02X\n"
-                "CAN state=%u age1=%u/%u age2=%u/%u q=%u peak=%u rxMiss=%u busErr=%u arbLost=%u txFail=%u | WSS=%.0f/%.0f/%.0f/%.0f pulse=%u/%u/%u/%u\n",
+                "CAN state=%u age1=%u/%u age2=%u/%u q=%u peak=%u rxMiss=%u busErr=%u arbLost=%u txFail=%u | WSS=%.0f/%.0f/%.0f/%.0f pulse=%u/%u/%u/%u\n"
+                "IMU valid=%d yaw=%+.2f ax=%+.3f ay=%+.3f rxBytes=%u frames=%u csErr=%u\n",
                 torque_allowed(), can_bus::deadman_ok(),
                 state.controller_handshaked_L, state.controller_handshaked_R,
                 state.controller_feedback_fresh_L,
                 state.controller_feedback_fresh_R,
                 state.controller_fault_latched, (unsigned)state.gear,
                 (unsigned)state.gear_sensed, (unsigned)state.gear_raw_adc,
-                state.throttle_raw_adc, (float)state.throttle_pct,
+                state.throttle_raw_adc, state.throttle_signal_valid,
+                (float)state.throttle_pct,
                 state.imu_valid, state.time_sync_armed, state.time_sync_active,
                 state.component_test_active, test_remaining_ms,
                 state.controller_fb1_L.bus_voltage_v,
@@ -254,7 +262,10 @@ void debug_update() {
                 state.wheel_pulse_total[WHEEL_FL],
                 state.wheel_pulse_total[WHEEL_FR],
                 state.wheel_pulse_total[WHEEL_RL],
-                state.wheel_pulse_total[WHEEL_RR]);
+                state.wheel_pulse_total[WHEEL_RR],
+                state.imu_valid, state.yaw_rate, state.accel_x, state.accel_y,
+                imu_diag.rx_bytes, imu_diag.valid_mtdata2_frames,
+                imu_diag.checksum_errors);
         }
     }
     was_fast_log_active = fast_log_active;

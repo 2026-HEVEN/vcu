@@ -52,9 +52,10 @@ namespace {
     void send_torque(uint32_t id, float amps, bool running) {
         // Confirmed on the vehicle: propulsion uses +4000 rpm while regen
         // uses 0 rpm. Byte4 must be 0x01 or EZkontrol remains HALTED.
-        const int target_rpm = amps < 0.0f
-            ? REGEN_TARGET_SPEED_RPM
-            : (running ? DRIVE_TARGET_SPEED_RPM : 0);
+        const int target_rpm = !running ? 0
+            : (state.gear == Gear::Reverse ? -DRIVE_TARGET_SPEED_RPM
+                : (amps < 0.0f ? REGEN_TARGET_SPEED_RPM
+                               : DRIVE_TARGET_SPEED_RPM));
         uint8_t data[8];
         encode_motor_control(amps, target_rpm, running, g_life, data);
 
@@ -72,6 +73,7 @@ namespace {
             const bool scheduler_alive = (now - g_last_cmd_ms < DEADMAN_MS);
             if (state.component_test_normal_inhibit) {
                 if (!state.component_test_active &&
+                    state.throttle_signal_valid &&
                     (float)state.throttle_pct <=
                         realcar_cal::bringup::THROTTLE_ARM_MAX_PCT) {
                     if (state.component_test_release_ticks < 6U) {
@@ -84,8 +86,13 @@ namespace {
                     state.component_test_release_ticks = 0U;
                 }
             }
+            const bool propulsion_gear =
+                state.gear == Gear::Drive || state.gear == Gear::Reverse;
             bool normal_allow = torque_allowed() && scheduler_alive &&
-                                !state.component_test_normal_inhibit;
+                                state.throttle_signal_valid &&
+                                !state.component_test_normal_inhibit &&
+                                propulsion_gear &&
+                                state.propulsion_direction_armed;
             float l = normal_allow ? (float)state.torque_L : 0.0f;
             float r = normal_allow ? (float)state.torque_R : 0.0f;
             bool run_l = normal_allow;
@@ -109,6 +116,7 @@ namespace {
                 } else {
                     const bool common_ok = scheduler_alive &&
                         component_test_safety_allowed() &&
+                        state.throttle_signal_valid &&
                         !state.controller_fault_latched &&
                         (float)state.throttle_pct <=
                             realcar_cal::bringup::THROTTLE_ARM_MAX_PCT &&
@@ -151,6 +159,7 @@ namespace {
                     }
                 }
             }
+
             // Do not place normal command frames on a controller ID before
             // that controller has completed its 0x55/0xAA handshake.
             state.can_commanded_current_L = l;

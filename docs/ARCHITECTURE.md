@@ -292,7 +292,7 @@ ImuOutput imu_compute(const ImuRaw &raw, ImuFilterState &s);  // s에 이전값 
   회생 입력을 0으로 고정한다. `REGEN_HARDWARE_VALIDATED`도 false라 Cluster의
   Regen Auto 요청만 관찰되고 음의 상전류는 생성되지 않는다.
 - 기어 ADC 판정과 100 ms 안정화는 구현돼 있지만, GPIO27 전압 실측 전에는
-  `GEAR_SELECTOR_INSTALLED=false`로 전진 고정 D bring-up 상태를 사용한다.
+  `GEAR_SELECTOR_INSTALLED=true`로 GPIO27 기어 입력을 사용하며, 정지·스로틀 해제 인터록 뒤 안정적으로 판정된 D/R 방향만 구동한다.
 - 브레이크 압력, LV 전압, AIR 릴레이 모니터는 핀만 예약됐다. 센서 배선·스케일링과
   CAN ID가 확정된 뒤 구현한다.
 - **토크벡터링**은 `tv_compute` 하나가 아니라 `src/modules/tv/` 5개 stage

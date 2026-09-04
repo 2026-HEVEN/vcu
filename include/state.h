@@ -14,6 +14,7 @@
 struct VehicleState {
     // inputs
     int       throttle_raw_adc = 0; // diagnostics/calibration; 0..4095
+    bool      throttle_signal_valid = false; // false below disconnected-signal floor
     Percent   throttle_pct;       // 0..100 (clamped both ways)
     Pct0to100 brake_pct;
     bool      brake_active = false;
@@ -35,6 +36,7 @@ struct VehicleState {
     uint16_t  gear_raw_adc = 0;
     Gear      gear_sensed = Gear::Neutral; // diagnostic; never grants authority
     Gear      gear = Gear::Neutral;
+    bool      propulsion_direction_armed = false;
     // controller feedback (from CAN)
     ControllerFeedbackPart1 controller_fb1_L;
     ControllerFeedbackPart1 controller_fb1_R;

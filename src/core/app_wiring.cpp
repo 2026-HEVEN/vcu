@@ -22,6 +22,7 @@
 #include "modules/longitudinal.h"
 #include "modules/torque_vectoring.h"
 #include "modules/gear.h"
+#include "modules/direction_interlock.h"
 #include "modules/drive_supervisor.h"
 #include "modules/time_sync_pulse.h"
 #include <Arduino.h>
@@ -74,6 +75,7 @@ namespace {
         (uint16_t)realcar_cal::bringup::GEAR_ADC_TOLERANCE,
     };
     GearFilterState gear_filter_state{};
+    DirectionInterlockState direction_interlock_state{};
     const DriveSupervisorParams DRIVE_SUPERVISOR_PARAMS {
         realcar_cal::bringup::ENABLE_DRIVE_POWER_LIMIT
             ? realcar_cal::bringup::DRIVE_POWER_SOFT_LIMIT_W : 0.0f,
@@ -100,7 +102,11 @@ namespace {
 
 static void throttle_update() {
     state.throttle_raw_adc = analogRead(board_pins::THROTTLE_ADC);
-    state.throttle_pct = throttle_compute({ state.throttle_raw_adc });
+    state.throttle_signal_valid =
+        state.throttle_raw_adc >=
+            (int)realcar_cal::bringup::THROTTLE_SIGNAL_VALID_MIN_ADC;
+    state.throttle_pct = state.throttle_signal_valid
+        ? throttle_compute({ state.throttle_raw_adc }) : Percent(0.0f);
 }
 static void brake_update() {
     // Current bring-up vehicle has no brake sensor. Never read the floating
@@ -140,16 +146,14 @@ static void vehicle_speed_update() {
     state.vehicle_speed_valid = o.valid;
 }
 static void gear_update_task() {
-    // Read the raw ladder on every build so the wiring can be checked before
-    // enabling gear authority. With the selector disabled, propulsion remains
-    // intentionally forward-only regardless of this diagnostic value.
+    // Read the raw ladder on every build so the wiring can be checked even
+    // when selector authority is temporarily disabled.
     state.gear_raw_adc = (uint16_t)analogRead(board_pins::GEAR_ADC);
     state.gear_sensed = gear_update(state.gear_raw_adc, GEAR_CAL,
                                     realcar_cal::bringup::GEAR_STABLE_SAMPLES,
                                     gear_filter_state);
     if (!realcar_cal::bringup::GEAR_SELECTOR_INSTALLED) {
-        // Current test vehicle is intentionally forward-only until the ADC
-        // voltages are measured on the completed PCB.
+        // Legacy fallback for a build without a connected selector.
         state.gear = Gear::Drive;
         return;
     }
@@ -176,10 +180,22 @@ static void longitudinal_update() {
         state.throttle_pct, state.brake_pct, state.pack_soc, drive_mode,
         state.regen_auto_requested &&
             realcar_cal::bringup::REGEN_HARDWARE_VALIDATED });
-    // Current bring-up supports forward only. Neutral/Reverse/Park cannot
-    // create propulsion until reverse-direction control is separately tested.
-    if (state.gear != Gear::Drive) {
+    const bool throttle_released =
+        (float)state.throttle_pct <= realcar_cal::bringup::THROTTLE_ARM_MAX_PCT;
+    const bool stopped =
+        abs(state.controller_fb1_L.motor_speed_rpm) <=
+            realcar_cal::bringup::GEAR_DIRECTION_CHANGE_MAX_RPM &&
+        abs(state.controller_fb1_R.motor_speed_rpm) <=
+            realcar_cal::bringup::GEAR_DIRECTION_CHANGE_MAX_RPM;
+    const DirectionInterlockOutput direction = direction_interlock_update(
+        state.gear, throttle_released, stopped,
+        realcar_cal::bringup::GEAR_DIRECTION_ARM_SAMPLES,
+        direction_interlock_state);
+    state.propulsion_direction_armed = direction.propulsion_enabled;
+    if (!direction.propulsion_enabled) {
         state.total_torque = 0.0f;
+    } else {
+        state.total_torque = direction.command_sign * abs((float)state.total_torque);
     }
 }
 static void torque_vectoring_update() {
@@ -206,7 +222,8 @@ static void time_sync_pulse_update() {
         !state.regen_auto_requested && !state.paddock_active &&
         !state.paddock_requested;
     const bool runtime_ok = can_bus::handshaked() && torque_allowed() &&
-        state.controller_feedback_fresh && !state.controller_fault_latched &&
+        state.throttle_signal_valid && state.controller_feedback_fresh &&
+        !state.controller_fault_latched &&
         throttle_released && !state.brake_active &&
         state.gear == Gear::Drive && mode_requests_off &&
         state.vehicle_speed_valid &&

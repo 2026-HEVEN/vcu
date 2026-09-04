@@ -18,10 +18,13 @@ namespace realcar_cal {
 // Set these back to production requirements as hardware is installed.
 namespace bringup {
 constexpr bool BRAKE_SENSOR_INSTALLED = false;
-// Current vehicle bring-up is forward-only. Set true only after GPIO27 has
-// been measured at N/R/D on the completed PCB and the bands below updated.
-constexpr bool GEAR_SELECTOR_INSTALLED = false;
+// The completed harness connects the gear selector to GPIO27. Stable Drive
+// and Reverse classifications can grant propulsion after the stopped,
+// released-throttle direction interlock; Neutral/invalid readings halt it.
+constexpr bool GEAR_SELECTOR_INSTALLED = true;
 constexpr unsigned GEAR_STABLE_SAMPLES = 10U;  // 100 ms at 100 Hz
+constexpr unsigned GEAR_DIRECTION_ARM_SAMPLES = 30U;  // 300 ms at 100 Hz
+constexpr int GEAR_DIRECTION_CHANGE_MAX_RPM = 50;
 // Initial values assume the PCB scales 0/2.5/5 V to approximately
 // 0/half/full ESP32 ADC range. They are placeholders until measured.
 constexpr unsigned GEAR_NEUTRAL_ADC = 0U;
@@ -86,6 +89,10 @@ constexpr float PADDOCK_ENTRY_SPEED_MAX_MPS = 3.0f / 3.6f;
 // this threshold for THROTTLE_ARM_CONSECUTIVE_TICKS scheduler passes.
 constexpr float THROTTLE_ARM_MAX_PCT = 1.0f;
 constexpr unsigned THROTTLE_ARM_CONSECUTIVE_TICKS = 30U;  // about 300 ms at 100 Hz
+// Raw values below this floor are treated as a disconnected/failed signal,
+// not as a released pedal. Values from 400 through the 0% point at 500 are
+// accepted as a valid released pedal while still commanding zero current.
+constexpr unsigned THROTTLE_SIGNAL_VALID_MIN_ADC = 400U;
 }  // namespace bringup
 
 namespace confirmed {
@@ -105,8 +112,8 @@ namespace provisional {
 // Initial Hall-throttle calibration. These values are deliberately
 // conservative and MUST be replaced with the actual released/full ADC
 // readings from the 5 Hz serial diagnostics before a driven test.
-constexpr float THROTTLE_RAW_MIN = 620.0f;
-constexpr float THROTTLE_RAW_MAX = 3720.0f;
+constexpr float THROTTLE_RAW_MIN = 500.0f;
+constexpr float THROTTLE_RAW_MAX = 3000.0f;
 
 // 초기값: 구름둘레 1.50 m / 2pi. 운전자 탑승·실사용 공기압 상태에서
 // 누적 WSS 펄스와 실주행 거리로 다시 식별한다.
