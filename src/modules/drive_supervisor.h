@@ -36,7 +36,6 @@ struct DriveSupervisorInput {
     float motor_temp_left_c;
     float motor_temp_right_c;
     bool paddock_active;
-    bool paddock_timed_out;
     float vehicle_speed_mps;
     float paddock_speed_mps;
     bool pack_data_valid;
@@ -54,7 +53,6 @@ struct DriveSupervisorOutput {
     bool thermal_limited = false;
     bool paddock_limited = false;
     bool paddock_sensor_blocked = false;
-    bool paddock_timed_out = false;
     bool paddock_current_limited = false;
 };
 

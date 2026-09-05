@@ -4,7 +4,8 @@ This branch extends the existing Cluster paddock request into a conservative
 one-hour dynamometer envelope. It does **not** make 300 A/motor continuous.
 Full pedal in paddock mode is intentionally limited by all of the following:
 
-- 30 A maximum phase-current command per motor;
+- 100 A maximum phase-current command per motor, near the 103 A reference
+  estimated from 13 N.m continuous torque divided by Kt=0.1266 N.m/A;
 - linear speed taper from 8 km/h to zero positive drive at 10 km/h;
 - the greater of front-wheel vehicle speed and motor-RPM-derived driven-wheel
   speed, so a rear-wheel-only roller cannot bypass the speed limit;
@@ -13,8 +14,6 @@ Full pedal in paddock mode is intentionally limited by all of the following:
 - 70 A absolute BMS pack-current ceiling;
 - valid BMS data and valid controller/motor temperature telemetry;
 - the existing controller and motor thermal derating;
-- a 60-minute active timer, latched at zero output until paddock mode is
-  switched off and re-armed with released throttle below the entry speed.
 
 ## Why full pedal is still low output
 
@@ -22,7 +21,9 @@ The Bexel pack is approximately 4.14 kWh. The 2026-09-05 road logs reached
 about 8.47 kW and 153 A around 40--45 km/h at 300 A/motor, which cannot be
 maintained for one hour from this pack. Paddock mode therefore interprets
 100% pedal as 100% of the endurance envelope, not 100% of the normal 300 A
-peak envelope.
+peak envelope. There is no automatic one-hour shutoff because a driver remains
+in the vehicle and controls the pedal throughout the test; the electrical and
+thermal guards remain active continuously.
 
 ## Cooling prerequisites
 
@@ -49,11 +50,14 @@ separate limit and must be verified independently.
 The 1 Hz summary includes:
 
 ```text
-LIMIT pad=... timeout=... sensorBlock=... currentLimit=...
+LIMIT pad=... sensorBlock=... currentLimit=...
       pwr=... therm=... scale=... speed=...kmh
       P=measured/estimatedW BMS=... V=... I=... T=...
 ```
 
-The 30 A value remains an initial endurance setting. It must not be raised
-until a short staged run confirms motor temperature, coolant performance,
-controller current scale, BMS current and the dynamometer load point.
+The 100 A value is an initial endurance setting based on a phase-current
+estimate from the motor's continuous torque point, not a manufacturer-confirmed
+one-hour phase-current rating and not proof that the installed cooling system
+can sustain it. A short staged run must still confirm motor temperature,
+coolant performance, controller current scale, BMS current and the dynamometer
+load point.

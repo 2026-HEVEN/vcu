@@ -106,7 +106,12 @@ constexpr float MOTOR_CUTOFF_C = 120.0f;
 // Provisional starting point only. Measure the minimum per-motor phase current
 // that reliably moves the complete vehicle, then recalibrate this value.
 constexpr bool PADDOCK_CURRENT_CALIBRATED = false;
-constexpr float PADDOCK_CURRENT_MAX_PER_MOTOR_A = 30.0f;
+// Set near the 103 A/motor phase-current reference estimated from the
+// 13 N.m continuous-torque point divided by Kt=0.1266 N.m/A. This is not a
+// manufacturer-guaranteed one-hour phase-current rating. The dynamometer load
+// and tire/roller losses made the former 30 A ceiling too low to guarantee
+// that the complete vehicle would move.
+constexpr float PADDOCK_CURRENT_MAX_PER_MOTOR_A = 100.0f;
 // Endurance/dynamometer profile: full pedal still means only this continuous
 // paddock envelope.  Speed is tapered before the hard ceiling so the current
 // command does not chatter between full current and zero on a roller.
@@ -125,7 +130,6 @@ constexpr float PADDOCK_PACK_CURRENT_LIMIT_A = 70.0f;
 constexpr bool PADDOCK_REQUIRE_PACK_DATA = true;
 // EZkontrol uses -40 C as the missing/invalid temperature sentinel.
 constexpr float TELEMETRY_TEMPERATURE_VALID_MIN_C = -30.0f;
-constexpr unsigned PADDOCK_MAX_ACTIVE_DURATION_MS = 60U * 60U * 1000U;
 // Vehicle cannot enter Drive until the released throttle has stayed below
 // this threshold for THROTTLE_ARM_CONSECUTIVE_TICKS scheduler passes.
 constexpr float THROTTLE_ARM_MAX_PCT = 1.0f;

@@ -88,13 +88,6 @@ DriveSupervisorOutput drive_supervisor_compute(
             out.paddock_sensor_blocked = true;
             return out;
         }
-        if (in.paddock_timed_out) {
-            out.left_a = 0.0f;
-            out.right_a = 0.0f;
-            out.paddock_limited = true;
-            out.paddock_timed_out = true;
-            return out;
-        }
         const float requested_peak = std::fmax(positive(out.left_a),
                                                positive(out.right_a));
         bool phase_current_clamped = false;

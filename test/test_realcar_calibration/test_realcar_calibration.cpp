@@ -110,8 +110,6 @@ void test_paddock_endurance_profile_is_conservative() {
     TEST_ASSERT_TRUE(
         realcar_cal::bringup::PADDOCK_PACK_CURRENT_LIMIT_A < 157.0f);
     TEST_ASSERT_TRUE(realcar_cal::bringup::PADDOCK_REQUIRE_PACK_DATA);
-    TEST_ASSERT_EQUAL_UINT32(60U * 60U * 1000U,
-        realcar_cal::bringup::PADDOCK_MAX_ACTIVE_DURATION_MS);
 }
 
 void setUp(void) {}

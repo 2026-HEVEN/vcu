@@ -174,21 +174,12 @@ static void paddock_update() {
     }
     if (!state.paddock_requested) {
         state.paddock_active = false;
-        state.paddock_timed_out = false;
-        state.paddock_active_since_ms = 0U;
         return;
     }
     if (!state.paddock_active &&
         state.vehicle_speed_mps <= realcar_cal::bringup::PADDOCK_ENTRY_SPEED_MAX_MPS &&
         (float)state.throttle_pct <= realcar_cal::bringup::THROTTLE_ARM_MAX_PCT) {
         state.paddock_active = true;
-        state.paddock_active_since_ms = millis();
-        state.paddock_timed_out = false;
-    }
-    if (state.paddock_active && state.paddock_active_since_ms != 0U &&
-        millis() - state.paddock_active_since_ms >=
-            realcar_cal::bringup::PADDOCK_MAX_ACTIVE_DURATION_MS) {
-        state.paddock_timed_out = true;
     }
 }
 static void longitudinal_update() {
@@ -289,7 +280,7 @@ static void drive_supervisor_update() {
         (float)state.controller_fb2_R.controller_temp_c,
         (float)state.controller_fb2_L.motor_temp_c,
         (float)state.controller_fb2_R.motor_temp_c,
-        state.paddock_active, state.paddock_timed_out,
+        state.paddock_active,
         state.vehicle_speed_mps, state.paddock_speed_mps,
         state.pack_data_valid, state.pack_current_a,
     };

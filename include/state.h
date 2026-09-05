@@ -67,10 +67,8 @@ struct VehicleState {
     bool      regen_auto_requested = false;
     bool      paddock_requested = false;
     bool      paddock_active = false;
-    bool      paddock_timed_out = false;
     bool      paddock_sensor_blocked = false;
     bool      paddock_current_limited = false;
-    uint32_t  paddock_active_since_ms = 0;
     float     paddock_speed_mps = 0.0f;
     bool      debug_requested = false;
     bool      cluster_cmd_alive = false;
