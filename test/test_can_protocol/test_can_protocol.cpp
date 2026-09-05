@@ -72,11 +72,21 @@ void test_decode_controller_feedback(void) {
 
 void test_encode_vcu_cluster_status(void) {
     uint8_t out[8];
-    encode_vcu_cluster_status(2, true, true, false, 88, 0x5A, out);
+    encode_vcu_cluster_status(2, true, true, false, 88,
+                              true, 60, 0x5A, out);
     TEST_ASSERT_EQUAL_UINT8(2, out[0]);
-    TEST_ASSERT_EQUAL_UINT8(0x03, out[1]);
+    TEST_ASSERT_EQUAL_UINT8(0x0B, out[1]);
     TEST_ASSERT_EQUAL_UINT8(0, out[2]);
+    TEST_ASSERT_EQUAL_UINT8(60, out[3]);
     TEST_ASSERT_EQUAL_UINT8(0x5A, out[7]);
+}
+
+void test_encode_vcu_cluster_status_clears_invalid_throttle(void) {
+    uint8_t out[8];
+    encode_vcu_cluster_status(0, false, false, false, 0,
+                              false, 87, 0x2A, out);
+    TEST_ASSERT_EQUAL_UINT8(0x00, out[1] & 0x08);
+    TEST_ASSERT_EQUAL_UINT8(0, out[3]);
 }
 
 void test_sensor_telemetry_encoders(void) {
@@ -158,6 +168,7 @@ int main(int, char **) {
     RUN_TEST(test_decode_cluster_command_regen_off);
     RUN_TEST(test_decode_controller_feedback);
     RUN_TEST(test_encode_vcu_cluster_status);
+    RUN_TEST(test_encode_vcu_cluster_status_clears_invalid_throttle);
     RUN_TEST(test_sensor_telemetry_encoders);
     RUN_TEST(test_decode_cluster_bms_status_is_diagnostic);
     RUN_TEST(test_vehicle_speed_kph_to_raw_clamps_and_rounds);

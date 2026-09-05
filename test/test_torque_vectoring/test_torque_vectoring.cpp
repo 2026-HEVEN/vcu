@@ -18,13 +18,13 @@ void test_split_sums_to_demand(void) {
     TVOutput o = tv_compute(straight(), s);
     TEST_ASSERT_FLOAT_WITHIN(0.1f, 20.0f, (float)o.torque_L + (float)o.torque_R);
 }
-void test_full_bringup_demand_is_150_a_per_motor_when_tv_off(void) {
+void test_full_bringup_demand_is_300_a_per_motor_when_tv_off(void) {
     TVYawState s{};
     TVInput in = straight();
-    in.total_torque = 300.0f;
+    in.total_torque = 600.0f;
     TVOutput o = tv_compute(in, s);
-    TEST_ASSERT_FLOAT_WITHIN(0.01f, 150.0f, (float)o.torque_L);
-    TEST_ASSERT_FLOAT_WITHIN(0.01f, 150.0f, (float)o.torque_R);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 300.0f, (float)o.torque_L);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 300.0f, (float)o.torque_R);
 }
 void test_intermediates_are_populated(void) {
     // 중간신호가 TVOutput에 실려 나오는지 (관측 경로 확인)
@@ -89,7 +89,7 @@ int main(int, char **) {
     UNITY_BEGIN();
     RUN_TEST(test_straight_is_symmetric);
     RUN_TEST(test_split_sums_to_demand);
-    RUN_TEST(test_full_bringup_demand_is_150_a_per_motor_when_tv_off);
+    RUN_TEST(test_full_bringup_demand_is_300_a_per_motor_when_tv_off);
     RUN_TEST(test_intermediates_are_populated);
     RUN_TEST(test_low_speed_explicitly_disables_yaw_feedback);
     RUN_TEST(test_zero_gains_are_strict_5050_off_even_beyond_friction_model);

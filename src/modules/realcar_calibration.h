@@ -27,10 +27,12 @@ constexpr unsigned GEAR_DIRECTION_ARM_SAMPLES = 30U;  // 300 ms at 100 Hz
 constexpr int GEAR_DIRECTION_CHANGE_MAX_RPM = 50;
 // Initial values assume the PCB scales 0/2.5/5 V to approximately
 // 0/half/full ESP32 ADC range. They are placeholders until measured.
+// Contiguous gear-ladder boundaries. The classifier interprets these as:
+// Neutral [0, REVERSE), Reverse [REVERSE, DRIVE), Drive [DRIVE, 4095].
 constexpr unsigned GEAR_NEUTRAL_ADC = 0U;
-constexpr unsigned GEAR_REVERSE_ADC = 2048U;
-constexpr unsigned GEAR_DRIVE_ADC = 4095U;
-constexpr unsigned GEAR_ADC_TOLERANCE = 450U;
+constexpr unsigned GEAR_REVERSE_ADC = 500U;
+constexpr unsigned GEAR_DRIVE_ADC = 2500U;
+constexpr unsigned GEAR_ADC_TOLERANCE = 0U;  // reserved; no dead band
 // Brake/BMS/current polarity and charge limits are not validated yet. Keeping
 // this false makes a Cluster Regen-Auto request observable but unable to
 // produce negative phase current.
@@ -41,12 +43,12 @@ constexpr bool REQUIRE_BOTH_MOTOR_CONTROLLERS = true;
 // Throttle command ceiling, per motor. This is a software test limit, not a
 // competition-rule or battery-current limit. Raise/lower only here after
 // checking controller, motor, battery/BMS and energy-meter data.
-constexpr float DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A = 150.0f;
+constexpr float DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A = 300.0f;
 constexpr float DRIVE_PHASE_CURRENT_EFF_PER_MOTOR_A = 100.0f;
 // Bench-only serial motor pulse used by bringup/component-test. A pulse is
 // accepted only with released throttle, fresh CAN feedback, no controller
 // fault and a nearly stopped selected motor. The CAN life task re-checks the
-// runtime gates every 50 ms and always expires the pulse at the deadline.
+// runtime gates at MOTOR_COMMAND_PERIOD_MS and always expires at the deadline.
 constexpr float COMPONENT_TEST_CURRENT_MAX_PER_MOTOR_A = 150.0f;
 constexpr unsigned COMPONENT_TEST_DURATION_MIN_MS = 100U;
 constexpr unsigned COMPONENT_TEST_DURATION_MAX_MS = 3000U;
@@ -60,9 +62,31 @@ constexpr bool ENABLE_DRIVE_POWER_LIMIT = false;
 constexpr float DRIVE_POWER_SOFT_LIMIT_W = 9000.0f;
 constexpr float DRIVETRAIN_EFFICIENCY = 0.92f;
 constexpr float CONTROLLER_FEEDBACK_STALE_MS = 250.0f;
+// Motor-controller command/life frame cadence. Set 10 ms for 100 Hz or 50 ms
+// for the vendor protocol's original nominal 20 Hz cadence.
+constexpr unsigned MOTOR_COMMAND_PERIOD_MS = 50U; //모터 캔 제어주기
+static_assert(MOTOR_COMMAND_PERIOD_MS > 0U,
+              "motor command period must be nonzero");
+// If either feedback part remains absent this long after a handshake, stop
+// that controller's normal command traffic so it can return to its 0x55
+// handshake state. This exceeds both the normal freshness gate and the
+// controller's documented 250--500 ms command/life timeout.
+constexpr unsigned CONTROLLER_REHANDSHAKE_TIMEOUT_MS = 750U;
+// After a component test, require this much released-pedal time before normal
+// throttle control can resume. The tick count follows the command period.
+constexpr unsigned COMPONENT_TEST_RELEASE_HOLD_MS = 300U;
+constexpr unsigned COMPONENT_TEST_RELEASE_TICKS =
+    (COMPONENT_TEST_RELEASE_HOLD_MS + MOTOR_COMMAND_PERIOD_MS - 1U) /
+    MOTOR_COMMAND_PERIOD_MS;
+// A controller reconnect no longer requires pedal release. Once both protocol
+// handshakes and feedback streams are healthy, restore the held driver demand
+// gradually from zero over this interval instead of applying a torque step.
+constexpr unsigned MOTOR_RECONNECT_RAMP_MS = 1000U;
+static_assert(MOTOR_RECONNECT_RAMP_MS > 0U,
+              "motor reconnect ramp must be nonzero");
 constexpr float CLUSTER_COMMAND_STALE_MS = 200.0f;
 constexpr unsigned CAN_RX_QUEUE_LENGTH = 32U;
-constexpr float PHASE_CURRENT_HARD_CUTOFF_A = 330.0f;
+constexpr float PHASE_CURRENT_HARD_CUTOFF_A = 1000.0f;
 // Energy Meter (100 Hz) and Monolith/controller feedback (20 Hz) time-axis
 // marker. It never runs automatically: Serial SYNC_ARM followed by SYNC_RUN
 // is required, and the runtime safety conditions are checked every 10 ms.
@@ -96,11 +120,12 @@ constexpr unsigned THROTTLE_SIGNAL_VALID_MIN_ADC = 400U;
 }  // namespace bringup
 
 namespace confirmed {
-// PCNT는 상승엣지만 센다. 네 바퀴 모두 휠 1회전당 상승엣지 48개.
-constexpr float WSS_PULSES_PER_WHEEL_REV_FL = 48.0f;
-constexpr float WSS_PULSES_PER_WHEEL_REV_FR = 48.0f;
-constexpr float WSS_PULSES_PER_WHEEL_REV_RL = 48.0f;
-constexpr float WSS_PULSES_PER_WHEEL_REV_RR = 48.0f;
+// PCNT는 상승엣지만 센다. 48개의 N/S 교차 극에서 실측되는 상승엣지는
+// 네 바퀴 모두 휠 1회전당 24개다.
+constexpr float WSS_PULSES_PER_WHEEL_REV_FL = 24.0f;
+constexpr float WSS_PULSES_PER_WHEEL_REV_FR = 24.0f;
+constexpr float WSS_PULSES_PER_WHEEL_REV_RL = 24.0f;
+constexpr float WSS_PULSES_PER_WHEEL_REV_RR = 24.0f;
 
 constexpr float GEAR_RATIO = 3.72f;
 constexpr float MOTOR_KT_NM_PER_A = 0.1266f;
@@ -136,7 +161,7 @@ constexpr float REAR_LLTD = 0.50f;
 // WSS 양자화가 확보된 뒤 조정한다.
 constexpr float VEHICLE_SPEED_MAX_ACCEL_MPS2 = 15.0f;
 
-// 48 PPR를 10 ms마다 직접 RPM으로 바꾸면 한 펄스 차이가 약 125 rpm이다.
+// 24 PPR를 10 ms마다 직접 RPM으로 바꾸면 한 펄스 차이가 약 250 rpm이다.
 // 아래 1차 필터로 펄스 양자화가 차속/슬립 판정에 그대로 들어가는 것을 막는다.
 // 실차에서는 응답 지연과 속도 노이즈를 함께 보고 조정한다.
 constexpr float WSS_FILTER_TIME_CONSTANT_S = 0.25f;

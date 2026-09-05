@@ -3,11 +3,11 @@
 #include "modules/vehicle_speed.h"
 #include "modules/tv/tv_config.h"
 
-void test_all_four_wss_channels_use_confirmed_48_ppr() {
-    TEST_ASSERT_EQUAL_FLOAT(48.0f, realcar_cal::confirmed::WSS_PULSES_PER_WHEEL_REV_FL);
-    TEST_ASSERT_EQUAL_FLOAT(48.0f, realcar_cal::confirmed::WSS_PULSES_PER_WHEEL_REV_FR);
-    TEST_ASSERT_EQUAL_FLOAT(48.0f, realcar_cal::confirmed::WSS_PULSES_PER_WHEEL_REV_RL);
-    TEST_ASSERT_EQUAL_FLOAT(48.0f, realcar_cal::confirmed::WSS_PULSES_PER_WHEEL_REV_RR);
+void test_all_four_wss_channels_use_confirmed_24_ppr() {
+    TEST_ASSERT_EQUAL_FLOAT(24.0f, realcar_cal::confirmed::WSS_PULSES_PER_WHEEL_REV_FL);
+    TEST_ASSERT_EQUAL_FLOAT(24.0f, realcar_cal::confirmed::WSS_PULSES_PER_WHEEL_REV_FR);
+    TEST_ASSERT_EQUAL_FLOAT(24.0f, realcar_cal::confirmed::WSS_PULSES_PER_WHEEL_REV_RL);
+    TEST_ASSERT_EQUAL_FLOAT(24.0f, realcar_cal::confirmed::WSS_PULSES_PER_WHEEL_REV_RR);
 }
 
 void test_vehicle_speed_defaults_share_realcar_profile() {
@@ -43,9 +43,9 @@ void test_dual_motor_bringup_requires_both_controllers() {
     TEST_ASSERT_TRUE(realcar_cal::bringup::REQUIRE_BOTH_MOTOR_CONTROLLERS);
 }
 
-void test_bringup_phase_current_ceiling_is_150_a_per_motor() {
+void test_bringup_drive_phase_current_ceiling_is_300_a_per_motor() {
     TEST_ASSERT_EQUAL_FLOAT(
-        150.0f, realcar_cal::bringup::DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A);
+        300.0f, realcar_cal::bringup::DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A);
     TEST_ASSERT_EQUAL_FLOAT(
         realcar_cal::bringup::DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A,
         TV_PARAMS.motor_current_max_a);
@@ -53,8 +53,7 @@ void test_bringup_phase_current_ceiling_is_150_a_per_motor() {
         realcar_cal::bringup::DRIVE_PHASE_CURRENT_EFF_PER_MOTOR_A <=
         realcar_cal::bringup::DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A);
     TEST_ASSERT_EQUAL_FLOAT(
-        realcar_cal::bringup::DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A,
-        realcar_cal::bringup::COMPONENT_TEST_CURRENT_MAX_PER_MOTOR_A);
+        150.0f, realcar_cal::bringup::COMPONENT_TEST_CURRENT_MAX_PER_MOTOR_A);
 }
 
 void test_unverified_inputs_are_fail_closed() {
@@ -68,6 +67,24 @@ void test_unverified_inputs_are_fail_closed() {
 
 void test_can_rx_queue_has_burst_margin_for_debug_logging() {
     TEST_ASSERT_EQUAL_UINT(32U, realcar_cal::bringup::CAN_RX_QUEUE_LENGTH);
+}
+
+void test_rehandshake_timeout_and_recovery_timing_are_configured() {
+    TEST_ASSERT_TRUE(realcar_cal::bringup::MOTOR_COMMAND_PERIOD_MS > 0U);
+    TEST_ASSERT_TRUE(
+        realcar_cal::bringup::CONTROLLER_FEEDBACK_STALE_MS <
+        realcar_cal::bringup::CONTROLLER_REHANDSHAKE_TIMEOUT_MS);
+    TEST_ASSERT_TRUE(
+        realcar_cal::bringup::CONTROLLER_REHANDSHAKE_TIMEOUT_MS >= 500U);
+    TEST_ASSERT_EQUAL_UINT(
+        300U, realcar_cal::bringup::COMPONENT_TEST_RELEASE_HOLD_MS);
+    TEST_ASSERT_EQUAL_UINT(
+        (realcar_cal::bringup::COMPONENT_TEST_RELEASE_HOLD_MS +
+         realcar_cal::bringup::MOTOR_COMMAND_PERIOD_MS - 1U) /
+            realcar_cal::bringup::MOTOR_COMMAND_PERIOD_MS,
+        realcar_cal::bringup::COMPONENT_TEST_RELEASE_TICKS);
+    TEST_ASSERT_EQUAL_UINT(
+        1000U, realcar_cal::bringup::MOTOR_RECONNECT_RAMP_MS);
 }
 
 void test_throttle_signal_and_zero_percent_thresholds() {
@@ -86,14 +103,15 @@ void tearDown(void) {}
 
 int main(int, char **) {
     UNITY_BEGIN();
-    RUN_TEST(test_all_four_wss_channels_use_confirmed_48_ppr);
+    RUN_TEST(test_all_four_wss_channels_use_confirmed_24_ppr);
     RUN_TEST(test_vehicle_speed_defaults_share_realcar_profile);
     RUN_TEST(test_tv_defaults_share_realcar_profile);
     RUN_TEST(test_production_default_keeps_tv_master_off);
     RUN_TEST(test_dual_motor_bringup_requires_both_controllers);
-    RUN_TEST(test_bringup_phase_current_ceiling_is_150_a_per_motor);
+    RUN_TEST(test_bringup_drive_phase_current_ceiling_is_300_a_per_motor);
     RUN_TEST(test_unverified_inputs_are_fail_closed);
     RUN_TEST(test_can_rx_queue_has_burst_margin_for_debug_logging);
+    RUN_TEST(test_rehandshake_timeout_and_recovery_timing_are_configured);
     RUN_TEST(test_throttle_signal_and_zero_percent_thresholds);
     return UNITY_END();
 }

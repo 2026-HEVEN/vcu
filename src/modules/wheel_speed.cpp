@@ -8,7 +8,7 @@
 // ═════════════════════════════════════════════════════════════════════════
 
 // pulses_per_rev (WssCalib) = 바퀴 1회전당 센서 펄스 수 (하드웨어값).
-//   자석/톱니 개수로 결정 — app_wiring 의 WSS_CAL 에서 주입 (현재 48).
+//   실제 상승엣지 수로 결정 — app_wiring 의 WSS_CAL 에서 주입 (현재 24).
 //   ★실차 보정: 바퀴 1회전 돌려 나온 펄스 수를 세서 이 값을 맞출 것.
 Rpm wheel_speed_compute(const WssReading &r, const WssCalib &c) {
     // 0으로 나누기/무효 입력 방지 (첫 읽기·정지 상태)

@@ -5,10 +5,10 @@
 enum class Gear : uint8_t { Neutral = 0, Reverse = 1, Drive = 2, Park = 3 };
 
 struct GearCalib {
-    uint16_t neutral_adc;
-    uint16_t reverse_adc;
-    uint16_t drive_adc;
-    uint16_t tolerance;
+    uint16_t neutral_floor_adc;
+    uint16_t reverse_floor_adc;
+    uint16_t drive_floor_adc;
+    uint16_t reserved;
 };
 
 struct GearFilterState {

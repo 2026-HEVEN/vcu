@@ -75,7 +75,7 @@
 | MCU → METER | 계기 메시지 I | `0x180117EF` | `0x180117F0` | 100ms | 6 |
 | MCU → METER | 계기 메시지 II | `0x180217EF` | `0x180217F0` | 100ms | 6 |
 | Cluster → VCU | 커맨드 (TC 표기의 TV enable/Regen Auto/Debug/Paddock) | `0x1801D0C0` (신규) | — | ~20ms | 8 |
-| VCU → Cluster | 기어/브레이크/HV 상태 | `0x1801C0D0` (신규) | — | 50ms | 6 |
+| VCU → Cluster | 기어/브레이크/HV/스로틀 상태 | `0x1801C0D0` (신규) | — | 50ms | 6 |
 | VCU → Cluster/TMA-1 | 단일 차량속도 | `0x1803C0D0` (신규) | — | 50ms | 6 |
 | VCU → TMA-1 | 조향 텔레메트리 | `0x1804C0D0` (신규) | — | 50ms | 6 |
 | VCU → TMA-1 | IMU 텔레메트리 | `0x1805C0D0` (신규) | — | 50ms | 6 |
@@ -192,14 +192,18 @@
 | 바이트 | 항목 | 의미 |
 |--------|------|------|
 | 0 | Gear | 0=N, 1=R, 2=D, 3=P |
-| 1 | Flags | bit0 Brake, bit1 HV active, bit2 SOC valid |
+| 1 | Flags | bit0 Brake, bit1 HV active, bit2 SOC valid, bit3 Throttle valid |
 | 2 | SOC | 0~100, bit2가 1일 때만 유효 |
-| 3~6 | 예약 | 0 |
+| 3 | Throttle | 보정된 스로틀 0~100%, bit3가 1일 때만 유효 |
+| 4~6 | 예약 | 0 |
 | 7 | Life | 0~255 |
 
 현재 VCU는 Cluster가 BLE BMS를 직접 표시하므로 SOC valid를 0으로 보낸다.
 기어 셀렉터 실측 전 bring-up 프로파일에서는 전진 고정 상태를 D로 송신한다.
 HV active는 좌·우 컨트롤러 피드백이 fresh이고 DC bus가 20V를 넘을 때 1이다.
+Throttle은 VCU의 보정 범위 `(raw - RAW_MIN) / (RAW_MAX - RAW_MIN)`를 0~100%로
+클램프한 값이다. 현재 보정값은 RAW_MIN=500, RAW_MAX=3000이며, Cluster의 VESS
+출력에 사용한다.
 
 ### 5.9 VCU → Cluster/TMA-1 : 단일 차량속도 `0x1803C0D0` (HEVEN 정의) · 50ms
 

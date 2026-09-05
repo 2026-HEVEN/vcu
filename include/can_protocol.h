@@ -101,9 +101,12 @@ ControllerFeedbackPart2 decode_controller_feedback_part2(const uint8_t data[8]);
 ClusterBmsStatus decode_cluster_bms_status(const uint8_t data[8]);
 
 // VCU -> Cluster status: byte0 gear (0=N,1=R,2=D,3=P), byte1 bit0 brake,
-// bit1 HV active, bit2 SOC valid, byte2 SOC %, byte7 life counter.
+// bit1 HV active, bit2 SOC valid, bit3 throttle valid, byte2 SOC %,
+// byte3 throttle % (0..100), byte7 life counter.
 void encode_vcu_cluster_status(uint8_t gear, bool brake, bool hv_active,
-                               bool soc_valid, uint8_t soc_pct, uint8_t life,
+                               bool soc_valid, uint8_t soc_pct,
+                               bool throttle_valid, uint8_t throttle_pct,
+                               uint8_t life,
                                uint8_t out[8]);
 // VCU -> Cluster/TMA-1 single vehicle speed frame (0x1803C0D0). HEVEN-defined.
 uint16_t vehicle_speed_kph_to_raw(float kph);
