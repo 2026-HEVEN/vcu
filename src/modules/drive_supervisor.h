@@ -5,7 +5,13 @@ struct DriveSupervisorParams {
     float drivetrain_efficiency;
     float motor_kt_nm_per_a;
     float paddock_current_per_motor_a;
+    float paddock_speed_taper_start_mps;
     float paddock_speed_limit_mps;
+    float paddock_power_soft_limit_w;
+    float paddock_controller_bus_current_limit_a;
+    float paddock_pack_current_limit_a;
+    float telemetry_temperature_valid_min_c;
+    bool paddock_require_pack_data;
     float controller_derate_start_c;
     float controller_cutoff_c;
     float motor_derate_start_c;
@@ -30,7 +36,11 @@ struct DriveSupervisorInput {
     float motor_temp_left_c;
     float motor_temp_right_c;
     bool paddock_active;
+    bool paddock_timed_out;
     float vehicle_speed_mps;
+    float paddock_speed_mps;
+    bool pack_data_valid;
+    float pack_current_a;
 };
 
 struct DriveSupervisorOutput {
@@ -43,6 +53,9 @@ struct DriveSupervisorOutput {
     bool power_limited = false;
     bool thermal_limited = false;
     bool paddock_limited = false;
+    bool paddock_sensor_blocked = false;
+    bool paddock_timed_out = false;
+    bool paddock_current_limited = false;
 };
 
 DriveSupervisorOutput drive_supervisor_compute(

@@ -98,6 +98,22 @@ void test_throttle_signal_and_zero_percent_thresholds() {
         realcar_cal::provisional::THROTTLE_RAW_MIN);
 }
 
+void test_paddock_endurance_profile_is_conservative() {
+    TEST_ASSERT_TRUE(
+        realcar_cal::bringup::PADDOCK_CURRENT_MAX_PER_MOTOR_A <=
+        realcar_cal::confirmed::MOTOR_CONTINUOUS_CURRENT_MAX_A);
+    TEST_ASSERT_TRUE(
+        realcar_cal::bringup::PADDOCK_SPEED_TAPER_START_MPS <
+        realcar_cal::bringup::PADDOCK_SPEED_LIMIT_MPS);
+    TEST_ASSERT_TRUE(
+        realcar_cal::bringup::PADDOCK_POWER_SOFT_LIMIT_W > 0.0f);
+    TEST_ASSERT_TRUE(
+        realcar_cal::bringup::PADDOCK_PACK_CURRENT_LIMIT_A < 157.0f);
+    TEST_ASSERT_TRUE(realcar_cal::bringup::PADDOCK_REQUIRE_PACK_DATA);
+    TEST_ASSERT_EQUAL_UINT32(60U * 60U * 1000U,
+        realcar_cal::bringup::PADDOCK_MAX_ACTIVE_DURATION_MS);
+}
+
 void setUp(void) {}
 void tearDown(void) {}
 
@@ -113,5 +129,6 @@ int main(int, char **) {
     RUN_TEST(test_can_rx_queue_has_burst_margin_for_debug_logging);
     RUN_TEST(test_rehandshake_timeout_and_recovery_timing_are_configured);
     RUN_TEST(test_throttle_signal_and_zero_percent_thresholds);
+    RUN_TEST(test_paddock_endurance_profile_is_conservative);
     return UNITY_END();
 }

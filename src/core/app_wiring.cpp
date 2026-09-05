@@ -26,6 +26,7 @@
 #include "modules/drive_supervisor.h"
 #include "modules/time_sync_pulse.h"
 #include <Arduino.h>
+#include <cmath>
 
 // [LOCKED] The ONLY translation unit that touches `state`. All update() wiring
 // lives here; modules never see global state.
@@ -82,7 +83,13 @@ namespace {
         realcar_cal::bringup::DRIVETRAIN_EFFICIENCY,
         realcar_cal::confirmed::MOTOR_KT_NM_PER_A,
         realcar_cal::bringup::PADDOCK_CURRENT_MAX_PER_MOTOR_A,
+        realcar_cal::bringup::PADDOCK_SPEED_TAPER_START_MPS,
         realcar_cal::bringup::PADDOCK_SPEED_LIMIT_MPS,
+        realcar_cal::bringup::PADDOCK_POWER_SOFT_LIMIT_W,
+        realcar_cal::bringup::PADDOCK_CONTROLLER_BUS_CURRENT_LIMIT_A,
+        realcar_cal::bringup::PADDOCK_PACK_CURRENT_LIMIT_A,
+        realcar_cal::bringup::TELEMETRY_TEMPERATURE_VALID_MIN_C,
+        realcar_cal::bringup::PADDOCK_REQUIRE_PACK_DATA,
         realcar_cal::bringup::CONTROLLER_DERATE_START_C,
         realcar_cal::bringup::CONTROLLER_CUTOFF_C,
         realcar_cal::bringup::MOTOR_DERATE_START_C,
@@ -167,12 +174,21 @@ static void paddock_update() {
     }
     if (!state.paddock_requested) {
         state.paddock_active = false;
+        state.paddock_timed_out = false;
+        state.paddock_active_since_ms = 0U;
         return;
     }
     if (!state.paddock_active &&
         state.vehicle_speed_mps <= realcar_cal::bringup::PADDOCK_ENTRY_SPEED_MAX_MPS &&
         (float)state.throttle_pct <= realcar_cal::bringup::THROTTLE_ARM_MAX_PCT) {
         state.paddock_active = true;
+        state.paddock_active_since_ms = millis();
+        state.paddock_timed_out = false;
+    }
+    if (state.paddock_active && state.paddock_active_since_ms != 0U &&
+        millis() - state.paddock_active_since_ms >=
+            realcar_cal::bringup::PADDOCK_MAX_ACTIVE_DURATION_MS) {
+        state.paddock_timed_out = true;
     }
 }
 static void longitudinal_update() {
@@ -251,6 +267,15 @@ static void drive_supervisor_update() {
         ? time_sync_output.left_a : (float)state.requested_torque_L;
     const float requested_right_a = time_sync_output.override_active
         ? time_sync_output.right_a : (float)state.requested_torque_R;
+    constexpr float TWO_PI_OVER_60 = 0.104719755f;
+    const float motor_speed_mps =
+        std::fmax(std::fabs((float)state.controller_fb1_L.motor_speed_rpm),
+                  std::fabs((float)state.controller_fb1_R.motor_speed_rpm)) *
+        TWO_PI_OVER_60 *
+        realcar_cal::provisional::WHEEL_SPEED_ROLLING_RADIUS_M /
+        realcar_cal::confirmed::GEAR_RATIO;
+    state.paddock_speed_mps =
+        std::fmax(state.vehicle_speed_mps, motor_speed_mps);
     const DriveSupervisorInput in {
         requested_left_a, requested_right_a,
         state.controller_feedback_fresh,
@@ -264,7 +289,9 @@ static void drive_supervisor_update() {
         (float)state.controller_fb2_R.controller_temp_c,
         (float)state.controller_fb2_L.motor_temp_c,
         (float)state.controller_fb2_R.motor_temp_c,
-        state.paddock_active, state.vehicle_speed_mps,
+        state.paddock_active, state.paddock_timed_out,
+        state.vehicle_speed_mps, state.paddock_speed_mps,
+        state.pack_data_valid, state.pack_current_a,
     };
     const DriveSupervisorOutput out =
         drive_supervisor_compute(in, DRIVE_SUPERVISOR_PARAMS);
@@ -275,6 +302,8 @@ static void drive_supervisor_update() {
     state.drive_limit_scale = out.applied_scale;
     state.power_limited = out.power_limited;
     state.thermal_limited = out.thermal_limited;
+    state.paddock_sensor_blocked = out.paddock_sensor_blocked;
+    state.paddock_current_limited = out.paddock_current_limited;
     can_bus::note_command();
 }
 static void can_rx_update()  { can_bus::poll_rx(); }
