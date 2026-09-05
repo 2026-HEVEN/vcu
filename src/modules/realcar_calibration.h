@@ -103,30 +103,23 @@ constexpr float CONTROLLER_DERATE_START_C = 75.0f;
 constexpr float CONTROLLER_CUTOFF_C = 85.0f;
 constexpr float MOTOR_DERATE_START_C = 100.0f;
 constexpr float MOTOR_CUTOFF_C = 120.0f;
-// Provisional starting point only. Measure the minimum per-motor phase current
-// that reliably moves the complete vehicle, then recalibrate this value.
+// Provisional speed/current test envelope.  The phase-current ceiling falls
+// continuously from 300 A/motor at standstill to 50 A/motor at 80 km/h, then
+// holds 50 A/motor above that speed.  This is only active in paddock mode.
 constexpr bool PADDOCK_CURRENT_CALIBRATED = false;
-// Set near the 103 A/motor phase-current reference estimated from the
-// 13 N.m continuous-torque point divided by Kt=0.1266 N.m/A. This is not a
-// manufacturer-guaranteed one-hour phase-current rating. The dynamometer load
-// and tire/roller losses made the former 30 A ceiling too low to guarantee
-// that the complete vehicle would move.
-constexpr float PADDOCK_CURRENT_MAX_PER_MOTOR_A = 100.0f;
-// Endurance/dynamometer profile: full pedal still means only this continuous
-// paddock envelope.  Speed is tapered before the hard ceiling so the current
-// command does not chatter between full current and zero on a roller.
-constexpr float PADDOCK_SPEED_TAPER_START_MPS = 8.0f / 3.6f;
-constexpr float PADDOCK_SPEED_LIMIT_MPS = 10.0f / 3.6f;
+constexpr float PADDOCK_CURRENT_ZERO_SPEED_PER_MOTOR_A = 300.0f;
+constexpr float PADDOCK_CURRENT_HIGH_SPEED_PER_MOTOR_A = 50.0f;
+constexpr float PADDOCK_CURRENT_LINEAR_END_SPEED_MPS = 80.0f / 3.6f;
 constexpr float PADDOCK_ENTRY_SPEED_MAX_MPS = 3.0f / 3.6f;
-// The Bexel pack is only 4.14 kWh.  3.5 kW leaves roughly one hour of ideal
-// endurance including a modest reserve, while the 30 A/motor + 10 km/h
-// envelope normally sits far below this guard.
-constexpr float PADDOCK_POWER_SOFT_LIMIT_W = 3500.0f;
+// The Bexel pack's 157 A continuous rating is about 8.13 kW at 51.8 V.
+// Keep a small margin below that value; this is a soft command scaler, not a
+// substitute for hardware over-current protection.
+constexpr float PADDOCK_POWER_SOFT_LIMIT_W = 8000.0f;
 // Controller L+R bus-current feedback ran about 20--30% above the delayed BMS
-// value in the 2026-09-05 logs.  Limiting the uncorrected sum to 90 A is
-// intentionally conservative; the independent BMS guard remains at 70 A.
-constexpr float PADDOCK_CONTROLLER_BUS_CURRENT_LIMIT_A = 90.0f;
-constexpr float PADDOCK_PACK_CURRENT_LIMIT_A = 70.0f;
+// value in the 2026-09-05 logs.  200 A controller-sum and 150 A BMS limits
+// represent approximately the same operating boundary.
+constexpr float PADDOCK_CONTROLLER_BUS_CURRENT_LIMIT_A = 200.0f;
+constexpr float PADDOCK_PACK_CURRENT_LIMIT_A = 150.0f;
 constexpr bool PADDOCK_REQUIRE_PACK_DATA = true;
 // EZkontrol uses -40 C as the missing/invalid temperature sentinel.
 constexpr float TELEMETRY_TEMPERATURE_VALID_MIN_C = -30.0f;

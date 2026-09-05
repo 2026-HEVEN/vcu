@@ -2,8 +2,8 @@
 #include "modules/drive_supervisor.h"
 
 static DriveSupervisorParams params() {
-    return {9000.0f, 0.92f, 0.1266f, 100.0f, 2.2222f, 2.7778f,
-            3500.0f, 90.0f, 70.0f, -30.0f, true,
+    return {9000.0f, 0.92f, 0.1266f, 300.0f, 50.0f, 22.2222f,
+            8000.0f, 200.0f, 150.0f, -30.0f, true,
             75.0f, 85.0f, 100.0f, 120.0f};
 }
 
@@ -66,23 +66,37 @@ void test_zero_power_limit_disables_power_limiting(void) {
     TEST_ASSERT_EQUAL_FLOAT(300.0f, out.right_a);
 }
 
-void test_paddock_clamps_current_and_speed(void) {
+void test_paddock_current_limit_decreases_linearly_with_speed(void) {
     DriveSupervisorInput in = nominal();
     in.paddock_active = true;
+    in.requested_left_a = 400.0f;
+    in.requested_right_a = 400.0f;
+    in.motor_rpm_left = 0;
+    in.motor_rpm_right = 0;
     auto out = drive_supervisor_compute(in, params());
-    TEST_ASSERT_FLOAT_WITHIN(0.01f, 100.0f, out.left_a);
-    in.paddock_speed_mps = 3.0f;
-    out = drive_supervisor_compute(in, params());
-    TEST_ASSERT_EQUAL_FLOAT(0.0f, out.left_a);
-}
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 300.0f, out.left_a);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 300.0f, out.paddock_current_limit_a);
 
-void test_paddock_tapers_before_speed_limit(void) {
-    DriveSupervisorInput in = nominal();
-    in.paddock_active = true;
-    in.paddock_speed_mps = 2.5f;
-    auto out = drive_supervisor_compute(in, params());
-    TEST_ASSERT_FLOAT_WITHIN(0.01f, 50.0f, out.left_a);
-    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.50f, out.applied_scale);
+    in.paddock_speed_mps = 20.0f / 3.6f;
+    out = drive_supervisor_compute(in, params());
+    TEST_ASSERT_FLOAT_WITHIN(0.02f, 237.5f, out.left_a);
+
+    in.paddock_speed_mps = 40.0f / 3.6f;
+    out = drive_supervisor_compute(in, params());
+    TEST_ASSERT_FLOAT_WITHIN(0.02f, 175.0f, out.left_a);
+    TEST_ASSERT_FLOAT_WITHIN(0.02f, 175.0f, out.paddock_current_limit_a);
+
+    in.paddock_speed_mps = 60.0f / 3.6f;
+    out = drive_supervisor_compute(in, params());
+    TEST_ASSERT_FLOAT_WITHIN(0.02f, 112.5f, out.left_a);
+
+    in.paddock_speed_mps = 80.0f / 3.6f;
+    out = drive_supervisor_compute(in, params());
+    TEST_ASSERT_FLOAT_WITHIN(0.02f, 50.0f, out.left_a);
+
+    in.paddock_speed_mps = 120.0f / 3.6f;
+    out = drive_supervisor_compute(in, params());
+    TEST_ASSERT_FLOAT_WITHIN(0.02f, 50.0f, out.left_a);
 }
 
 void test_paddock_blocks_missing_temperature_or_pack_data(void) {
@@ -104,7 +118,7 @@ void test_paddock_blocks_missing_temperature_or_pack_data(void) {
 void test_paddock_pack_current_and_power_guards_scale_drive(void) {
     DriveSupervisorInput in = nominal();
     in.paddock_active = true;
-    in.pack_current_a = 140.0f;
+    in.pack_current_a = 300.0f;
     auto out = drive_supervisor_compute(in, params());
     TEST_ASSERT_TRUE(out.paddock_current_limited);
     TEST_ASSERT_TRUE(out.left_a < 100.0f);
@@ -113,8 +127,8 @@ void test_paddock_pack_current_and_power_guards_scale_drive(void) {
     in.paddock_active = true;
     in.bus_voltage_left_v = 57.0f;
     in.bus_voltage_right_v = 57.0f;
-    in.bus_current_left_a = 40.0f;
-    in.bus_current_right_a = 40.0f;
+    in.bus_current_left_a = 80.0f;
+    in.bus_current_right_a = 80.0f;
     out = drive_supervisor_compute(in, params());
     TEST_ASSERT_TRUE(out.power_limited);
     TEST_ASSERT_TRUE(out.left_a < 100.0f);
@@ -139,8 +153,7 @@ int main(int, char **) {
     RUN_TEST(test_fault_blocks_all_current);
     RUN_TEST(test_power_limit_scales_both_motors);
     RUN_TEST(test_zero_power_limit_disables_power_limiting);
-    RUN_TEST(test_paddock_clamps_current_and_speed);
-    RUN_TEST(test_paddock_tapers_before_speed_limit);
+    RUN_TEST(test_paddock_current_limit_decreases_linearly_with_speed);
     RUN_TEST(test_paddock_blocks_missing_temperature_or_pack_data);
     RUN_TEST(test_paddock_pack_current_and_power_guards_scale_drive);
     RUN_TEST(test_thermal_cutoff_also_blocks_regen);

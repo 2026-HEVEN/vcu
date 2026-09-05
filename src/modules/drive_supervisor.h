@@ -4,9 +4,9 @@ struct DriveSupervisorParams {
     float power_soft_limit_w;
     float drivetrain_efficiency;
     float motor_kt_nm_per_a;
-    float paddock_current_per_motor_a;
-    float paddock_speed_taper_start_mps;
-    float paddock_speed_limit_mps;
+    float paddock_current_zero_speed_per_motor_a;
+    float paddock_current_high_speed_per_motor_a;
+    float paddock_current_linear_end_speed_mps;
     float paddock_power_soft_limit_w;
     float paddock_controller_bus_current_limit_a;
     float paddock_pack_current_limit_a;
@@ -47,6 +47,7 @@ struct DriveSupervisorOutput {
     float right_a = 0.0f;
     float measured_bus_power_w = 0.0f;
     float estimated_input_power_w = 0.0f;
+    float paddock_current_limit_a = 0.0f;
     float applied_scale = 0.0f;
     bool controller_blocked = false;
     bool power_limited = false;

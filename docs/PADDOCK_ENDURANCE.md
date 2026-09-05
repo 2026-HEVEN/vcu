@@ -1,29 +1,34 @@
-# Paddock endurance / dynamometer profile
+# Paddock speed-dependent current test profile
 
-This branch extends the existing Cluster paddock request into a conservative
-one-hour dynamometer envelope. It does **not** make 300 A/motor continuous.
-Full pedal in paddock mode is intentionally limited by all of the following:
+This branch turns the existing Cluster paddock request into a continuous
+speed-dependent phase-current test envelope. It does **not** make 300 A/motor
+continuous. Full pedal in paddock mode is limited by all of the following:
 
-- 100 A maximum phase-current command per motor, near the 103 A reference
-  estimated from 13 N.m continuous torque divided by Kt=0.1266 N.m/A;
-- linear speed taper from 8 km/h to zero positive drive at 10 km/h;
+- a phase-current ceiling that falls linearly from 300 A/motor at 0 km/h to
+  50 A/motor at 80 km/h, and stays at 50 A/motor above 80 km/h;
 - the greater of front-wheel vehicle speed and motor-RPM-derived driven-wheel
-  speed, so a rear-wheel-only roller cannot bypass the speed limit;
-- 3.5 kW controller-reported input-power ceiling;
-- 90 A sum of absolute controller bus currents;
-- 70 A absolute BMS pack-current ceiling;
+  speed, so a low or missing WSS reading cannot bypass the current envelope;
+- an 8.0 kW measured/estimated input-power ceiling;
+- 200 A sum of absolute controller bus currents;
+- 150 A absolute BMS pack-current ceiling;
 - valid BMS data and valid controller/motor temperature telemetry;
 - the existing controller and motor thermal derating;
 
-## Why full pedal is still low output
+The current equation is:
+
+```text
+ratio = clamp(speed / 80 km/h, 0, 1)
+phase_current_limit_each = 300 A + (50 A - 300 A) * ratio
+```
+
+## Why phase current falls with speed
 
 The Bexel pack is approximately 4.14 kWh. The 2026-09-05 road logs reached
 about 8.47 kW and 153 A around 40--45 km/h at 300 A/motor, which cannot be
-maintained for one hour from this pack. Paddock mode therefore interprets
-100% pedal as 100% of the endurance envelope, not 100% of the normal 300 A
-peak envelope. There is no automatic one-hour shutoff because a driver remains
-in the vehicle and controls the pedal throughout the test; the electrical and
-thermal guards remain active continuously.
+maintained as speed continues to rise. The falling phase-current ceiling gives
+stronger launch current while reducing the electrical demand as motor speed
+rises. The independent power, bus-current and pack-current scalers can reduce
+the command below the linear ceiling.
 
 ## Cooling prerequisites
 
@@ -39,8 +44,8 @@ separate limit and must be verified independently.
    temperatures are real values, not the EZkontrol `-40 C` invalid sentinel.
 2. Confirm `BMS=1` in the `LIMIT` serial line before enabling paddock mode.
 3. Select paddock mode only below 3 km/h with released throttle.
-4. Run 5 minutes, stop and inspect coolant, motors, controllers, cables and
-   connectors before extending to 15, 30 and 60 minutes.
+4. Start with the driven wheels lifted or a controlled dynamometer load. Check
+   the 0/20/40/60/80 km/h current points before any road test.
 5. Treat any CAN fault, stale feedback, `sensorBlock=1`, `currentLimit=1`,
    `pwr=1`, `therm=1`, abnormal noise, smell, vibration or leakage as a stop
    condition requiring inspection.
@@ -51,13 +56,11 @@ The 1 Hz summary includes:
 
 ```text
 LIMIT pad=... sensorBlock=... currentLimit=...
-      pwr=... therm=... scale=... speed=...kmh
+      pwr=... therm=... scale=... speed=...kmh Ilim=...A
       P=measured/estimatedW BMS=... V=... I=... T=...
 ```
 
-The 100 A value is an initial endurance setting based on a phase-current
-estimate from the motor's continuous torque point, not a manufacturer-confirmed
-one-hour phase-current rating and not proof that the installed cooling system
-can sustain it. A short staged run must still confirm motor temperature,
-coolant performance, controller current scale, BMS current and the dynamometer
-load point.
+`Ilim` is the calculated per-motor phase-current ceiling before the independent
+bus-current, pack-current, power and thermal scalers. The 300 A zero-speed value
+is a short test ceiling, not a manufacturer-confirmed continuous rating and not
+proof that the installed cooling system can sustain it.

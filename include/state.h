@@ -70,6 +70,7 @@ struct VehicleState {
     bool      paddock_sensor_blocked = false;
     bool      paddock_current_limited = false;
     float     paddock_speed_mps = 0.0f;
+    float     paddock_current_limit_a = 0.0f;
     bool      debug_requested = false;
     bool      cluster_cmd_alive = false;
     uint32_t  cluster_cmd_last_rx_ms = 0;

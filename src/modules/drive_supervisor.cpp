@@ -88,15 +88,29 @@ DriveSupervisorOutput drive_supervisor_compute(
             out.paddock_sensor_blocked = true;
             return out;
         }
+        const float high_current_limit = positive(
+            params.paddock_current_zero_speed_per_motor_a);
+        const float low_current_limit = std::fmin(
+            high_current_limit,
+            positive(params.paddock_current_high_speed_per_motor_a));
+        const float speed_fraction =
+            params.paddock_current_linear_end_speed_mps > 0.0f
+                ? clamp01(positive(in.paddock_speed_mps) /
+                          params.paddock_current_linear_end_speed_mps)
+                : 1.0f;
+        out.paddock_current_limit_a =
+            high_current_limit +
+            (low_current_limit - high_current_limit) * speed_fraction;
+
         const float requested_peak = std::fmax(positive(out.left_a),
                                                positive(out.right_a));
         bool phase_current_clamped = false;
-        if (out.left_a > params.paddock_current_per_motor_a) {
-            out.left_a = params.paddock_current_per_motor_a;
+        if (out.left_a > out.paddock_current_limit_a) {
+            out.left_a = out.paddock_current_limit_a;
             phase_current_clamped = true;
         }
-        if (out.right_a > params.paddock_current_per_motor_a) {
-            out.right_a = params.paddock_current_per_motor_a;
+        if (out.right_a > out.paddock_current_limit_a) {
+            out.right_a = out.paddock_current_limit_a;
             phase_current_clamped = true;
         }
         if (phase_current_clamped) {
@@ -106,22 +120,6 @@ DriveSupervisorOutput drive_supervisor_compute(
                 paddock_scale = limited_peak / requested_peak;
             out.paddock_current_limited = true;
         }
-
-        float speed_scale = 1.0f;
-        if (in.paddock_speed_mps >= params.paddock_speed_limit_mps) {
-            speed_scale = 0.0f;
-        } else if (in.paddock_speed_mps >
-                   params.paddock_speed_taper_start_mps) {
-            const float band = params.paddock_speed_limit_mps -
-                               params.paddock_speed_taper_start_mps;
-            speed_scale = band > 0.0f
-                ? clamp01((params.paddock_speed_limit_mps -
-                           in.paddock_speed_mps) / band)
-                : 0.0f;
-        }
-        paddock_scale *= speed_scale;
-        scale_positive(out.left_a, speed_scale);
-        scale_positive(out.right_a, speed_scale);
 
         const float controller_bus_current_sum =
             std::fabs(in.bus_current_left_a) +

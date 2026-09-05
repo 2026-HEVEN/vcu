@@ -82,9 +82,9 @@ namespace {
             ? realcar_cal::bringup::DRIVE_POWER_SOFT_LIMIT_W : 0.0f,
         realcar_cal::bringup::DRIVETRAIN_EFFICIENCY,
         realcar_cal::confirmed::MOTOR_KT_NM_PER_A,
-        realcar_cal::bringup::PADDOCK_CURRENT_MAX_PER_MOTOR_A,
-        realcar_cal::bringup::PADDOCK_SPEED_TAPER_START_MPS,
-        realcar_cal::bringup::PADDOCK_SPEED_LIMIT_MPS,
+        realcar_cal::bringup::PADDOCK_CURRENT_ZERO_SPEED_PER_MOTOR_A,
+        realcar_cal::bringup::PADDOCK_CURRENT_HIGH_SPEED_PER_MOTOR_A,
+        realcar_cal::bringup::PADDOCK_CURRENT_LINEAR_END_SPEED_MPS,
         realcar_cal::bringup::PADDOCK_POWER_SOFT_LIMIT_W,
         realcar_cal::bringup::PADDOCK_CONTROLLER_BUS_CURRENT_LIMIT_A,
         realcar_cal::bringup::PADDOCK_PACK_CURRENT_LIMIT_A,
@@ -290,6 +290,7 @@ static void drive_supervisor_update() {
     state.torque_R = out.right_a;
     state.measured_bus_power_w = out.measured_bus_power_w;
     state.estimated_input_power_w = out.estimated_input_power_w;
+    state.paddock_current_limit_a = out.paddock_current_limit_a;
     state.drive_limit_scale = out.applied_scale;
     state.power_limited = out.power_limited;
     state.thermal_limited = out.thermal_limited;

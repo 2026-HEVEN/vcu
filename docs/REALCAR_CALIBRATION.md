@@ -24,8 +24,8 @@
 - 컨트롤러 75→85 ℃, 모터 100→120 ℃ 구간에서 선형 감쇠 후 차단
 - `ENABLE_DRIVE_POWER_LIMIT = false`: 최초 실차 로깅 중에는 추정 전력 제한 OFF
 - `DRIVE_POWER_SOFT_LIMIT_W = 9000`: 추정 모델 검증 후 위 플래그를 켤 때 사용할 후보값
-- Paddock은 유지하되 `PADDOCK_CURRENT_MAX_PER_MOTOR_A = 30`은 임시값이다. 완성차가
-  평지·출발저항·운전자 탑승 조건에서 안정적으로 굴러가는 최소 상전류를 실측해 교체한다.
+- Paddock 시험 프로파일은 0 km/h의 300 A/모터에서 80 km/h의 50 A/모터까지
+  속도에 따라 연속 선형 감소하며, 80 km/h 이상에서는 50 A/모터를 유지한다.
 - `GEAR_SELECTOR_INSTALLED = true`: GPIO27 기어 ADC 사용. 0=N, 1=R, 2=D로 판정하고 정지·스로틀 해제 인터록 뒤 전·후진 구동
 - `REGEN_HARDWARE_VALIDATED = false`: Cluster 요청은 수신하지만 음의 상전류는 생성하지 않음
 - 핸드셰이크 전에는 해당 컨트롤러 ID로 일반 토크 프레임을 보내지 않음
@@ -125,22 +125,32 @@ P_battery ~= P_mech / efficiency
 검증한다. 이후 `max(좌우 양의 DC bus power 합, Kt×목표상전류×실제RPM/효율 추정)`이
 공식 Energy Meter와 충분히 일치할 때만 플래그를 켜고 9 kW 후보값을 보정한다.
 
-### Paddock 최소 구동전류 캘리브레이션
+### Paddock 속도-상전류 시험 프로파일
 
-현재 30 A/모터는 기능 배선과 속도 제한을 확인하기 위한 시작값일 뿐 확정값이 아니다.
-바퀴를 지면에 내리고 운전자 탑승·정상 타이어 공기압 상태에서 다음 순서로 정한다.
+Paddock을 켜면 가속 상전류 상한은 다음 연속식으로 계산한다. 차속은 WSS 기반 차속과
+좌우 모터 RPM 환산 차속 중 큰 값을 사용하므로, 한 센서가 낮게 잘못 읽어 전류 제한을
+우회하기 어렵게 했다.
 
-1. 평지에서 Paddock을 켜고 매우 낮은 전류부터 단계적으로 올린다.
-2. 정지마찰을 이기고 양쪽 모터가 반복해서 출발하는 최소값을 기록한다.
-3. 약한 경사와 조향 상태에서도 출발 가능한지 확인한다.
-4. 좌·우 목표/실제 상전류와 BUS 전류, 속도를 함께 기록한다.
-5. 반복 출발이 가능한 최소값에 작은 여유를 더해
-   `PADDOCK_CURRENT_MAX_PER_MOTOR_A`로 확정하고
-   `PADDOCK_CURRENT_CALIBRATED=true`로 바꾼다.
+```text
+ratio = clamp(speed / 80 km/h, 0, 1)
+phase_current_limit_each = 300 A + (50 A - 300 A) * ratio
+```
 
-Paddock의 10 km/h 제한은 현재 경계에서 구동전류를 0으로 자르는 단순 방식이다.
-실측 중 울컥임이 크면 제한속도 접근 구간에서 전류를 점진적으로 줄이는 폐루프 제어를
-후속 구현한다.
+| 차속 | 모터별 상전류 상한 |
+|---:|---:|
+| 0 km/h | 300 A |
+| 20 km/h | 237.5 A |
+| 40 km/h | 175 A |
+| 60 km/h | 112.5 A |
+| 80 km/h 이상 | 50 A |
+
+조정 지점은 `PADDOCK_CURRENT_ZERO_SPEED_PER_MOTOR_A`,
+`PADDOCK_CURRENT_HIGH_SPEED_PER_MOTOR_A`,
+`PADDOCK_CURRENT_LINEAR_END_SPEED_MPS` 세 값이다. 별도로 8 kW 추정전력,
+컨트롤러 BUS 전류 합 200 A, BMS 팩전류 150 A 소프트 제한과 기존 온도/CAN 유효성
+차단도 계속 적용된다. 시리얼 `LIMIT` 줄의 `speed`와 `Ilim`으로 현재 속도와 계산된
+모터별 상전류 상한을 함께 확인한다. 이 소프트 제한은 BMS·퓨즈·비상정지 같은 하드웨어
+보호를 대신하지 않는다.
 
 ## WSS 48 PPR와 구름반경
 
