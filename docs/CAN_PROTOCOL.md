@@ -192,7 +192,7 @@
 | 바이트 | 항목 | 의미 |
 |--------|------|------|
 | 0 | Gear | 0=N, 1=R, 2=D, 3=P |
-| 1 | Flags | bit0 Brake, bit1 HV active, bit2 SOC valid, bit3 Throttle valid |
+| 1 | Flags | bit0 Brake, bit1 HV active, bit2 SOC valid, bit3 Throttle valid, bit4 Paddock active, bit7-5 reserved(0) |
 | 2 | SOC | 0~100, bit2가 1일 때만 유효 |
 | 3 | Throttle | 보정된 스로틀 0~100%, bit3가 1일 때만 유효 |
 | 4~6 | 예약 | 0 |
@@ -204,6 +204,8 @@ HV active는 좌·우 컨트롤러 피드백이 fresh이고 DC bus가 20V를 넘
 Throttle은 VCU의 보정 범위 `(raw - RAW_MIN) / (RAW_MAX - RAW_MIN)`를 0~100%로
 클램프한 값이다. 현재 보정값은 RAW_MIN=500, RAW_MAX=3000이며, Cluster의 VESS
 출력에 사용한다.
+Paddock active는 Cluster의 스위치 요청값이 아니라 VCU가 실제로 패독 제한을
+적용 중일 때만 1로 보내는 확인 신호다.
 
 ### 5.9 VCU → Cluster/TMA-1 : 단일 차량속도 `0x1803C0D0` (HEVEN 정의) · 50ms
 

@@ -292,6 +292,7 @@ void send_cluster_status() {
         (float)state.throttle_pct + 0.5f);
     encode_vcu_cluster_status(static_cast<uint8_t>(state.gear),
                               state.brake_active, hv_active,
+                              state.paddock_active,
                               false, 0,
                               state.throttle_signal_valid, throttle_pct,
                               g_status_life++, data);

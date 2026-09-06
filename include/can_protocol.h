@@ -101,9 +101,11 @@ ControllerFeedbackPart2 decode_controller_feedback_part2(const uint8_t data[8]);
 ClusterBmsStatus decode_cluster_bms_status(const uint8_t data[8]);
 
 // VCU -> Cluster status: byte0 gear (0=N,1=R,2=D,3=P), byte1 bit0 brake,
-// bit1 HV active, bit2 SOC valid, bit3 throttle valid, byte2 SOC %,
+// bit1 HV active, bit2 SOC valid, bit3 throttle valid, bit4 Paddock active,
+// byte2 SOC %,
 // byte3 throttle % (0..100), byte7 life counter.
 void encode_vcu_cluster_status(uint8_t gear, bool brake, bool hv_active,
+                               bool paddock_active,
                                bool soc_valid, uint8_t soc_pct,
                                bool throttle_valid, uint8_t throttle_pct,
                                uint8_t life,

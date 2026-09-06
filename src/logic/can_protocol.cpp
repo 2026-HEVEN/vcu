@@ -104,6 +104,7 @@ ClusterBmsStatus decode_cluster_bms_status(const uint8_t data[8]) {
 }
 
 void encode_vcu_cluster_status(uint8_t gear, bool brake, bool hv_active,
+                               bool paddock_active,
                                bool soc_valid, uint8_t soc_pct,
                                bool throttle_valid, uint8_t throttle_pct,
                                uint8_t life,
@@ -113,7 +114,8 @@ void encode_vcu_cluster_status(uint8_t gear, bool brake, bool hv_active,
     out[1] = (brake ? 0x01 : 0x00) |
              (hv_active ? 0x02 : 0x00) |
              (soc_valid ? 0x04 : 0x00) |
-             (throttle_valid ? 0x08 : 0x00);
+             (throttle_valid ? 0x08 : 0x00) |
+             (paddock_active ? 0x10 : 0x00);
     out[2] = soc_valid ? (soc_pct <= 100 ? soc_pct : 100) : 0;
     out[3] = throttle_valid ? (throttle_pct <= 100 ? throttle_pct : 100) : 0;
     out[7] = life;
