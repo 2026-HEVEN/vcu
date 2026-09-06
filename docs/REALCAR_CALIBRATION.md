@@ -22,8 +22,8 @@
 - 좌·우 Part I/II 피드백이 모두 250 ms 이내 fresh여야 최종 상전류 명령 허용
 - 컨트롤러 fault 또는 실제 상전류 1000 A 초과를 한 번이라도 받으면 전원 재인가까지 구동 차단
 - 컨트롤러 75→85 ℃, 모터 100→120 ℃ 구간에서 선형 감쇠 후 차단
-- `ENABLE_DRIVE_POWER_LIMIT = false`: 최초 실차 로깅 중에는 추정 전력 제한 OFF
-- `DRIVE_POWER_SOFT_LIMIT_W = 9000`: 추정 모델 검증 후 위 플래그를 켤 때 사용할 후보값
+- `ENABLE_DRIVE_POWER_LIMIT = true`: 약 13 kW까지 확인된 실차 시험 후 일반 주행 전력 제한 활성화
+- `DRIVE_POWER_SOFT_LIMIT_W = 9000`: 10 kW 경계 아래에 여유를 둔 소프트웨어 명령 상한
 - Paddock 시험 프로파일은 0 km/h의 500 A/모터에서 80 km/h의 50 A/모터까지
   속도에 따라 연속 선형 감소하며, 80 km/h 이상에서는 50 A/모터를 유지한다.
 - `GEAR_SELECTOR_INSTALLED = true`: GPIO27 기어 ADC 사용. 0=N, 1=R, 2=D로 판정하고 정지·스로틀 해제 인터록 뒤 전·후진 구동
@@ -124,11 +124,10 @@ P_battery ~= P_mech / efficiency
 예를 들어 57 V에서는 10 kW가 약 175 A BUS, 58 V에서는 약 172 A BUS지만,
 전압강하와 효율·손실에 따라 Phase/BUS 전류 관계가 계속 달라진다.
 
-현재 `dev`는 좌·우 컨트롤러 Part I/II를 20 Hz로 디코딩하고 전력 계산값을
-시리얼 상태에 남기지만, `ENABLE_DRIVE_POWER_LIMIT=false`라 전류 명령을 줄이지 않는다.
-최초 시험에서 Energy Meter, BMS, 컨트롤러 값을 함께 기록해 전류 부호·지연·오차를
-검증한다. 이후 `max(좌우 양의 DC bus power 합, Kt×목표상전류×실제RPM/효율 추정)`이
-공식 Energy Meter와 충분히 일치할 때만 플래그를 켜고 9 kW 후보값을 보정한다.
+현재 펌웨어는 좌·우 컨트롤러 Part I/II를 20 Hz로 디코딩하고,
+`max(좌우 DC bus 전력 절댓값 합, Kt×목표상전류×실제RPM/효율 추정)`을 기준으로
+9 kW를 넘는 구동 명령을 좌우 동일 비율로 줄인다. Energy Meter, BMS, 컨트롤러
+값을 계속 함께 기록해 전류 부호·지연·오차를 확인하고 9 kW 설정을 보정한다.
 
 ### Paddock 속도-상전류 시험 프로파일
 

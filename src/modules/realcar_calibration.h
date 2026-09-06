@@ -58,12 +58,10 @@ constexpr float COMPONENT_TEST_CURRENT_MAX_PER_MOTOR_A = 150.0f;
 constexpr unsigned COMPONENT_TEST_DURATION_MIN_MS = 100U;
 constexpr unsigned COMPONENT_TEST_DURATION_MAX_MS = 3000U;
 constexpr int COMPONENT_TEST_START_MAX_MOTOR_RPM = 50;
-// Keep the estimated power limiter OFF during bring-up so logged controller
-// feedback and the official Energy Meter can be compared without the estimator
-// changing the test. Set true only after the power model is validated.
-constexpr bool ENABLE_DRIVE_POWER_LIMIT = false;
-// Candidate limit used when ENABLE_DRIVE_POWER_LIMIT is true. The official
-// Energy Meter remains authoritative.
+// Enabled after the 2026-09 road test reached about 13 kW. This 9 kW command
+// ceiling leaves margin below the 10 kW Energy Meter boundary. The official
+// Energy Meter remains authoritative when validating the model.
+constexpr bool ENABLE_DRIVE_POWER_LIMIT = true;
 constexpr float DRIVE_POWER_SOFT_LIMIT_W = 9000.0f;
 constexpr float DRIVETRAIN_EFFICIENCY = 0.92f;
 constexpr float CONTROLLER_FEEDBACK_STALE_MS = 250.0f;
