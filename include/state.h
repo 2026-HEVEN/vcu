@@ -87,6 +87,7 @@ struct VehicleState {
     bool      can_commanded_running_R = false;
     float     measured_bus_power_w = 0.0f;
     float     estimated_input_power_w = 0.0f;
+    float     predicted_command_power_w = 0.0f;
     float     drive_limit_scale = 0.0f;
     bool      power_limited = false;
     bool      thermal_limited = false;

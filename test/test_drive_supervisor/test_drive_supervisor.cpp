@@ -81,8 +81,32 @@ void test_power_limit_uses_actual_phase_current_not_500_a_target(void) {
     auto out = compute(in);
     TEST_ASSERT_FALSE(out.power_limited);
     TEST_ASSERT_TRUE(out.estimated_input_power_w < 8000.0f);
+    TEST_ASSERT_TRUE(out.predicted_command_power_w < 8000.0f);
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 10.0f, out.left_a);
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 10.0f, out.right_a);
+}
+
+void test_slew_limited_command_prediction_caps_before_feedback_arrives(void) {
+    DriveSupervisorInput in = nominal();
+    in.propulsion_requested = true;
+    in.control_dt_s = 0.01f;
+    in.requested_left_a = 500.0f;
+    in.requested_right_a = 500.0f;
+    in.phase_current_left_a = 0.0f;
+    in.phase_current_right_a = 0.0f;
+    in.bus_current_left_a = 0.0f;
+    in.bus_current_right_a = 0.0f;
+    in.motor_rpm_left = 2500;
+    in.motor_rpm_right = 2500;
+
+    DriveSupervisorOutput out{};
+    for (int tick = 0; tick < 50; ++tick) out = compute(in);
+
+    TEST_ASSERT_TRUE(out.power_limited);
+    TEST_ASSERT_TRUE(out.predicted_command_power_w > 8000.0f);
+    TEST_ASSERT_TRUE(out.left_a > 100.0f);
+    TEST_ASSERT_TRUE(out.left_a < 112.0f);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, out.left_a, out.right_a);
 }
 
 void test_zero_power_limit_disables_power_limiting(void) {
@@ -278,6 +302,7 @@ int main(int, char **) {
     RUN_TEST(test_fault_blocks_all_current);
     RUN_TEST(test_power_limit_scales_both_motors);
     RUN_TEST(test_power_limit_uses_actual_phase_current_not_500_a_target);
+    RUN_TEST(test_slew_limited_command_prediction_caps_before_feedback_arrives);
     RUN_TEST(test_zero_power_limit_disables_power_limiting);
     RUN_TEST(test_paddock_current_limit_decreases_linearly_with_speed);
     RUN_TEST(test_paddock_propulsion_rises_to_500_a_in_half_second);

@@ -188,23 +188,23 @@ DriveSupervisorOutput drive_supervisor_compute(
     constexpr float TWO_PI_OVER_60 = 0.104719755f;
     const float efficiency = params.drivetrain_efficiency > 0.05f
         ? params.drivetrain_efficiency : 1.0f;
+    const auto estimate_input_power = [&](float left_current_a,
+                                          float right_current_a) {
+        return
+            (std::fabs(left_current_a) * params.motor_kt_nm_per_a *
+                 std::fabs((float)in.motor_rpm_left) * TWO_PI_OVER_60 +
+             std::fabs(right_current_a) * params.motor_kt_nm_per_a *
+                 std::fabs((float)in.motor_rpm_right) * TWO_PI_OVER_60) /
+            efficiency;
+    };
+
     // Estimate shaft/input power from the phase current that each controller
     // actually reports, not from the final requested-current target.  Using
     // the target here made a 500 A request pre-emptively reduce launch current
     // even while the shared rise limiter and the motors were still well below
     // that current.
-    out.estimated_input_power_w =
-        (std::fabs(in.phase_current_left_a) *
-             params.motor_kt_nm_per_a *
-             std::fabs((float)in.motor_rpm_left) * TWO_PI_OVER_60 +
-         std::fabs(in.phase_current_right_a) *
-             params.motor_kt_nm_per_a *
-             std::fabs((float)in.motor_rpm_right) * TWO_PI_OVER_60) /
-        efficiency;
-
-    float governing_power = out.measured_bus_power_w;
-    if (out.estimated_input_power_w > governing_power)
-        governing_power = out.estimated_input_power_w;
+    out.estimated_input_power_w = estimate_input_power(
+        in.phase_current_left_a, in.phase_current_right_a);
 
     float effective_power_limit_w = params.power_soft_limit_w;
     if (in.paddock_active && params.paddock_power_soft_limit_w > 0.0f &&
@@ -212,6 +212,42 @@ DriveSupervisorOutput drive_supervisor_compute(
          params.paddock_power_soft_limit_w < effective_power_limit_w)) {
         effective_power_limit_w = params.paddock_power_soft_limit_w;
     }
+
+    float slew_scale = 1.0f;
+    if (in.propulsion_requested) {
+        if (params.drive_current_rise_time_s > 0.0f) {
+            const float desired_peak = std::fmax(std::fabs(out.left_a),
+                                                 std::fabs(out.right_a));
+            const float rise_rate_a_per_s =
+                positive(params.drive_current_max_per_motor_a) /
+                params.drive_current_rise_time_s;
+            const float max_step = rise_rate_a_per_s * positive(in.control_dt_s);
+            bool slew_limited = false;
+            out.left_a = limit_rising_magnitude(
+                out.left_a, state.previous_left_a, max_step, slew_limited);
+            out.right_a = limit_rising_magnitude(
+                out.right_a, state.previous_right_a, max_step, slew_limited);
+            if (slew_limited) {
+                const float limited_peak = std::fmax(std::fabs(out.left_a),
+                                                     std::fabs(out.right_a));
+                if (desired_peak > 0.0f)
+                    slew_scale = limited_peak / desired_peak;
+                out.drive_slew_limited = true;
+            }
+        }
+    }
+
+    // Predict the input power of the current command that will be sent this
+    // cycle, after the launch slew limiter.  This catches a likely over-limit
+    // command before the 20 Hz controller feedback reports the resulting
+    // phase/bus current, without treating the unreached 500 A target as real.
+    out.predicted_command_power_w = estimate_input_power(out.left_a, out.right_a);
+
+    float governing_power = out.measured_bus_power_w;
+    if (out.estimated_input_power_w > governing_power)
+        governing_power = out.estimated_input_power_w;
+    if (out.predicted_command_power_w > governing_power)
+        governing_power = out.predicted_command_power_w;
 
     float power_scale = 1.0f;
     if (effective_power_limit_w > 0.0f &&
@@ -222,25 +258,10 @@ DriveSupervisorOutput drive_supervisor_compute(
         out.power_limited = true;
     }
 
-    float slew_scale = 1.0f;
-    if (in.propulsion_requested && params.drive_current_rise_time_s > 0.0f) {
-        const float desired_peak = std::fmax(std::fabs(out.left_a),
-                                             std::fabs(out.right_a));
-        const float rise_rate_a_per_s =
-            positive(params.drive_current_max_per_motor_a) /
-            params.drive_current_rise_time_s;
-        const float max_step = rise_rate_a_per_s * positive(in.control_dt_s);
-        bool slew_limited = false;
-        out.left_a = limit_rising_magnitude(
-            out.left_a, state.previous_left_a, max_step, slew_limited);
-        out.right_a = limit_rising_magnitude(
-            out.right_a, state.previous_right_a, max_step, slew_limited);
-        if (slew_limited) {
-            const float limited_peak = std::fmax(std::fabs(out.left_a),
-                                                 std::fabs(out.right_a));
-            if (desired_peak > 0.0f) slew_scale = limited_peak / desired_peak;
-            out.drive_slew_limited = true;
-        }
+    if (in.propulsion_requested) {
+        // Store the final protected command.  If the power limiter reduced it,
+        // the next cycle may only rise from this value, preventing oscillatory
+        // jumps back toward the unbounded request.
         state.previous_left_a = out.left_a;
         state.previous_right_a = out.right_a;
     } else {

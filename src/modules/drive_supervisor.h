@@ -51,6 +51,7 @@ struct DriveSupervisorOutput {
     float right_a = 0.0f;
     float measured_bus_power_w = 0.0f;
     float estimated_input_power_w = 0.0f;
+    float predicted_command_power_w = 0.0f;
     float paddock_current_limit_a = 0.0f;
     float applied_scale = 0.0f;
     bool controller_blocked = false;

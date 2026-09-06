@@ -300,6 +300,7 @@ static void drive_supervisor_update() {
     state.torque_R = out.right_a;
     state.measured_bus_power_w = out.measured_bus_power_w;
     state.estimated_input_power_w = out.estimated_input_power_w;
+    state.predicted_command_power_w = out.predicted_command_power_w;
     state.paddock_current_limit_a = out.paddock_current_limit_a;
     state.drive_limit_scale = out.applied_scale;
     state.power_limited = out.power_limited;
