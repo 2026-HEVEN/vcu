@@ -40,6 +40,8 @@ namespace {
     volatile bool      g_reconnect_inhibit = false;
     volatile bool      g_reconnect_ramp_active = false;
     volatile uint32_t  g_reconnect_ramp_start_ms = 0U;
+    volatile bool      g_feedback_recovery_expected_L = false;
+    volatile bool      g_feedback_recovery_expected_R = false;
     uint32_t            g_handshake_reply_ms_L = 0U;
     uint32_t            g_handshake_reply_ms_R = 0U;
     bool                g_bus_recovery_pending = false;
@@ -55,6 +57,7 @@ namespace {
             state.controller_feedback_fresh_L = false;
             state.controller_fb1_last_ms_L = 0U;
             state.controller_fb2_last_ms_L = 0U;
+            g_feedback_recovery_expected_L = true;
         } else {
             was_handshaked = g_handshaked_R;
             g_handshaked_R = false;
@@ -62,6 +65,7 @@ namespace {
             state.controller_feedback_fresh_R = false;
             state.controller_fb1_last_ms_R = 0U;
             state.controller_fb2_last_ms_R = 0U;
+            g_feedback_recovery_expected_R = true;
         }
         state.controller_feedback_fresh = false;
         g_reconnect_inhibit = true;
@@ -345,10 +349,12 @@ void poll_rx() {
                 if (from_l) {
                     g_handshaked_L = true;
                     state.controller_handshaked_L = true;
+                    g_feedback_recovery_expected_L = false;
                     g_handshake_reply_ms_L = millis();
                 } else {
                     g_handshaked_R = true;
                     state.controller_handshaked_R = true;
+                    g_feedback_recovery_expected_R = false;
                     g_handshake_reply_ms_R = millis();
                 }
                 Serial.printf("[CAN] controller %c handshake reply sent\n",
@@ -430,6 +436,34 @@ void poll_rx() {
     state.controller_feedback_fresh =
         state.controller_feedback_fresh_L &&
         state.controller_feedback_fresh_R;
+
+    // After a real link loss, some controller/firmware combinations resume
+    // normal Part I/II feedback without returning to the documented 0x55
+    // startup probe.  In that case the VCU used to remain stuck at hs=0 even
+    // though both fresh feedback frames proved that the controller-side CAN
+    // session was alive.  Accept that evidence only for a link which was
+    // previously handshaked and then explicitly invalidated; initial startup
+    // still requires the normal 0x55/0xAA exchange.  The global reconnect
+    // inhibit remains set until both sides are ready, after which the existing
+    // one-second torque ramp performs the controlled recovery.
+    if (!g_handshaked_L && g_feedback_recovery_expected_L &&
+        state.controller_feedback_fresh_L) {
+        g_handshaked_L = true;
+        state.controller_handshaked_L = true;
+        g_feedback_recovery_expected_L = false;
+        g_handshake_reply_ms_L = now;
+        Serial.println(
+            "[CAN] controller L restored from fresh Part I/II feedback");
+    }
+    if (!g_handshaked_R && g_feedback_recovery_expected_R &&
+        state.controller_feedback_fresh_R) {
+        g_handshaked_R = true;
+        state.controller_handshaked_R = true;
+        g_feedback_recovery_expected_R = false;
+        g_handshake_reply_ms_R = now;
+        Serial.println(
+            "[CAN] controller R restored from fresh Part I/II feedback");
+    }
 
     // The 250 ms freshness check above removes torque immediately. If either
     // required feedback part is still absent at the longer timeout, stop that
