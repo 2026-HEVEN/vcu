@@ -110,6 +110,9 @@ constexpr bool PADDOCK_CURRENT_CALIBRATED = false;
 constexpr float PADDOCK_CURRENT_ZERO_SPEED_PER_MOTOR_A = 300.0f;
 constexpr float PADDOCK_CURRENT_HIGH_SPEED_PER_MOTOR_A = 50.0f;
 constexpr float PADDOCK_CURRENT_LINEAR_END_SPEED_MPS = 80.0f / 3.6f;
+// 300 A / 0.5 s = 600 A/s. Only rising propulsion magnitude is limited;
+// release, faults and protective reductions remain immediate.
+constexpr float PADDOCK_CURRENT_RISE_TIME_S = 0.5f;
 constexpr float PADDOCK_ENTRY_SPEED_MAX_MPS = 3.0f / 3.6f;
 // The Bexel pack's 157 A continuous rating is about 8.13 kW at 51.8 V.
 // Keep a small margin below that value; this is a soft command scaler, not a

@@ -110,6 +110,8 @@ void test_paddock_speed_current_profile_is_bounded() {
         realcar_cal::confirmed::MOTOR_CONTINUOUS_CURRENT_MAX_A);
     TEST_ASSERT_TRUE(
         realcar_cal::bringup::PADDOCK_CURRENT_LINEAR_END_SPEED_MPS > 0.0f);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.5f,
+        realcar_cal::bringup::PADDOCK_CURRENT_RISE_TIME_S);
     TEST_ASSERT_TRUE(
         realcar_cal::bringup::PADDOCK_POWER_SOFT_LIMIT_W > 0.0f);
     TEST_ASSERT_TRUE(

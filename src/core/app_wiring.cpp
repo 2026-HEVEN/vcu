@@ -77,6 +77,7 @@ namespace {
     };
     GearFilterState gear_filter_state{};
     DirectionInterlockState direction_interlock_state{};
+    DriveSupervisorState drive_supervisor_state{};
     const DriveSupervisorParams DRIVE_SUPERVISOR_PARAMS {
         realcar_cal::bringup::ENABLE_DRIVE_POWER_LIMIT
             ? realcar_cal::bringup::DRIVE_POWER_SOFT_LIMIT_W : 0.0f,
@@ -85,6 +86,7 @@ namespace {
         realcar_cal::bringup::PADDOCK_CURRENT_ZERO_SPEED_PER_MOTOR_A,
         realcar_cal::bringup::PADDOCK_CURRENT_HIGH_SPEED_PER_MOTOR_A,
         realcar_cal::bringup::PADDOCK_CURRENT_LINEAR_END_SPEED_MPS,
+        realcar_cal::bringup::PADDOCK_CURRENT_RISE_TIME_S,
         realcar_cal::bringup::PADDOCK_POWER_SOFT_LIMIT_W,
         realcar_cal::bringup::PADDOCK_CONTROLLER_BUS_CURRENT_LIMIT_A,
         realcar_cal::bringup::PADDOCK_PACK_CURRENT_LIMIT_A,
@@ -267,6 +269,11 @@ static void drive_supervisor_update() {
         realcar_cal::confirmed::GEAR_RATIO;
     state.paddock_speed_mps =
         std::fmax(state.vehicle_speed_mps, motor_speed_mps);
+    const bool propulsion_requested =
+        !time_sync_output.override_active &&
+        state.propulsion_direction_armed && state.throttle_signal_valid &&
+        (float)state.throttle_pct > realcar_cal::bringup::THROTTLE_ARM_MAX_PCT &&
+        !state.brake_active;
     const DriveSupervisorInput in {
         requested_left_a, requested_right_a,
         state.controller_feedback_fresh,
@@ -281,11 +288,13 @@ static void drive_supervisor_update() {
         (float)state.controller_fb2_L.motor_temp_c,
         (float)state.controller_fb2_R.motor_temp_c,
         state.paddock_active,
+        propulsion_requested, realcar_cal::confirmed::CONTROL_PERIOD_S,
         state.vehicle_speed_mps, state.paddock_speed_mps,
         state.pack_data_valid, state.pack_current_a,
     };
     const DriveSupervisorOutput out =
-        drive_supervisor_compute(in, DRIVE_SUPERVISOR_PARAMS);
+        drive_supervisor_compute(in, DRIVE_SUPERVISOR_PARAMS,
+                                 drive_supervisor_state);
     state.torque_L = out.left_a;
     state.torque_R = out.right_a;
     state.measured_bus_power_w = out.measured_bus_power_w;
@@ -296,6 +305,7 @@ static void drive_supervisor_update() {
     state.thermal_limited = out.thermal_limited;
     state.paddock_sensor_blocked = out.paddock_sensor_blocked;
     state.paddock_current_limited = out.paddock_current_limited;
+    state.paddock_slew_limited = out.paddock_slew_limited;
     can_bus::note_command();
 }
 static void can_rx_update()  { can_bus::poll_rx(); }

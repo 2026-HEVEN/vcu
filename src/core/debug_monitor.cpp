@@ -267,11 +267,12 @@ void debug_update() {
                 imu_diag.rx_bytes, imu_diag.valid_mtdata2_frames,
                 imu_diag.checksum_errors);
             Serial.printf(
-                "LIMIT pad=%d sensorBlock=%d currentLimit=%d "
+                "LIMIT pad=%d sensorBlock=%d currentLimit=%d slew=%d "
                 "pwr=%d therm=%d scale=%.3f speed=%.2fkmh Ilim=%.1fA "
                 "P=%.0f/%.0fW BMS=%d V=%.1f I=%+.1f T=%d\n",
                 state.paddock_active, state.paddock_sensor_blocked,
                 state.paddock_current_limited,
+                state.paddock_slew_limited,
                 state.power_limited, state.thermal_limited,
                 state.drive_limit_scale, state.paddock_speed_mps * 3.6f,
                 state.paddock_current_limit_a,

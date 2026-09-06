@@ -69,6 +69,7 @@ struct VehicleState {
     bool      paddock_active = false;
     bool      paddock_sensor_blocked = false;
     bool      paddock_current_limited = false;
+    bool      paddock_slew_limited = false;
     float     paddock_speed_mps = 0.0f;
     float     paddock_current_limit_a = 0.0f;
     bool      debug_requested = false;

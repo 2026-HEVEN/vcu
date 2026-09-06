@@ -7,6 +7,7 @@ struct DriveSupervisorParams {
     float paddock_current_zero_speed_per_motor_a;
     float paddock_current_high_speed_per_motor_a;
     float paddock_current_linear_end_speed_mps;
+    float paddock_current_rise_time_s;
     float paddock_power_soft_limit_w;
     float paddock_controller_bus_current_limit_a;
     float paddock_pack_current_limit_a;
@@ -36,6 +37,8 @@ struct DriveSupervisorInput {
     float motor_temp_left_c;
     float motor_temp_right_c;
     bool paddock_active;
+    bool propulsion_requested;
+    float control_dt_s;
     float vehicle_speed_mps;
     float paddock_speed_mps;
     bool pack_data_valid;
@@ -55,7 +58,14 @@ struct DriveSupervisorOutput {
     bool paddock_limited = false;
     bool paddock_sensor_blocked = false;
     bool paddock_current_limited = false;
+    bool paddock_slew_limited = false;
+};
+
+struct DriveSupervisorState {
+    float previous_left_a = 0.0f;
+    float previous_right_a = 0.0f;
 };
 
 DriveSupervisorOutput drive_supervisor_compute(
-    const DriveSupervisorInput &in, const DriveSupervisorParams &params);
+    const DriveSupervisorInput &in, const DriveSupervisorParams &params,
+    DriveSupervisorState &state);

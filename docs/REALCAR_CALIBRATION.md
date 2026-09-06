@@ -146,7 +146,9 @@ phase_current_limit_each = 300 A + (50 A - 300 A) * ratio
 
 조정 지점은 `PADDOCK_CURRENT_ZERO_SPEED_PER_MOTOR_A`,
 `PADDOCK_CURRENT_HIGH_SPEED_PER_MOTOR_A`,
-`PADDOCK_CURRENT_LINEAR_END_SPEED_MPS` 세 값이다. 별도로 8 kW 추정전력,
+`PADDOCK_CURRENT_LINEAR_END_SPEED_MPS` 세 값이다. 출발 전류는
+`PADDOCK_CURRENT_RISE_TIME_S = 0.5`에 따라 600 A/s로 증가한다. 이 램프는
+구동전류가 커질 때만 적용하며 스로틀 해제와 보호 차단은 즉시 반영한다. 별도로 8 kW 추정전력,
 컨트롤러 BUS 전류 합 200 A, BMS 팩전류 150 A 소프트 제한과 기존 온도/CAN 유효성
 차단도 계속 적용된다. 시리얼 `LIMIT` 줄의 `speed`와 `Ilim`으로 현재 속도와 계산된
 모터별 상전류 상한을 함께 확인한다. 이 소프트 제한은 BMS·퓨즈·비상정지 같은 하드웨어
