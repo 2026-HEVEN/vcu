@@ -43,7 +43,7 @@ constexpr bool REQUIRE_BOTH_MOTOR_CONTROLLERS = true;
 // Throttle command ceiling, per motor. This is a software test limit, not a
 // competition-rule or battery-current limit. Raise/lower only here after
 // checking controller, motor, battery/BMS and energy-meter data.
-constexpr float DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A = 300.0f;
+constexpr float DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A = 500.0f;
 constexpr float DRIVE_PHASE_CURRENT_EFF_PER_MOTOR_A = 100.0f;
 // Bench-only serial motor pulse used by bringup/component-test. A pulse is
 // accepted only with released throttle, fresh CAN feedback, no controller
@@ -104,13 +104,13 @@ constexpr float CONTROLLER_CUTOFF_C = 85.0f;
 constexpr float MOTOR_DERATE_START_C = 100.0f;
 constexpr float MOTOR_CUTOFF_C = 120.0f;
 // Provisional speed/current test envelope.  The phase-current ceiling falls
-// continuously from 300 A/motor at standstill to 50 A/motor at 80 km/h, then
+// continuously from 500 A/motor at standstill to 50 A/motor at 80 km/h, then
 // holds 50 A/motor above that speed.  This is only active in paddock mode.
 constexpr bool PADDOCK_CURRENT_CALIBRATED = false;
-constexpr float PADDOCK_CURRENT_ZERO_SPEED_PER_MOTOR_A = 300.0f;
+constexpr float PADDOCK_CURRENT_ZERO_SPEED_PER_MOTOR_A = 500.0f;
 constexpr float PADDOCK_CURRENT_HIGH_SPEED_PER_MOTOR_A = 50.0f;
 constexpr float PADDOCK_CURRENT_LINEAR_END_SPEED_MPS = 80.0f / 3.6f;
-// 300 A / 0.5 s = 600 A/s. Only rising propulsion magnitude is limited;
+// 500 A / 0.5 s = 1000 A/s. Only rising propulsion magnitude is limited;
 // release, faults and protective reductions remain immediate.
 constexpr float PADDOCK_CURRENT_RISE_TIME_S = 0.5f;
 constexpr float PADDOCK_ENTRY_SPEED_MAX_MPS = 3.0f / 3.6f;

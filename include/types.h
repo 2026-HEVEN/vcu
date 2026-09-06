@@ -23,6 +23,6 @@ using Pct0to100 = Clamped<0, 100>;     // brake
 using Rpm       = Clamped<0, 6000>;    // wheel/motor speed
 
 // EZkontrol Target Phase Current is an ampere command, not a percentage.
-// The domain range follows the HPM05KW maximum phase-current capability;
-// the lower continuous operating limit is enforced by TVParams.
-using Amp       = Clamped<-300, 300>;
+// The domain range follows the configured short-duration software command
+// ceiling; continuous and paddock limits are enforced separately.
+using Amp       = Clamped<-500, 500>;

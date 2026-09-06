@@ -47,10 +47,10 @@ void test_physical_yaw_to_current_conversion() {
     TEST_ASSERT_FLOAT_WITHIN(0.01f, expected_diff, actual_diff);
 }
 
-void test_bringup_limit_allows_300_a_but_no_more() {
+void test_bringup_limit_allows_500_a_but_no_more() {
     const TVAllocOutput o = tv_alloc_compute(1000.0f, 0.0f, unlimited(), TV_PARAMS);
-    TEST_ASSERT_FLOAT_WITHIN(0.01f, 300.0f, (float)o.torque_L);
-    TEST_ASSERT_FLOAT_WITHIN(0.01f, 300.0f, (float)o.torque_R);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 500.0f, (float)o.torque_L);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 500.0f, (float)o.torque_R);
 }
 
 void test_saturation_keeps_yaw_before_common_current() {
@@ -119,7 +119,7 @@ int main(int, char **) {
     RUN_TEST(test_asymmetric_limits_are_respected);
     RUN_TEST(test_zero_demand_cannot_create_torque);
     RUN_TEST(test_physical_yaw_to_current_conversion);
-    RUN_TEST(test_bringup_limit_allows_300_a_but_no_more);
+    RUN_TEST(test_bringup_limit_allows_500_a_but_no_more);
     RUN_TEST(test_saturation_keeps_yaw_before_common_current);
     RUN_TEST(test_small_total_with_large_yaw_does_not_manufacture_current);
     RUN_TEST(test_near_zero_total_with_large_yaw_does_not_manufacture_current);

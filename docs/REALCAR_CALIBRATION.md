@@ -20,11 +20,11 @@
 - `BRAKE_SENSOR_INSTALLED = false`: 미장착 GPIO33을 읽지 않고 브레이크/회생 입력을 0으로 고정
 - `REQUIRE_BOTH_MOTOR_CONTROLLERS = true`: 좌·우 컨트롤러가 모두 핸드셰이크되어야 시험 허용
 - 좌·우 Part I/II 피드백이 모두 250 ms 이내 fresh여야 최종 상전류 명령 허용
-- 컨트롤러 fault 또는 실제 상전류 330 A 초과를 한 번이라도 받으면 전원 재인가까지 구동 차단
+- 컨트롤러 fault 또는 실제 상전류 1000 A 초과를 한 번이라도 받으면 전원 재인가까지 구동 차단
 - 컨트롤러 75→85 ℃, 모터 100→120 ℃ 구간에서 선형 감쇠 후 차단
 - `ENABLE_DRIVE_POWER_LIMIT = false`: 최초 실차 로깅 중에는 추정 전력 제한 OFF
 - `DRIVE_POWER_SOFT_LIMIT_W = 9000`: 추정 모델 검증 후 위 플래그를 켤 때 사용할 후보값
-- Paddock 시험 프로파일은 0 km/h의 300 A/모터에서 80 km/h의 50 A/모터까지
+- Paddock 시험 프로파일은 0 km/h의 500 A/모터에서 80 km/h의 50 A/모터까지
   속도에 따라 연속 선형 감소하며, 80 km/h 이상에서는 50 A/모터를 유지한다.
 - `GEAR_SELECTOR_INSTALLED = true`: GPIO27 기어 ADC 사용. 0=N, 1=R, 2=D로 판정하고 정지·스로틀 해제 인터록 뒤 전·후진 구동
 - `REGEN_HARDWARE_VALIDATED = false`: Cluster 요청은 수신하지만 음의 상전류는 생성하지 않음
@@ -85,8 +85,8 @@
 5. 페달을 아주 천천히 밟아 `thr`가 단조 증가하는지 확인한다. 반대로 움직이거나
    놓은 상태에서 0%가 아니면 지상 구동하지 않는다.
 
-현재 Normal 모드는 스로틀 100%에서 총 목표 상전류 300 A를 만들고, TV OFF의
-50:50 분배로 좌·우 컨트롤러에 각각 최대 150 A를 요청한다. 이 값은 배터리 BUS
+현재 Normal 모드는 스로틀 100%에서 총 목표 상전류 1000 A를 만들고, TV OFF의
+50:50 분배로 좌·우 컨트롤러에 각각 최대 500 A를 요청한다. 이 값은 배터리 BUS
 전류나 대회 규정값이 아니라 짧은 실차 시험용 소프트웨어 상한이다. 한쪽
 컨트롤러의 핸드셰이크가 빠지면 `HS=0`, `ARM=0`을 유지하며 어느 모터에도 구동
 전류를 허용하지 않는다.
@@ -105,7 +105,7 @@ P_battery ~= P_mech / efficiency
 
 | 모터 RPM | 10 kW 근사 상한, 모터별 Phase current |
 |---:|---:|
-| 1,000 | 347 A → 소프트웨어 150 A 상한이 먼저 작동 |
+| 1,000 | 347 A |
 | 1,500 | 231 A |
 | 2,000 | 173 A |
 | 2,500 | 139 A |
@@ -113,8 +113,8 @@ P_battery ~= P_mech / efficiency
 | 3,500 | 99 A |
 | 4,000 | 87 A |
 
-즉 150 A/모터도 전 속도에서 유지 가능한 명령은 아니다.
-이 근사에서는 약 2,310 rpm부터 150 A/모터가 배터리 입력 10 kW를 넘길 수 있다.
+즉 500 A/모터는 연속 운전값이 아니며 이 근사에서는 약 694 rpm부터
+배터리 입력 10 kW를 넘길 수 있다.
 실제 판정은 에너지미터가 측정하는 배터리 출력단 전압·전류로 해야 한다.
 예를 들어 57 V에서는 10 kW가 약 175 A BUS, 58 V에서는 약 172 A BUS지만,
 전압강하와 효율·손실에 따라 Phase/BUS 전류 관계가 계속 달라진다.
@@ -133,21 +133,21 @@ Paddock을 켜면 가속 상전류 상한은 다음 연속식으로 계산한다
 
 ```text
 ratio = clamp(speed / 80 km/h, 0, 1)
-phase_current_limit_each = 300 A + (50 A - 300 A) * ratio
+phase_current_limit_each = 500 A + (50 A - 500 A) * ratio
 ```
 
 | 차속 | 모터별 상전류 상한 |
 |---:|---:|
-| 0 km/h | 300 A |
-| 20 km/h | 237.5 A |
-| 40 km/h | 175 A |
-| 60 km/h | 112.5 A |
+| 0 km/h | 500 A |
+| 20 km/h | 387.5 A |
+| 40 km/h | 275 A |
+| 60 km/h | 162.5 A |
 | 80 km/h 이상 | 50 A |
 
 조정 지점은 `PADDOCK_CURRENT_ZERO_SPEED_PER_MOTOR_A`,
 `PADDOCK_CURRENT_HIGH_SPEED_PER_MOTOR_A`,
 `PADDOCK_CURRENT_LINEAR_END_SPEED_MPS` 세 값이다. 출발 전류는
-`PADDOCK_CURRENT_RISE_TIME_S = 0.5`에 따라 600 A/s로 증가한다. 이 램프는
+`PADDOCK_CURRENT_RISE_TIME_S = 0.5`에 따라 1000 A/s로 증가한다. 이 램프는
 구동전류가 커질 때만 적용하며 스로틀 해제와 보호 차단은 즉시 반영한다. 별도로 8 kW 추정전력,
 컨트롤러 BUS 전류 합 200 A, BMS 팩전류 150 A 소프트 제한과 기존 온도/CAN 유효성
 차단도 계속 적용된다. 시리얼 `LIMIT` 줄의 `speed`와 `Ilim`으로 현재 속도와 계산된

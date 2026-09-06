@@ -1,12 +1,12 @@
 # Paddock speed-dependent current test profile
 
 This branch turns the existing Cluster paddock request into a continuous
-speed-dependent phase-current test envelope. It does **not** make 300 A/motor
+speed-dependent phase-current test envelope. It does **not** make 500 A/motor
 continuous. Full pedal in paddock mode is limited by all of the following:
 
-- a phase-current ceiling that falls linearly from 300 A/motor at 0 km/h to
+- a phase-current ceiling that falls linearly from 500 A/motor at 0 km/h to
   50 A/motor at 80 km/h, and stays at 50 A/motor above 80 km/h;
-- a 600 A/s propulsion rise limit, so 0 to 300 A takes 0.5 seconds;
+- a 1000 A/s propulsion rise limit, so 0 to 500 A takes 0.5 seconds;
 - the greater of front-wheel vehicle speed and motor-RPM-derived driven-wheel
   speed, so a low or missing WSS reading cannot bypass the current envelope;
 - an 8.0 kW measured/estimated input-power ceiling;
@@ -19,7 +19,7 @@ The current equation is:
 
 ```text
 ratio = clamp(speed / 80 km/h, 0, 1)
-phase_current_limit_each = 300 A + (50 A - 300 A) * ratio
+phase_current_limit_each = 500 A + (50 A - 500 A) * ratio
 ```
 
 ## Why phase current falls with speed
@@ -62,7 +62,7 @@ LIMIT pad=... sensorBlock=... currentLimit=...
 ```
 
 `Ilim` is the calculated per-motor phase-current ceiling before the independent
-bus-current, pack-current, power and thermal scalers. The 300 A zero-speed value
+bus-current, pack-current, power and thermal scalers. The 500 A zero-speed value
 is a short test ceiling, not a manufacturer-confirmed continuous rating and not
 proof that the installed cooling system can sustain it.
 
