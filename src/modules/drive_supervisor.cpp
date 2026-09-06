@@ -188,11 +188,16 @@ DriveSupervisorOutput drive_supervisor_compute(
     constexpr float TWO_PI_OVER_60 = 0.104719755f;
     const float efficiency = params.drivetrain_efficiency > 0.05f
         ? params.drivetrain_efficiency : 1.0f;
+    // Estimate shaft/input power from the phase current that each controller
+    // actually reports, not from the final requested-current target.  Using
+    // the target here made a 500 A request pre-emptively reduce launch current
+    // even while the shared rise limiter and the motors were still well below
+    // that current.
     out.estimated_input_power_w =
-        (drive_magnitude(out.left_a, in.propulsion_requested) *
+        (std::fabs(in.phase_current_left_a) *
              params.motor_kt_nm_per_a *
              std::fabs((float)in.motor_rpm_left) * TWO_PI_OVER_60 +
-         drive_magnitude(out.right_a, in.propulsion_requested) *
+         std::fabs(in.phase_current_right_a) *
              params.motor_kt_nm_per_a *
              std::fabs((float)in.motor_rpm_right) * TWO_PI_OVER_60) /
         efficiency;
