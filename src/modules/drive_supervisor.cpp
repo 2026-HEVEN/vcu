@@ -218,13 +218,12 @@ DriveSupervisorOutput drive_supervisor_compute(
     }
 
     float slew_scale = 1.0f;
-    if (in.paddock_active && in.propulsion_requested &&
-        params.paddock_current_rise_time_s > 0.0f) {
+    if (in.propulsion_requested && params.drive_current_rise_time_s > 0.0f) {
         const float desired_peak = std::fmax(std::fabs(out.left_a),
                                              std::fabs(out.right_a));
         const float rise_rate_a_per_s =
-            positive(params.paddock_current_zero_speed_per_motor_a) /
-            params.paddock_current_rise_time_s;
+            positive(params.drive_current_max_per_motor_a) /
+            params.drive_current_rise_time_s;
         const float max_step = rise_rate_a_per_s * positive(in.control_dt_s);
         bool slew_limited = false;
         out.left_a = limit_rising_magnitude(
@@ -235,13 +234,13 @@ DriveSupervisorOutput drive_supervisor_compute(
             const float limited_peak = std::fmax(std::fabs(out.left_a),
                                                  std::fabs(out.right_a));
             if (desired_peak > 0.0f) slew_scale = limited_peak / desired_peak;
-            out.paddock_slew_limited = true;
+            out.drive_slew_limited = true;
         }
         state.previous_left_a = out.left_a;
         state.previous_right_a = out.right_a;
     } else {
-        // Paddock can only be entered with released throttle. Resetting while
-        // disabled guarantees the next propulsion request starts from zero.
+        // A released/blocked propulsion request resets the launch history so
+        // the next Normal or Paddock acceleration starts from zero.
         reset_rise_limit(state);
     }
 

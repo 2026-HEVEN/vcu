@@ -91,6 +91,11 @@
 컨트롤러의 핸드셰이크가 빠지면 `HS=0`, `ARM=0`을 유지하며 어느 모터에도 구동
 전류를 허용하지 않는다.
 
+Normal과 Paddock의 구동전류 상승에는 공통으로
+`DRIVE_CURRENT_RISE_TIME_S = 0.5`를 적용한다. 모터당 500 A 상한 기준으로
+1000 A/s이며, 스로틀 해제·브레이크·고장 및 보호 로직의 전류 감소는 즉시
+반영한다. 재핸드셰이크 직후에는 별도의 1초 복구 램프가 더 낮은 상한으로 작동한다.
+
 ### 10 kW 에너지미터 출력 제한의 사전 근사
 
 모터별 상전류가 같고, 실측 토크상수 `Kt=0.1266 N·m/A`를 RMS Phase current에
@@ -147,7 +152,7 @@ phase_current_limit_each = 500 A + (50 A - 500 A) * ratio
 조정 지점은 `PADDOCK_CURRENT_ZERO_SPEED_PER_MOTOR_A`,
 `PADDOCK_CURRENT_HIGH_SPEED_PER_MOTOR_A`,
 `PADDOCK_CURRENT_LINEAR_END_SPEED_MPS` 세 값이다. 출발 전류는
-`PADDOCK_CURRENT_RISE_TIME_S = 0.5`에 따라 1000 A/s로 증가한다. 이 램프는
+공통 `DRIVE_CURRENT_RISE_TIME_S = 0.5`에 따라 1000 A/s로 증가한다. 이 램프는
 구동전류가 커질 때만 적용하며 스로틀 해제와 보호 차단은 즉시 반영한다. 별도로 8 kW 추정전력,
 컨트롤러 BUS 전류 합 200 A, BMS 팩전류 150 A 소프트 제한과 기존 온도/CAN 유효성
 차단도 계속 적용된다. 시리얼 `LIMIT` 줄의 `speed`와 `Ilim`으로 현재 속도와 계산된

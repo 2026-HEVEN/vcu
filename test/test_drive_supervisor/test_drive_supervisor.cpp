@@ -2,8 +2,9 @@
 #include "modules/drive_supervisor.h"
 
 static DriveSupervisorParams params() {
-    return {9000.0f, 0.92f, 0.1266f, 500.0f, 50.0f, 22.2222f,
-            0.5f, 8000.0f, 200.0f, 150.0f, -30.0f, true,
+    return {500.0f, 0.5f, 9000.0f, 0.92f, 0.1266f,
+            500.0f, 50.0f, 22.2222f,
+            8000.0f, 200.0f, 150.0f, -30.0f, true,
             75.0f, 85.0f, 100.0f, 120.0f};
 }
 
@@ -72,6 +73,7 @@ void test_zero_power_limit_disables_power_limiting(void) {
     in.motor_rpm_right = 2500;
     DriveSupervisorParams p = params();
     p.power_soft_limit_w = 0.0f;
+    p.drive_current_rise_time_s = 0.0f;
     auto out = compute(in, p);
     TEST_ASSERT_FALSE(out.power_limited);
     TEST_ASSERT_EQUAL_FLOAT(300.0f, out.left_a);
@@ -86,7 +88,7 @@ void test_paddock_current_limit_decreases_linearly_with_speed(void) {
     in.motor_rpm_left = 0;
     in.motor_rpm_right = 0;
     DriveSupervisorParams p = params();
-    p.paddock_current_rise_time_s = 0.0f;
+    p.drive_current_rise_time_s = 0.0f;
     auto out = compute(in, p);
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 500.0f, out.left_a);
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 500.0f, out.paddock_current_limit_a);
@@ -126,7 +128,7 @@ void test_paddock_propulsion_rises_to_500_a_in_half_second(void) {
     auto out = compute(in);
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 10.0f, out.left_a);
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 10.0f, out.right_a);
-    TEST_ASSERT_TRUE(out.paddock_slew_limited);
+    TEST_ASSERT_TRUE(out.drive_slew_limited);
 
     for (int tick = 1; tick < 25; ++tick) out = compute(in);
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 250.0f, out.left_a);
@@ -134,7 +136,40 @@ void test_paddock_propulsion_rises_to_500_a_in_half_second(void) {
     for (int tick = 25; tick < 50; ++tick) out = compute(in);
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 500.0f, out.left_a);
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 500.0f, out.right_a);
-    TEST_ASSERT_FALSE(out.paddock_slew_limited);
+    TEST_ASSERT_FALSE(out.drive_slew_limited);
+}
+
+void test_normal_propulsion_rises_to_500_a_in_half_second(void) {
+    DriveSupervisorInput in = nominal();
+    in.paddock_active = false;
+    in.propulsion_requested = true;
+    in.control_dt_s = 0.01f;
+    in.requested_left_a = 500.0f;
+    in.requested_right_a = 500.0f;
+    in.motor_rpm_left = 0;
+    in.motor_rpm_right = 0;
+    DriveSupervisorParams p = params();
+    p.power_soft_limit_w = 0.0f;
+
+    auto out = compute(in, p);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 10.0f, out.left_a);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 10.0f, out.right_a);
+    TEST_ASSERT_TRUE(out.drive_slew_limited);
+
+    for (int tick = 1; tick < 25; ++tick) out = compute(in, p);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 250.0f, out.left_a);
+
+    for (int tick = 25; tick < 50; ++tick) out = compute(in, p);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 500.0f, out.left_a);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 500.0f, out.right_a);
+    TEST_ASSERT_FALSE(out.drive_slew_limited);
+
+    in.requested_left_a = 0.0f;
+    in.requested_right_a = 0.0f;
+    in.propulsion_requested = false;
+    out = compute(in, p);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, out.left_a);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, out.right_a);
 }
 
 void test_paddock_release_and_fault_reductions_are_immediate(void) {
@@ -225,6 +260,7 @@ int main(int, char **) {
     RUN_TEST(test_zero_power_limit_disables_power_limiting);
     RUN_TEST(test_paddock_current_limit_decreases_linearly_with_speed);
     RUN_TEST(test_paddock_propulsion_rises_to_500_a_in_half_second);
+    RUN_TEST(test_normal_propulsion_rises_to_500_a_in_half_second);
     RUN_TEST(test_paddock_release_and_fault_reductions_are_immediate);
     RUN_TEST(test_paddock_blocks_missing_temperature_or_pack_data);
     RUN_TEST(test_paddock_pack_current_and_power_guards_scale_drive);

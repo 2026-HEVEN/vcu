@@ -79,6 +79,8 @@ namespace {
     DirectionInterlockState direction_interlock_state{};
     DriveSupervisorState drive_supervisor_state{};
     const DriveSupervisorParams DRIVE_SUPERVISOR_PARAMS {
+        realcar_cal::bringup::DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A,
+        realcar_cal::bringup::DRIVE_CURRENT_RISE_TIME_S,
         realcar_cal::bringup::ENABLE_DRIVE_POWER_LIMIT
             ? realcar_cal::bringup::DRIVE_POWER_SOFT_LIMIT_W : 0.0f,
         realcar_cal::bringup::DRIVETRAIN_EFFICIENCY,
@@ -86,7 +88,6 @@ namespace {
         realcar_cal::bringup::PADDOCK_CURRENT_ZERO_SPEED_PER_MOTOR_A,
         realcar_cal::bringup::PADDOCK_CURRENT_HIGH_SPEED_PER_MOTOR_A,
         realcar_cal::bringup::PADDOCK_CURRENT_LINEAR_END_SPEED_MPS,
-        realcar_cal::bringup::PADDOCK_CURRENT_RISE_TIME_S,
         realcar_cal::bringup::PADDOCK_POWER_SOFT_LIMIT_W,
         realcar_cal::bringup::PADDOCK_CONTROLLER_BUS_CURRENT_LIMIT_A,
         realcar_cal::bringup::PADDOCK_PACK_CURRENT_LIMIT_A,
@@ -305,7 +306,7 @@ static void drive_supervisor_update() {
     state.thermal_limited = out.thermal_limited;
     state.paddock_sensor_blocked = out.paddock_sensor_blocked;
     state.paddock_current_limited = out.paddock_current_limited;
-    state.paddock_slew_limited = out.paddock_slew_limited;
+    state.drive_slew_limited = out.drive_slew_limited;
     can_bus::note_command();
 }
 static void can_rx_update()  { can_bus::poll_rx(); }

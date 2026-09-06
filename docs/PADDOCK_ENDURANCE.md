@@ -6,7 +6,8 @@ continuous. Full pedal in paddock mode is limited by all of the following:
 
 - a phase-current ceiling that falls linearly from 500 A/motor at 0 km/h to
   50 A/motor at 80 km/h, and stays at 50 A/motor above 80 km/h;
-- a 1000 A/s propulsion rise limit, so 0 to 500 A takes 0.5 seconds;
+- the shared Normal/Paddock 1000 A/s propulsion rise limit, so 0 to 500 A
+  takes 0.5 seconds;
 - the greater of front-wheel vehicle speed and motor-RPM-derived driven-wheel
   speed, so a low or missing WSS reading cannot bypass the current envelope;
 - an 8.0 kW measured/estimated input-power ceiling;
@@ -66,7 +67,8 @@ bus-current, pack-current, power and thermal scalers. The 500 A zero-speed value
 is a short test ceiling, not a manufacturer-confirmed continuous rating and not
 proof that the installed cooling system can sustain it.
 
-The rise limiter only delays an increase in propulsion-current magnitude.
+The rise limiter is shared with Normal mode and only delays an increase in
+propulsion-current magnitude.
 Throttle release, a lower speed/current/power/thermal ceiling, stale CAN
 feedback, controller faults and invalid required telemetry reduce the command
 immediately. Reverse propulsion uses the same magnitude ramp; regenerative

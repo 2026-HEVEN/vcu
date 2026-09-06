@@ -45,6 +45,11 @@ constexpr bool REQUIRE_BOTH_MOTOR_CONTROLLERS = true;
 // checking controller, motor, battery/BMS and energy-meter data.
 constexpr float DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A = 500.0f;
 constexpr float DRIVE_PHASE_CURRENT_EFF_PER_MOTOR_A = 100.0f;
+// Apply the same launch slew limit in Normal and Paddock modes. At the 500 A
+// per-motor ceiling this gives 1000 A/s and reaches full demand in 0.5 s.
+// Only rising propulsion magnitude is limited; release and protection cuts
+// remain immediate.
+constexpr float DRIVE_CURRENT_RISE_TIME_S = 0.5f;
 // Bench-only serial motor pulse used by bringup/component-test. A pulse is
 // accepted only with released throttle, fresh CAN feedback, no controller
 // fault and a nearly stopped selected motor. The CAN life task re-checks the
@@ -110,9 +115,6 @@ constexpr bool PADDOCK_CURRENT_CALIBRATED = false;
 constexpr float PADDOCK_CURRENT_ZERO_SPEED_PER_MOTOR_A = 500.0f;
 constexpr float PADDOCK_CURRENT_HIGH_SPEED_PER_MOTOR_A = 50.0f;
 constexpr float PADDOCK_CURRENT_LINEAR_END_SPEED_MPS = 80.0f / 3.6f;
-// 500 A / 0.5 s = 1000 A/s. Only rising propulsion magnitude is limited;
-// release, faults and protective reductions remain immediate.
-constexpr float PADDOCK_CURRENT_RISE_TIME_S = 0.5f;
 constexpr float PADDOCK_ENTRY_SPEED_MAX_MPS = 3.0f / 3.6f;
 // The Bexel pack's 157 A continuous rating is about 8.13 kW at 51.8 V.
 // Keep a small margin below that value; this is a soft command scaler, not a

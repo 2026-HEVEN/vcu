@@ -1,13 +1,14 @@
 #pragma once
 
 struct DriveSupervisorParams {
+    float drive_current_max_per_motor_a;
+    float drive_current_rise_time_s;
     float power_soft_limit_w;
     float drivetrain_efficiency;
     float motor_kt_nm_per_a;
     float paddock_current_zero_speed_per_motor_a;
     float paddock_current_high_speed_per_motor_a;
     float paddock_current_linear_end_speed_mps;
-    float paddock_current_rise_time_s;
     float paddock_power_soft_limit_w;
     float paddock_controller_bus_current_limit_a;
     float paddock_pack_current_limit_a;
@@ -58,7 +59,7 @@ struct DriveSupervisorOutput {
     bool paddock_limited = false;
     bool paddock_sensor_blocked = false;
     bool paddock_current_limited = false;
-    bool paddock_slew_limited = false;
+    bool drive_slew_limited = false;
 };
 
 struct DriveSupervisorState {

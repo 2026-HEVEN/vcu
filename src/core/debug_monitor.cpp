@@ -272,7 +272,7 @@ void debug_update() {
                 "P=%.0f/%.0fW BMS=%d V=%.1f I=%+.1f T=%d\n",
                 state.paddock_active, state.paddock_sensor_blocked,
                 state.paddock_current_limited,
-                state.paddock_slew_limited,
+                state.drive_slew_limited,
                 state.power_limited, state.thermal_limited,
                 state.drive_limit_scale, state.paddock_speed_mps * 3.6f,
                 state.paddock_current_limit_a,
