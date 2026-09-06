@@ -2,7 +2,7 @@
 #include "modules/drive_supervisor.h"
 
 static DriveSupervisorParams params() {
-    return {500.0f, 0.5f, 9000.0f, 0.92f, 0.1266f,
+    return {500.0f, 0.5f, 8000.0f, 0.92f, 0.1266f,
             500.0f, 50.0f, 22.2222f,
             8000.0f, 200.0f, 150.0f, -30.0f, true,
             75.0f, 85.0f, 100.0f, 120.0f};
@@ -80,7 +80,7 @@ void test_power_limit_uses_actual_phase_current_not_500_a_target(void) {
 
     auto out = compute(in);
     TEST_ASSERT_FALSE(out.power_limited);
-    TEST_ASSERT_TRUE(out.estimated_input_power_w < 9000.0f);
+    TEST_ASSERT_TRUE(out.estimated_input_power_w < 8000.0f);
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 10.0f, out.left_a);
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 10.0f, out.right_a);
 }

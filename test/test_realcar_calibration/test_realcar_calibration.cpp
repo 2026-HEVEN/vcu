@@ -63,7 +63,7 @@ void test_unverified_inputs_are_fail_closed() {
     TEST_ASSERT_FALSE(realcar_cal::bringup::REGEN_HARDWARE_VALIDATED);
     TEST_ASSERT_TRUE(realcar_cal::bringup::ENABLE_DRIVE_POWER_LIMIT);
     TEST_ASSERT_FALSE(realcar_cal::bringup::PADDOCK_CURRENT_CALIBRATED);
-    TEST_ASSERT_EQUAL_FLOAT(9000.0f,
+    TEST_ASSERT_EQUAL_FLOAT(8000.0f,
         realcar_cal::bringup::DRIVE_POWER_SOFT_LIMIT_W);
 }
 

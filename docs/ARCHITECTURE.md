@@ -285,7 +285,7 @@ ImuOutput imu_compute(const ImuRaw &raw, ImuFilterState &s);  // s에 이전값 
 
 - `can_bus.cpp::poll_rx()`는 좌/우 핸드셰이크, Cluster command, EZkontrol Part I/II,
   Cluster BMS 진단 프레임을 디코딩한다. Part I/II freshness·fault·온도는
-  `drive_supervisor`가 최종 좌우 전류 명령에 적용한다. 일반 주행의 9 kW 전력
+  `drive_supervisor`가 최종 좌우 전류 명령에 적용한다. 일반 주행의 8 kW 전력
   제한은 활성화되어 있으며 DC bus 측정전력과 실제 상전류·RPM 기반 추정전력 중
   큰 값을 기준으로 좌우 명령을 같은 비율로 낮춘다. 최종 500 A 목표값 자체를
   전력 추정에 사용하지 않는다.
