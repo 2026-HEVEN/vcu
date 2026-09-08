@@ -13,6 +13,8 @@
 #include "safety_logic.h"   // torque_allowed()
 #include "core/board_pins.h"
 #include "modules/realcar_calibration.h"
+#include "modules/car_check_status.h"
+#include "modules/tv/tv_config.h"
 
 // [LOCKED] Bit layout of EZkontrol control frames follows
 // EZkontrol-CANBUS-MCU-to-VCU.pdf and the reference 2026/Can_driver/CAN_DRIVER.ino.
@@ -83,13 +85,13 @@ namespace {
         g_handshaked = false;
     }
 
-    void transmit_ext(uint32_t id, const uint8_t data[8]) {
+    bool transmit_ext(uint32_t id, const uint8_t data[8], TickType_t wait_ticks=pdMS_TO_TICKS(5)) {
         twai_message_t m = {};
         m.identifier = id;
         m.extd = 1;
         m.data_length_code = 8;
         for (int i = 0; i < 8; ++i) m.data[i] = data[i];
-        twai_transmit(&m, pdMS_TO_TICKS(5));
+        return twai_transmit(&m, wait_ticks) == ESP_OK;
     }
 
     void send_torque(uint32_t id, float amps, bool running) {
@@ -266,6 +268,7 @@ void begin() {
         static_cast<gpio_num_t>(board_pins::CAN_RX),
         TWAI_MODE_NORMAL);
     g.rx_queue_len = realcar_cal::bringup::CAN_RX_QUEUE_LENGTH;
+    g.tx_queue_len = 16; // six display frames + two motor frames can coincide
     twai_timing_config_t  t = TWAI_TIMING_CONFIG_250KBITS();
     twai_filter_config_t  f = TWAI_FILTER_CONFIG_ACCEPT_ALL();
     twai_driver_install(&g, &t, &f);
@@ -304,11 +307,46 @@ void send_cluster_status() {
 }
 
 void send_sensor_telemetry() {
+    static uint8_t life = 0;
     uint8_t data[8];
-    encode_vcu_steering((float)state.steering_angle, data);
-    transmit_ext(CAN_ID_VCU_STEERING, data);
-    encode_vcu_imu(state.yaw_rate, state.accel_x, state.accel_y, data);
-    transmit_ext(CAN_ID_VCU_IMU, data);
+    const auto send = [&](uint32_t id) {
+        // Display data must not add four 5 ms waits to the control scheduler.
+        if (!transmit_ext(id, data, 0)) ++state.sensor_telemetry_tx_drops;
+    };
+    state.steering_telemetry.life = life;
+    state.imu_telemetry.life = life;
+    car_check::encode_steering(state.steering_telemetry, data);
+    send(car_check::STEERING_ID);
+    car_check::encode_imu(state.imu_telemetry, data);
+    send(car_check::IMU_ID);
+    car_check::encode_wheels(state.wheel_telemetry, data);
+    send(car_check::WHEELS_ID);
+
+    const bool output_allowed = torque_allowed() && deadman_ok() &&
+        state.throttle_signal_valid && !g_reconnect_inhibit &&
+        !state.component_test_normal_inhibit && state.propulsion_direction_armed &&
+        state.controller_feedback_fresh && !state.controller_fault_latched &&
+        (state.gear == Gear::Drive || state.gear == Gear::Reverse);
+    const bool gains = std::fabs(TV_PARAMS.kp)>1.0e-6f ||
+        std::fabs(TV_PARAMS.ki)>1.0e-6f || std::fabs(TV_PARAMS.kd)>1.0e-6f;
+    const CarCheckStatusInput in {
+        state.tv_enable_requested, state.regen_auto_requested,
+        state.paddock_requested, state.paddock_active, state.cluster_cmd_alive,
+        state.tv_pipeline_active, gains, state.imu_valid,
+        state.vehicle_speed_valid,
+        std::isfinite(state.vehicle_speed_mps) &&
+            std::fabs(state.vehicle_speed_mps)>=TV_PARAMS.tv_min_speed_mps,
+        output_allowed, state.component_test_active || state.time_sync_active,
+        realcar_cal::bringup::REGEN_HARDWARE_VALIDATED,
+        realcar_cal::bringup::BRAKE_SENSOR_INSTALLED, state.pack_data_valid,
+        state.brake_active, state.longitudinal_regen_demand,
+        state.pack_soc, (float)state.torque_L, (float)state.torque_R,
+        state.gear==Gear::Drive ? 1 : (state.gear==Gear::Reverse ? -1 : 0)
+    };
+    car_check::Control status = car_check_status_compute(in);
+    status.life = life++;
+    car_check::encode_control(status, data);
+    send(car_check::CONTROL_ID);
 }
 
 void poll_rx() {

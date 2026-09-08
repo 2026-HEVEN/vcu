@@ -12,4 +12,5 @@
 namespace wss_driver {
     void begin(int ch, int gpio);  // configure PCNT unit `ch` + glitch filter
     WssReading read(int ch);       // pulse delta + elapsed ms since last read
+    bool last_read_ok(int ch);     // PCNT API success only, NOT cable health
 }

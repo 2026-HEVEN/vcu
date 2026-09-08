@@ -6,6 +6,7 @@
 #pragma once
 #include "types.h"
 #include "can_protocol.h"
+#include "car_check_protocol.h"
 #include "modules/gear.h"
 #include "modules/vehicle_speed.h"   // WheelIdx / WHEEL_COUNT
 // [LOCKED] Shared state bus. ONLY core/app_wiring.cpp may include this.
@@ -23,6 +24,12 @@ struct VehicleState {
     float     accel_x  = 0.0f;
     float     accel_y  = 0.0f;
     bool      imu_valid = false;
+    // Display-only observations; never grant control/safety authority.
+    car_check::Steering steering_telemetry;
+    car_check::Imu imu_telemetry;
+    car_check::Wheels wheel_telemetry;
+    bool tv_pipeline_active = false;
+    uint32_t sensor_telemetry_tx_drops = 0; // best-effort display CAN queue failures
     Rpm       wheel_speed[WHEEL_COUNT];   // FL, FR, RL, RR (개별 휠속)
     uint32_t  wheel_pulse_total[WHEEL_COUNT]{}; // hand-spin sensor check
     float     vehicle_speed_mps  = 0.0f;  // 전륜 기준 추정 차속 (vehicle_speed 모듈)
@@ -77,6 +84,7 @@ struct VehicleState {
     uint32_t  cluster_cmd_last_rx_ms = 0;
     // control outputs
     float     total_torque = 0.0f;   // signed A demand
+    bool      longitudinal_regen_demand = false;
     Amp       requested_torque_L;
     Amp       requested_torque_R;
     Amp       torque_L;              // motor phase-current command [A]

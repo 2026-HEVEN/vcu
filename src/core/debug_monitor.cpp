@@ -280,6 +280,11 @@ void debug_update() {
                 state.predicted_command_power_w,
                 state.pack_data_valid, state.pack_voltage_v,
                 state.pack_current_a, state.pack_temperature_c);
+            Serial.printf("CAR_CHECK txDrop=%u steerValid=%d imuValid=%d/%d wssValid=%d/%d/%d/%d\n",
+                state.sensor_telemetry_tx_drops, state.steering_telemetry.valid,
+                state.imu_telemetry.yaw_valid, state.imu_telemetry.accel_valid,
+                state.wheel_telemetry.valid[0], state.wheel_telemetry.valid[1],
+                state.wheel_telemetry.valid[2], state.wheel_telemetry.valid[3]);
         }
     }
     was_fast_log_active = fast_log_active;

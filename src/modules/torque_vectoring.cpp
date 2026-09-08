@@ -53,5 +53,6 @@ TVOutput tv_compute(const TVInput &in, TVYawState &s) {
     return TVOutput{
         a.torque_L, a.torque_R,
         desired_yaw, mz, fz.fz_L, fz.fz_R, lim.max_L, lim.max_R,
+        control_enabled,
     };
 }

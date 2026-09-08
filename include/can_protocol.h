@@ -5,6 +5,7 @@
 // ============================================================
 #pragma once
 #include <cstdint>
+#include "car_check_protocol.h"
 // Wire-level IDs and byte layouts are shared with the Cluster repo. VCU-only
 // decoders/encoders below need not be copied, but any on-bus contract change
 // must be coordinated with Cluster and Monolith. Owner: 김도현.
@@ -49,8 +50,10 @@ constexpr uint32_t CAN_ID_VCU_CLUSTER_STATUS = 0x1801C0D0;
 // VCU -> Cluster/TMA-1 single vehicle speed. Byte 0..1 contains km/h x 10,
 // byte 2 is valid flag (1=valid, 0=invalid), byte 3..7 reserved zero.
 constexpr uint32_t CAN_ID_VCU_VEHICLE_SPEED = 0x1803C0D0;
-constexpr uint32_t CAN_ID_VCU_STEERING = 0x1804C0D0;
-constexpr uint32_t CAN_ID_VCU_IMU = 0x1805C0D0;
+constexpr uint32_t CAN_ID_VCU_STEERING = car_check::STEERING_ID;
+constexpr uint32_t CAN_ID_VCU_IMU = car_check::IMU_ID;
+constexpr uint32_t CAN_ID_VCU_WHEEL_SPEEDS = car_check::WHEELS_ID;
+constexpr uint32_t CAN_ID_VCU_CONTROL_STATUS = car_check::CONTROL_ID;
 // Cluster -> logger BMS summary. VCU may observe this for diagnostics only;
 // the BLE path is not an authoritative safety input.
 constexpr uint32_t CAN_ID_CLUSTER_BMS_STATUS = 0x18F3FFC0;
@@ -114,6 +117,8 @@ void encode_vcu_cluster_status(uint8_t gear, bool brake, bool hv_active,
 uint16_t vehicle_speed_kph_to_raw(float kph);
 void encode_vcu_vehicle_speed(float speed_kph, bool valid, uint8_t out[8]);
 int16_t telemetry_to_i16(float value, float scale);
+// Legacy numeric-only helpers retained for compatibility/tests. Runtime Car Check
+// uses car_check::encode_* so validity and life bytes are always present.
 void encode_vcu_steering(float steering_unit, uint8_t out[8]);
 void encode_vcu_imu(float yaw_rate_dps, float accel_x_g, float accel_y_g,
                     uint8_t out[8]);

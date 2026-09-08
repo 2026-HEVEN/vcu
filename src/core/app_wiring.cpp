@@ -25,6 +25,7 @@
 #include "modules/direction_interlock.h"
 #include "modules/drive_supervisor.h"
 #include "modules/time_sync_pulse.h"
+#include "modules/car_check_status.h"
 #include <Arduino.h>
 #include <cmath>
 
@@ -58,6 +59,8 @@ namespace {
           realcar_cal::provisional::WSS_FILTER_TIME_CONSTANT_S },
     };
     WheelSpeedFilterState wheel_speed_filter_state[WHEEL_COUNT]{};
+    // Independent display filter: rejecting corrupt telemetry must not change control.
+    WheelSpeedFilterState wheel_telemetry_filter[WHEEL_COUNT]{};
     const VehicleSpeedCalib VSPEED_CAL{};   // 값은 realcar_calibration.h에서 관리
     VehicleSpeedState vspeed_state{};
     const SteerCalib STEER_CAL {
@@ -129,7 +132,11 @@ static void brake_update() {
     state.brake_pct = o.pct; state.brake_active = o.active;
 }
 static void steering_update() {
-    state.steering_angle = steering_compute(steering_encoder_driver::read(), STEER_CAL);
+    const SteerRaw raw = steering_encoder_driver::read();
+    state.steering_angle = steering_compute(raw, STEER_CAL);
+    state.steering_telemetry.unit = (float)state.steering_angle;
+    state.steering_telemetry.valid = raw.counts <= 16380U &&
+        std::isfinite(state.steering_telemetry.unit);
 }
 static void imu_update() {
     ImuOutput o = imu_compute(imu_driver::read());
@@ -137,6 +144,12 @@ static void imu_update() {
     state.yaw_rate = state.imu_valid ? o.yaw_rate : 0.0f;
     state.accel_x = state.imu_valid ? o.accel_x : 0.0f;
     state.accel_y = state.imu_valid ? o.accel_y : 0.0f;
+    state.imu_telemetry.yaw_dps = o.yaw_rate;
+    state.imu_telemetry.ax_g = o.accel_x;
+    state.imu_telemetry.ay_g = o.accel_y;
+    state.imu_telemetry.yaw_valid = imu_driver::yaw_sample_fresh() && std::isfinite(o.yaw_rate);
+    state.imu_telemetry.accel_valid = imu_driver::accel_sample_fresh() &&
+        std::isfinite(o.accel_x) && std::isfinite(o.accel_y);
 }
 static void wheel_speed_update() {
     for (int ch = 0; ch < WHEEL_COUNT; ++ch) {
@@ -144,6 +157,20 @@ static void wheel_speed_update() {
         state.wheel_pulse_total[ch] += reading.pulse_delta;
         state.wheel_speed[ch] = wheel_speed_compute_filtered(
             reading, WSS_CAL[ch], wheel_speed_filter_state[ch]);
+        // PCNT reset/rollover defect is a separate control fix. Do not label
+        // its huge unsigned delta as a valid wheel measurement on the dash.
+        const bool valid = car_check_wheel_sample_valid(wss_driver::last_read_ok(ch),
+            reading.pulse_delta, reading.dt_ms, WSS_CAL[ch].pulses_per_rev);
+        state.wheel_telemetry.valid[ch] = valid;
+        if (valid) {
+            const float rpm = (float)wheel_speed_compute_filtered(
+                reading, WSS_CAL[ch], wheel_telemetry_filter[ch]);
+            state.wheel_telemetry.kph[ch] = rpm * 6.283185307f *
+                realcar_cal::provisional::WHEEL_SPEED_ROLLING_RADIUS_M * 0.06f;
+        } else {
+            wheel_telemetry_filter[ch] = WheelSpeedFilterState{};
+            state.wheel_telemetry.kph[ch] = 0.0f;
+        }
     }
 }
 static void vehicle_speed_update() {
@@ -190,6 +217,7 @@ static void longitudinal_update() {
         state.throttle_pct, state.brake_pct, state.pack_soc, drive_mode,
         state.regen_auto_requested &&
             realcar_cal::bringup::REGEN_HARDWARE_VALIDATED });
+    state.longitudinal_regen_demand = state.total_torque < 0.0f;
     const bool throttle_released =
         (float)state.throttle_pct <= realcar_cal::bringup::THROTTLE_ARM_MAX_PCT;
     const bool stopped =
@@ -217,6 +245,7 @@ static void torque_vectoring_update() {
         state.tv_enable_requested && state.imu_valid
     };
     TVOutput o = tv_compute(tv_in, tv_yaw_state);
+    state.tv_pipeline_active = o.control_active;
     state.requested_torque_L = o.torque_L;
     state.requested_torque_R = o.torque_R;
     // 중간신호 관측용 복사 (debug_monitor / Cluster에서 튜닝에 사용)
@@ -334,7 +363,7 @@ Task g_tasks[] = {
     { safety_task,             10, 0 },
     { vehicle_speed_can_tx_update, 50, 0 }, // 20 Hz VCU -> Cluster/TMA-1 single speed telemetry
     { cluster_status_can_tx_update, 50, 0 }, // 20 Hz gear/brake/HV display status
-    { sensor_telemetry_can_tx_update, 50, 0 }, // 20 Hz steering/IMU logger telemetry
+    { sensor_telemetry_can_tx_update, car_check::PERIOD_MS, 0 }, // steering/IMU/WSS/control diagnostics
     { debug_update,            50, 0 },   // 20 Hz compact test log; 1 Hz idle summary
 };
 const int G_TASK_COUNT = sizeof(g_tasks) / sizeof(g_tasks[0]);

@@ -1,5 +1,8 @@
 # HEVEN CAN 프로토콜 명세서 (단일 출처)
 
+> 2026-09-08 추가 계약: [Car Check CAN 인수인계](CAR_CHECK_CAN.md).
+> 개별 WSS·기능 적용 상태 및 조향/IMU 유효성은 해당 문서와 공용 car_check_protocol.h를 따른다.
+
 > **CAN ID와 wire layout은 VCU·Cluster·Monolith가 공유하는 계약입니다.**
 > 양 레포의 구현 헬퍼까지 글자 단위로 같을 필요는 없지만, 버스에 보이는 ID·bit·scaling을
 > 바꿀 때는 세 시스템을 함께 갱신합니다. (담당: 김도현)
@@ -223,17 +226,18 @@ Paddock active는 Cluster의 스위치 요청값이 아니라 VCU가 실제로 �
 - 송신: `can_bus::send_vehicle_speed()`
 - 주기: `app_wiring.cpp` scheduler에서 50ms, 20Hz
 
-### 5.10 VCU → TMA-1 : 조향 `0x1804C0D0` · 50ms
+### 5.10 VCU → Cluster/TMA-1 : 조향 `0x1804C0D0` · 50ms
 
 - Byte 0~1: signed int16 little-endian, 정규화 조향값 ×1000
-- Byte 2~7: 0
+- Byte 2~5: 0, Byte 6: bit7=유효성 규약 존재 / bit0=값 유효, Byte 7: life
 
-### 5.11 VCU → TMA-1 : IMU `0x1805C0D0` · 50ms
+### 5.11 VCU → Cluster/TMA-1 : IMU `0x1805C0D0` · 50ms
 
 - Byte 0~1: yaw rate [deg/s] ×100, signed int16 little-endian
 - Byte 2~3: accel X [g] ×100, signed int16 little-endian
 - Byte 4~5: accel Y [g] ×100, signed int16 little-endian
-- Byte 6~7: 0
+- Byte 6: bit7=유효성 규약 존재 / bit0=yaw 유효 / bit1=accel X/Y 유효, Byte 7: life
+- 기존 숫자 필드는 유지. 자세한 축·유효 조건과 신규 `0x1806C0D0` WSS / `0x1807C0D0` 적용 상태는 [Car Check 계약](CAR_CHECK_CAN.md) 참고.
 
 ### 5.12 Cluster → logger/VCU 진단 : BMS 상태 `0x18F3FFC0` · 100ms
 

@@ -56,6 +56,8 @@ namespace {
     uint32_t rx_bytes_ = 0;
     uint32_t valid_mtdata2_frames_ = 0;
     uint32_t checksum_errors_ = 0;
+    bool yaw_seen_ = false, accel_seen_ = false;
+    uint32_t yaw_last_ms_ = 0, accel_last_ms_ = 0;
 
     float be_float(const uint8_t *p) {
         uint8_t sw[4] = { p[3], p[2], p[1], p[0] };  // MTi floats are big-endian
@@ -75,8 +77,12 @@ namespace {
             if (xdi == XDI_ACCELERATION && dlen == 12) {
                 latest_.accel_x = be_float(data) * MPS2_TO_G;
                 latest_.accel_y = be_float(data + 4) * MPS2_TO_G;
+                accel_seen_ = true;
+                accel_last_ms_ = millis();
             } else if (xdi == XDI_RATE_OF_TURN && dlen == 12) {
                 latest_.yaw_rate = be_float(data + 8) * RADPS_TO_DEGPS;  // z axis
+                yaw_seen_ = true;
+                yaw_last_ms_ = millis();
             }
             // XDI_EULER_ANGLES intentionally skipped: VehicleState has no
             // attitude fields to put it in.
@@ -145,6 +151,13 @@ bool stale() {
 
 Diagnostics diagnostics() {
     return Diagnostics{rx_bytes_, valid_mtdata2_frames_, checksum_errors_};
+}
+
+bool yaw_sample_fresh() {
+    return yaw_seen_ && uint32_t(millis()-yaw_last_ms_) <= STALE_TIMEOUT_MS;
+}
+bool accel_sample_fresh() {
+    return accel_seen_ && uint32_t(millis()-accel_last_ms_) <= STALE_TIMEOUT_MS;
 }
 
 } // namespace imu_driver

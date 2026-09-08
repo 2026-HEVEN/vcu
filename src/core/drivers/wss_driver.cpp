@@ -18,6 +18,8 @@ namespace {
 
     uint32_t last_ms_[WHEEL_COUNT]    = { 0, 0, 0, 0 };
     int16_t  last_count_[WHEEL_COUNT] = { 0, 0, 0, 0 };
+    bool configured_[WHEEL_COUNT]{};
+    bool read_ok_[WHEEL_COUNT]{};
 
     bool valid_ch(int ch) { return ch >= 0 && ch < WHEEL_COUNT; }
 }
@@ -39,7 +41,7 @@ void begin(int ch, int gpio) {
     cfg.counter_l_lim  = -1;
     cfg.unit           = unit;
     cfg.channel        = PCNT_CH;
-    pcnt_unit_config(&cfg);
+    configured_[ch] = pcnt_unit_config(&cfg) == ESP_OK;
 
     // glitch filter: ~1 µs at 80 MHz APB = 80 cycles
     pcnt_set_filter_value(unit, 80);
@@ -55,7 +57,7 @@ void begin(int ch, int gpio) {
 WssReading read(int ch) {
     if (!valid_ch(ch)) return WssReading{ 0, 0 };
     int16_t count = 0;
-    pcnt_get_counter_value(UNITS[ch], &count);
+    read_ok_[ch] = pcnt_get_counter_value(UNITS[ch], &count) == ESP_OK && configured_[ch];
     uint32_t now = millis();
     WssReading r;
     r.pulse_delta = (uint32_t)(int16_t)(count - last_count_[ch]);
@@ -64,5 +66,7 @@ WssReading read(int ch) {
     last_ms_[ch] = now;
     return r;
 }
+
+bool last_read_ok(int ch) { return valid_ch(ch) && read_ok_[ch]; }
 
 } // namespace wss_driver

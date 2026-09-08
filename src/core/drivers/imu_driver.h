@@ -18,5 +18,7 @@ namespace imu_driver {
     bool   begin();        // returns true once UART is configured
     ImuRaw read();         // latest parsed sample: yaw_rate (deg/s) + accel (g)
     bool   stale();        // true if no valid MTData2 frame recently (sensor dead/disconnected)
+    bool   yaw_sample_fresh();   // display: exact required XDI group seen recently
+    bool   accel_sample_fresh();
     Diagnostics diagnostics();
 }

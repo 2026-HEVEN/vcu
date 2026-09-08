@@ -33,6 +33,7 @@ struct TVOutput {
     float yaw_moment;
     float fz_L, fz_R;
     float max_torque_L, max_torque_R;
+    bool control_active; // actual pipeline gate, independent of nonzero Mz
 };
 
 // 5개 stage를 순서대로 조립한다. s는 yaw 제어기 이력(코어가 static으로 보유).
