@@ -4,7 +4,7 @@
 //  Application work happens only in src/modules/.
 // ============================================================
 #pragma once
-#include "can_protocol.h"
+#include "safety_logic.h"
 // [LOCKED] TWAI (ESP32 built-in CAN) driver + 50ms life-signal task.
 
 namespace can_bus {
