@@ -203,11 +203,20 @@ NaN과의 비교는 모두 false이므로 **NaN이 그대로 통과한다**. `Am
 core 0이 원자적으로 게시하고 core 1이 원자적으로 통째 복사한다.**
 이후 core 1은 복사본만 본다. 3.1, 3.2, 3.4가 같은 수정으로 사라진다.
 
-### 5.1 새 순수 모듈 `src/modules/motor_command.{h,cpp}`
+### 5.1 새 순수 계층 `include/motor_command.h` + `src/logic/motor_command.cpp`
 
 의사결정 로직 전부를 하드웨어와 전역상태를 모르는 순수 함수로 옮긴다.
+
+**배치 근거.** 레포에 이미 같은 패턴이 있다. `include/safety_logic.h` +
+`src/logic/safety_logic.cpp`, `include/can_protocol.h` +
+`src/logic/can_protocol.cpp`. 순수 전이 로직은 `src/logic/`, 계약 헤더는
+`include/`에 둔다. 이를 그대로 따른다.
+
 `platformio.ini`의 `[env:native]`가 `build_src_filter = +<modules/> +<logic/>`
-이므로 노트북에서 단위 테스트가 가능하다.
+이므로 노트북에서 단위 테스트가 가능하다. 반대로 이 로직을
+`src/core/can_bus.cpp` 안에 두면 `Arduino.h`와 `driver/twai.h` 의존 때문에
+native 환경에서 컴파일 자체가 되지 않아 **단위 테스트를 전부 포기해야 한다.**
+이것이 별도 파일로 분리하는 이유이며, LOCKED 파일 수정 권한과는 무관하다.
 
 ```cpp
 #pragma once
@@ -449,8 +458,8 @@ LOCKED 파일 변경이 불가피했다. `AGENTS.md`는 `src/core/`, `src/logic/
 
 | 파일 | 상태 | 변경 |
 |---|---|---|
-| `src/modules/motor_command.h` | 신규 | 스냅샷/게이트/출력 타입 |
-| `src/modules/motor_command.cpp` | 신규 | `motor_command_resolve()` 순수 로직 |
+| `include/motor_command.h` | 신규 | 스냅샷/게이트/출력 타입 |
+| `src/logic/motor_command.cpp` | 신규 | `motor_command_resolve()` 순수 로직 |
 | `test/test_motor_command/test_motor_command.cpp` | 신규 | 단위 테스트 13건 |
 | `src/core/can_bus.h` | LOCKED | `publish_motor_command()` 선언, `motor_command.h` include |
 | `src/core/can_bus.cpp` | LOCKED | mux + 스냅샷, `life_task` 재작성, `send_torque` 시그니처, TX 실패 처리 |

@@ -104,8 +104,8 @@ EZkontrol이 토크 모드에서 반대 부호 목표 rpm을 받았을 때의 �
 
 ### 작업 다섯 덩이
 
-**A. 순수 모듈 신설** — `src/modules/motor_command.{h,cpp}`
-최종 명령을 만드는 로직을 하드웨어·전역상태를 모르는 순수 함수로 옮긴다. 입력은 스냅샷과 core 1 소유 게이트, 출력은 좌우 전류·목표 rpm·run 플래그. native 환경이 `src/modules/`를 컴파일하므로 노트북에서 단위 테스트가 된다. LOCKED 파일 변경도 최소로 줄어든다.
+**A. 순수 계층 신설** — `include/motor_command.h` + `src/logic/motor_command.cpp`
+최종 명령을 만드는 로직을 하드웨어·전역상태를 모르는 순수 함수로 옮긴다. 입력은 스냅샷과 core 1 소유 게이트, 출력은 좌우 전류·목표 rpm·run 플래그. 레포의 기존 `safety_logic`·`can_protocol`과 **동일한 배치**다. native 환경이 `src/logic/`을 컴파일하므로 노트북에서 단위 테스트가 된다. `can_bus.cpp` 안에 두면 `Arduino.h` 의존 때문에 테스트가 불가능하다.
 
 **B. 원자 게시·복사** — `portMUX_TYPE` + `portENTER_CRITICAL`
 임계구역 안에서는 약 40 byte 구조체 복사만. 수십 ns라 20 Hz 태스크에 영향 없다. **CAN 송신은 반드시 임계구역 밖에서.** `twai_transmit()`이 최대 5 ms 블록하므로 안에 두면 시스템이 멈춘다.
@@ -166,8 +166,8 @@ seqlock 같은 락프리 방식은 배리어 하나 빠뜨리면 조용히 깨�
 
 | 파일 | 상태 | 변경 |
 | --- | --- | --- |
-| src/modules/motor_command.h | 신규 | 스냅샷·게이트·출력 타입 |
-| src/modules/motor_command.cpp | 신규 | motor_command_resolve 순수 로직 |
+| include/motor_command.h | 신규 | 스냅샷·게이트·출력 타입 |
+| src/logic/motor_command.cpp | 신규 | motor_command_resolve 순수 로직 |
 | test/test_motor_command/ | 신규 | 단위 테스트 13건 |
 | src/core/can_bus.h | LOCKED | publish_motor_command 선언, motor_command.h include |
 | src/core/can_bus.cpp | LOCKED | mux·스냅샷, life_task 재작성, send_torque 시그니처, TX 실패 |

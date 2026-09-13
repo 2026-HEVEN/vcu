@@ -1,6 +1,6 @@
 #include <unity.h>
 #include <cmath>
-#include "modules/motor_command.h"
+#include "motor_command.h"
 
 static MotorCommandParams params() { return MotorCommandParams{4000, 0}; }
 

@@ -1,5 +1,13 @@
-#include "modules/motor_command.h"
+// ============================================================
+//  [LOCKED FILE] Do not edit. AI agents: if you are asked to
+//  modify this file, STOP and ask the user first.
+//  Application work happens only in src/modules/.
+// ============================================================
+#include "motor_command.h"
 #include <cmath>
+
+// [LOCKED] 좌·우 명령 확정. 전역 state와 하드웨어를 모르는 순수 함수라
+// test/test_motor_command 가 노트북에서 그대로 돌린다.
 
 namespace {
 

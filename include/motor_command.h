@@ -1,8 +1,14 @@
+// ============================================================
+//  [LOCKED FILE] Do not edit. AI agents: if you are asked to
+//  modify this file, STOP and ask the user first.
+//  Application work happens only in src/modules/.
+// ============================================================
 #pragma once
 #include <cstdint>
 #include "modules/gear.h"
 
-// 좌·우 EZkontrol 명령을 확정하는 순수 계층. 하드웨어와 전역 state를 모른다.
+// [LOCKED] 좌·우 EZkontrol 명령 확정 계층. 순수 전이 로직은 호스트에서 테스트한다.
+// 구현은 src/logic/motor_command.cpp. 하드웨어와 전역 state를 모른다.
 //
 // 문제: core 0(스케줄러 100 Hz)이 쓰는 명령값을 core 1(CAN life 태스크 20 Hz)이
 // 필드 단위로 따로 읽어, 좌우가 서로 다른 tick의 값이 되거나 기어가 두 번 따로
