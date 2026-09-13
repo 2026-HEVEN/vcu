@@ -203,20 +203,24 @@ NaN과의 비교는 모두 false이므로 **NaN이 그대로 통과한다**. `Am
 core 0이 원자적으로 게시하고 core 1이 원자적으로 통째 복사한다.**
 이후 core 1은 복사본만 본다. 3.1, 3.2, 3.4가 같은 수정으로 사라진다.
 
-### 5.1 새 순수 계층 `include/motor_command.h` + `src/logic/motor_command.cpp`
+### 5.1 `can_protocol` 계층에 명령 확정 단계 추가
 
 의사결정 로직 전부를 하드웨어와 전역상태를 모르는 순수 함수로 옮긴다.
+**새 파일을 만들지 않고 기존 `can_protocol` 계층을 확장한다.**
 
-**배치 근거.** 레포에 이미 같은 패턴이 있다. `include/safety_logic.h` +
-`src/logic/safety_logic.cpp`, `include/can_protocol.h` +
-`src/logic/can_protocol.cpp`. 순수 전이 로직은 `src/logic/`, 계약 헤더는
-`include/`에 둔다. 이를 그대로 따른다.
+**배치 근거.** `encode_motor_control()`이 이미 `include/can_protocol.h` +
+`src/logic/can_protocol.cpp`에 있다. 새로 추가하는 `motor_command_resolve()`는
+정확히 그 함수의 인자(전류, 목표 rpm, running)를 만들어내는 단계다. "프레임에
+무엇을 담을지 정한다"와 "그것을 바이트로 인코딩한다"가 한 파일에 붙어 있는 것이
+자연스럽다. `Gear` 타입을 위해 `modules/gear.h`를 include하는데, 그 헤더의
+주석대로 enum 값이 Cluster 상태 계약과 동일하고 `include/state.h`가 이미 같은
+의존을 갖고 있다.
 
 `platformio.ini`의 `[env:native]`가 `build_src_filter = +<modules/> +<logic/>`
 이므로 노트북에서 단위 테스트가 가능하다. 반대로 이 로직을
 `src/core/can_bus.cpp` 안에 두면 `Arduino.h`와 `driver/twai.h` 의존 때문에
 native 환경에서 컴파일 자체가 되지 않아 **단위 테스트를 전부 포기해야 한다.**
-이것이 별도 파일로 분리하는 이유이며, LOCKED 파일 수정 권한과는 무관하다.
+`can_bus.cpp`가 아니라 `can_protocol.cpp`를 고른 이유가 이것이다.
 
 ```cpp
 #pragma once
@@ -458,10 +462,10 @@ LOCKED 파일 변경이 불가피했다. `AGENTS.md`는 `src/core/`, `src/logic/
 
 | 파일 | 상태 | 변경 |
 |---|---|---|
-| `include/motor_command.h` | 신규 | 스냅샷/게이트/출력 타입 |
-| `src/logic/motor_command.cpp` | 신규 | `motor_command_resolve()` 순수 로직 |
-| `test/test_motor_command/test_motor_command.cpp` | 신규 | 단위 테스트 13건 |
-| `src/core/can_bus.h` | LOCKED | `publish_motor_command()` 선언, `motor_command.h` include |
+| `include/can_protocol.h` | LOCKED | 스냅샷/게이트/출력 타입, `motor_command_resolve()` 선언 |
+| `src/logic/can_protocol.cpp` | LOCKED | `motor_command_resolve()` 순수 로직 |
+| `test/test_can_protocol/test_can_protocol.cpp` | 기존 | 단위 테스트 13건 추가 |
+| `src/core/can_bus.h` | LOCKED | `publish_motor_command()` 선언, `can_protocol.h` include |
 | `src/core/can_bus.cpp` | LOCKED | mux + 스냅샷, `life_task` 재작성, `send_torque` 시그니처, TX 실패 처리 |
 | `src/core/app_wiring.cpp` | LOCKED | 태스크 순서 1줄, 게시 호출, `motor_command_seq` |
 | `include/state.h` | LOCKED | `can_tx_fail_count_L/R`, `motor_command_seq` 진단 필드 |
@@ -478,7 +482,7 @@ LOCKED 파일 변경이 불가피했다. `AGENTS.md`는 `src/core/`, `src/logic/
 
 ### 7.1 신규 단위 테스트 (native, 하드웨어 불필요)
 
-`test/test_motor_command/test_motor_command.cpp`
+`test/test_can_protocol/test_can_protocol.cpp` 에 13건을 추가했다.
 
 | # | 시나리오 | 기대 |
 |---|---|---|
@@ -499,7 +503,7 @@ LOCKED 파일 변경이 불가피했다. `AGENTS.md`는 `src/core/`, `src/logic/
 9번은 `left_a = NaN`과 `right_a = Inf` 두 경우를 모두 확인한다.
 7번은 값뿐 아니라 **좌우 비가 보존되는지**까지 단언한다.
 
-실행: `pio test -e native -f test_motor_command` → **13건 통과**
+실행: `pio test -e native -f test_can_protocol` → **23건 통과**(기존 10 + 신규 13)
 
 `platformio.ini`의 `build_dir`이 `C:\Users\jy02s\pio_build_vcu`로 고정되어 있다.
 다른 사람의 경로이므로 로컬에서 실패할 수 있다. 실패하면 `PLATFORMIO_BUILD_DIR`
