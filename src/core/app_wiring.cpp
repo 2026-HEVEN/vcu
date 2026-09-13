@@ -154,15 +154,13 @@ static void imu_update() {
 static void wheel_speed_update() {
     for (int ch = 0; ch < WHEEL_COUNT; ++ch) {
         const WssReading reading = wss_driver::read(ch);
-        state.wheel_pulse_total[ch] += reading.pulse_delta;
-        state.wheel_speed[ch] = wheel_speed_compute_filtered(
-            reading, WSS_CAL[ch], wheel_speed_filter_state[ch]);
-        // PCNT reset/rollover defect is a separate control fix. Do not label
-        // its huge unsigned delta as a valid wheel measurement on the dash.
         const bool valid = car_check_wheel_sample_valid(wss_driver::last_read_ok(ch),
             reading.pulse_delta, reading.dt_ms, WSS_CAL[ch].pulses_per_rev);
         state.wheel_telemetry.valid[ch] = valid;
         if (valid) {
+            state.wheel_pulse_total[ch] += reading.pulse_delta;
+            state.wheel_speed[ch] = wheel_speed_compute_filtered(
+                reading, WSS_CAL[ch], wheel_speed_filter_state[ch]);
             const float rpm = (float)wheel_speed_compute_filtered(
                 reading, WSS_CAL[ch], wheel_telemetry_filter[ch]);
             state.wheel_telemetry.kph[ch] = rpm * 6.283185307f *

@@ -15,6 +15,7 @@ namespace {
         PCNT_UNIT_0, PCNT_UNIT_1, PCNT_UNIT_2, PCNT_UNIT_3
     };
     constexpr pcnt_channel_t PCNT_CH = PCNT_CHANNEL_0;
+    constexpr int16_t COUNTER_LIMIT = 32767;
 
     uint32_t last_ms_[WHEEL_COUNT]    = { 0, 0, 0, 0 };
     int16_t  last_count_[WHEEL_COUNT] = { 0, 0, 0, 0 };
@@ -37,7 +38,7 @@ void begin(int ch, int gpio) {
     cfg.hctrl_mode     = PCNT_MODE_KEEP;
     cfg.pos_mode       = PCNT_COUNT_INC;   // count on rising edge
     cfg.neg_mode       = PCNT_COUNT_DIS;   // ignore falling edge
-    cfg.counter_h_lim  = 32767;
+    cfg.counter_h_lim  = COUNTER_LIMIT;
     cfg.counter_l_lim  = -1;
     cfg.unit           = unit;
     cfg.channel        = PCNT_CH;
@@ -58,9 +59,13 @@ WssReading read(int ch) {
     if (!valid_ch(ch)) return WssReading{ 0, 0 };
     int16_t count = 0;
     read_ok_[ch] = pcnt_get_counter_value(UNITS[ch], &count) == ESP_OK && configured_[ch];
+    if (!read_ok_[ch]) return WssReading{ 0, 0 };
+
     uint32_t now = millis();
     WssReading r;
-    r.pulse_delta = (uint32_t)(int16_t)(count - last_count_[ch]);
+    int32_t delta = int32_t(count) - last_count_[ch];
+    if (delta < 0) delta += COUNTER_LIMIT;
+    r.pulse_delta = uint32_t(delta);
     r.dt_ms = now - last_ms_[ch];
     last_count_[ch] = count;
     last_ms_[ch] = now;
