@@ -155,13 +155,6 @@ void test_encode_vcu_vehicle_speed(void) {
 
 // --- motor_command_resolve: 좌·우 명령 확정 (M2) ---
 
-static MotorCommandParams mc_params(void) {
-    MotorCommandParams p;
-    p.drive_target_speed_rpm = 4000;
-    p.regen_target_speed_rpm = 0;
-    return p;
-}
-
 // 전부 허용, Drive, 좌우 100 A. 각 테스트는 여기서 한 가지만 바꾼다.
 static MotorCommandSnapshot mc_snapshot(void) {
     MotorCommandSnapshot s;
@@ -188,7 +181,7 @@ static MotorCommandGates mc_gates(void) {
 
 static MotorFrameCommand mc_resolve(const MotorCommandSnapshot &s,
                                     const MotorCommandGates &g) {
-    return motor_command_resolve(s, g, mc_params());
+    return motor_command_resolve(s, g);
 }
 
 // 불허 결과는 항상 좌우 동일하게 완전 차단이어야 한다.

@@ -37,42 +37,32 @@ uint16_t motor_speed_to_raw(int rpm);
 void encode_motor_control(float amps, int target_rpm, bool running,
                           uint8_t life, uint8_t out[8]);
 
-// --- 좌·우 명령 확정 (encode_motor_control 의 인자를 만드는 순수 단계) ---
-//
-// core 0(스케줄러 100 Hz)이 쓰는 명령값을 core 1(CAN life 태스크 20 Hz)이
-// 필드 단위로 따로 읽으면, 좌우가 서로 다른 tick의 값이 되거나 gear가 두 번
-// 따로 읽혀 좌우 목표 rpm 부호가 갈릴 수 있다. 그래서 core 0이 한 tick의 결정을
-// MotorCommandSnapshot 하나로 원자 게시하고, core 1이 통째로 복사한 뒤
-// motor_command_resolve() 만 통과시킨다. gear는 복사본의 단일 필드이므로
-// 좌우 방향이 갈릴 수 없다. 상세는 docs/M2_COMMAND_SNAPSHOT.md.
+// --- 좌·우 명령 확정: encode_motor_control 의 인자를 만드는 순수 단계 ---
+// 배경과 설계는 docs/M2_COMMAND_SNAPSHOT.md.
+constexpr int DRIVE_TARGET_SPEED_RPM = 4000;   // 실차 확인: 구동 +4000 rpm
+constexpr int REGEN_TARGET_SPEED_RPM = 0;      // 회생은 0 rpm
 
-// core 0이 제어 tick마다 한 번 게시한다. 여기 담긴 값은 모두 같은 순간의 것이다.
+// core 0이 제어 tick마다 한 번 게시한다. 담긴 값은 모두 같은 순간의 것이다.
+// 브레이크·컨트롤러 fault·피드백 stale은 상위(longitudinal, drive_supervisor)가
+// 이미 명령값을 0으로 만든다. 중복 게이트를 두면 회생 시 제동 중 명령까지 막힌다.
 struct MotorCommandSnapshot {
-    uint32_t seq = 0;             // 게시마다 1 증가. 좌우 동일 tick 확인용 진단
-    uint32_t published_ms = 0;    // 게시 시각. 신선도 판정에 쓴다
+    uint32_t seq = 0;             // 게시마다 1 증가. 0 = 아직 게시 전
+    uint32_t published_ms = 0;
     float    left_a = 0.0f;
     float    right_a = 0.0f;
     Gear     gear = Gear::Neutral;
-    bool     safety_allow = false;              // 같은 tick의 torque_allowed()
+    bool     safety_allow = false;   // 같은 tick의 torque_allowed()
     bool     throttle_signal_valid = false;
     bool     propulsion_direction_armed = false;
 };
-// 주의: 브레이크·컨트롤러 fault·피드백 stale은 여기에 없다. 이미 상위에서
-// 명령값 자체를 0으로 만든다(브레이크는 longitudinal, 나머지는 drive_supervisor).
-// 여기서 다시 막으면 회생 시 제동 중 명령까지 차단되므로 중복 게이트를 두지 않는다.
 
-// core 1(life 태스크)이 자기 소유로 관리하는 게이트. 공유 상태가 아니다.
+// core 1(life 태스크) 소유. 코어 경계를 넘지 않으므로 경쟁이 없다.
 struct MotorCommandGates {
     bool  scheduler_alive = false;
     bool  reconnect_inhibit = true;
     bool  component_test_inhibit = true;
     bool  snapshot_fresh = false;
-    float reconnect_ramp_scale = 1.0f;   // 램프 중이 아니면 1.0
-};
-
-struct MotorCommandParams {
-    int drive_target_speed_rpm = 4000;
-    int regen_target_speed_rpm = 0;
+    float reconnect_ramp_scale = 1.0f;
 };
 
 struct MotorFrameCommand {
@@ -85,11 +75,9 @@ struct MotorFrameCommand {
     bool  normal_allow = false;
 };
 
-// 불허 판정이면 좌우 모두 0 A / run=false / 0 rpm으로 나간다. 한쪽만 차단하는
-// 경로는 없다. 한쪽만 0으로 만드는 것이 곧 좌우 비대칭이기 때문이다.
+// 불허면 좌우 모두 0 A / run=false / 0 rpm. 한쪽만 차단하는 경로는 없다.
 MotorFrameCommand motor_command_resolve(const MotorCommandSnapshot &snapshot,
-                                        const MotorCommandGates &gates,
-                                        const MotorCommandParams &params);
+                                        const MotorCommandGates &gates);
 
 // --- Cluster additions (mirror back into the VCU repo's can_protocol.h) ---
 // MCU -> VCU feedback (Controller_L). Controller_R replaces SA 0xEF with 0xF0.

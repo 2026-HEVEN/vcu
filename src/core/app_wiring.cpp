@@ -111,9 +111,7 @@ namespace {
     };
     TimeSyncPulseState time_sync_state{};
     TimeSyncPulseOutput time_sync_output{};
-    // Increments once per published command snapshot. Starts at 1, so seq 0
-    // means "nothing published yet" and the life task refuses to command.
-    uint32_t motor_command_seq = 0U;
+    uint32_t motor_command_seq = 0U;   // starts at 1; seq 0 = nothing published
 }
 
 static void throttle_update() {
@@ -340,10 +338,7 @@ static void drive_supervisor_update() {
     state.drive_slew_limited = out.drive_slew_limited;
 
     // Publish this tick's decision as one unit. safety_task runs BEFORE this
-    // task, so torque_allowed() here is this tick's verdict, not the previous
-    // one: the command and the permission that released it are the same
-    // instant. The core-1 life task copies this whole and never reads the
-    // individual fields. See docs/M2_COMMAND_SNAPSHOT.md.
+    // task, so torque_allowed() here is this tick's verdict, not the previous.
     MotorCommandSnapshot command_snapshot;
     command_snapshot.seq = ++motor_command_seq;
     command_snapshot.published_ms = millis();
