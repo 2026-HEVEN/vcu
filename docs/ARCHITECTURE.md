@@ -290,14 +290,17 @@ ImuOutput imu_compute(const ImuRaw &raw, ImuFilterState &s);  // s에 이전값 
   0.5초 램프 적용 후 이번 주기에 보낼 명령상전류·RPM 기반 예측전력 중 큰 값을
   기준으로 좌우 명령을 같은 비율로 낮춘다. 최종 500 A 목표값 자체를 전력
   추정에 사용하지 않는다.
+- `brake_compute` — GPIO26의 12-bit ADC를 2점 보정해 압력 bar와 0~100%를
+  함께 만든다. 단선·단락 범위 밖이면 valid=false로 만들고 회생 입력을 0으로
+  고정한다. 실측 보정 전 `BRAKE_SENSOR_INSTALLED=false`를 유지한다.
 - `longitudinal_compute` — Normal/Efficiency 구동·회생 전류와 SOC taper,
-  brake override가 구현되어 있다. 현재 브레이크 센서가 없어 bring-up 설정에서는
-  회생 입력을 0으로 고정한다. `REGEN_HARDWARE_VALIDATED`도 false라 Cluster의
-  Regen Auto 요청만 관찰되고 음의 상전류는 생성되지 않는다.
+  brake override가 구현되어 있다. 브레이크 5% 초과 기준을 brake active와
+  공유한다. `REGEN_HARDWARE_VALIDATED`도 false라 Cluster의 Regen Auto 요청만
+  관찰되고 음의 상전류는 생성되지 않는다.
 - 기어 ADC 판정과 100 ms 안정화는 구현돼 있지만, GPIO27 전압 실측 전에는
   `GEAR_SELECTOR_INSTALLED=true`로 GPIO27 기어 입력을 사용하며, 정지·스로틀 해제 인터록 뒤 안정적으로 판정된 D/R 방향만 구동한다.
-- 브레이크 압력, LV 전압, AIR 릴레이 모니터는 핀만 예약됐다. 센서 배선·스케일링과
-  CAN ID가 확정된 뒤 구현한다.
+- 브레이크 압력은 GPIO26 입력·보정·유효성·기존 상태 CAN의 예약 byte4~6까지
+  구현됐지만 실차 2점 보정 전 비활성이다. LV 전압과 AIR 릴레이는 핀만 예약됐다.
 - **토크벡터링**은 `tv_compute` 하나가 아니라 `src/modules/tv/` 5개 stage
   (reference/yaw_control/load/traction/allocation)로 분리되어 구현되어 있다. 실차 기본
   PID 게인이 0이므로 현재 거동은 strict 50:50 OFF다. 온보딩·담당표는

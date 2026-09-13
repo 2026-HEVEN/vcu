@@ -4,6 +4,7 @@
 //  Application work happens only in src/modules/.
 // ============================================================
 #include "can_protocol.h"
+#include <cmath>
 
 uint16_t torque_to_raw(float amps) {
     return (uint16_t)((amps + 3200.0f) * 10.0f + 0.5f);
@@ -107,6 +108,8 @@ void encode_vcu_cluster_status(uint8_t gear, bool brake, bool hv_active,
                                bool paddock_active,
                                bool soc_valid, uint8_t soc_pct,
                                bool throttle_valid, uint8_t throttle_pct,
+                               bool brake_pressure_valid,
+                               float brake_pressure_bar,
                                uint8_t life,
                                uint8_t out[8]) {
     for (int i = 0; i < 8; ++i) out[i] = 0;
@@ -118,6 +121,13 @@ void encode_vcu_cluster_status(uint8_t gear, bool brake, bool hv_active,
              (paddock_active ? 0x10 : 0x00);
     out[2] = soc_valid ? (soc_pct <= 100 ? soc_pct : 100) : 0;
     out[3] = throttle_valid ? (throttle_pct <= 100 ? throttle_pct : 100) : 0;
+    const bool pressure_valid = brake_pressure_valid &&
+        std::isfinite(brake_pressure_bar) && brake_pressure_bar >= 0.0f &&
+        brake_pressure_bar <= 6553.5f;
+    const uint16_t pressure_raw = pressure_valid
+        ? (uint16_t)(brake_pressure_bar * 10.0f + 0.5f) : 0U;
+    put_u16le(out + 4, pressure_raw);
+    out[6] = pressure_valid ? 0x01 : 0x00;
     out[7] = life;
 }
 

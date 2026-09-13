@@ -17,7 +17,10 @@ struct VehicleState {
     int       throttle_raw_adc = 0; // diagnostics/calibration; 0..4095
     bool      throttle_signal_valid = false; // false below disconnected-signal floor
     Percent   throttle_pct;       // 0..100 (clamped both ways)
+    int       brake_raw_adc = 0;  // diagnostics/calibration; ESP32 ADC 0..4095
     Pct0to100 brake_pct;
+    float     brake_pressure_bar = 0.0f;
+    bool      brake_signal_valid = false;
     bool      brake_active = false;
     Unit      steering_angle;     // -1..+1
     float     yaw_rate = 0.0f;    // deg/s

@@ -15,7 +15,6 @@ float longitudinal_compute(const LongInput &in) {
     
     constexpr float SOC_TAPER_START = 0.90f; // 회생제동 감소 시작
     constexpr float SOC_TAPER_END = 0.95f;   // 회생제동 완전 차단
-    constexpr float BRAKE_DEADZONE = 5.0f;   // 브레이크 노이즈 무시 구간
 
     float drive_max_a = DRIVE_MAX_A_NORMAL;
     float regen_max_a = REGEN_MAX_A_NORMAL;
@@ -44,7 +43,7 @@ float longitudinal_compute(const LongInput &in) {
 
     // 4. 안전 로직: Brake Override (양발 운전 급발진 방지)
     // [권장 피드백 반영] 센서 노이즈나 발을 살짝 올려둔 상태(데드존)를 무시하기 위해 5% 초과일 때만 구동 차단
-    if (in.brake_pct > BRAKE_DEADZONE) {
+    if (in.brake_pct > realcar_cal::provisional::BRAKE_ACTIVE_THRESHOLD_PCT) {
         drive = 0.0f; 
     }
 

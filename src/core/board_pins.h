@@ -7,7 +7,6 @@ constexpr int CAN_RX = 16;
 constexpr int CAN_TX = 17;
 
 constexpr int THROTTLE_ADC = 32;
-constexpr int BRAKE_DIGITAL = 33;
 constexpr int GEAR_ADC = 27;
 
 constexpr int WSS_FL = 36;
@@ -21,7 +20,9 @@ constexpr int STEERING_ADC = 25;
 // finalized. Do not read the floating inputs until the sensors are installed.
 constexpr int LV_VOLTAGE_ADC_RESERVED = 13;
 constexpr int AIR_RELAY_MONITOR_RESERVED = 14;
-constexpr int BRAKE_PRESSURE_ADC_RESERVED = 26;
+// 35342-2E500 candidate pressure sensor through the required 2/3 divider.
+// ADC2 is safe here because this VCU firmware does not use Wi-Fi.
+constexpr int BRAKE_PRESSURE_ADC = 26;
 
 // Harness v5 lists the MTi UART pair as D22/D21. RX is listed first.
 constexpr int IMU_RX = 22;

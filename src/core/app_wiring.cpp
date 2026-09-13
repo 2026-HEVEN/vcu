@@ -68,6 +68,14 @@ namespace {
         realcar_cal::provisional::STEERING_COUNTS_PER_UNIT,
         realcar_cal::provisional::STEERING_INVERT,
     };
+    const BrakeCalib BRAKE_CAL {
+        (uint16_t)realcar_cal::provisional::BRAKE_PRESSURE_ZERO_ADC,
+        (uint16_t)realcar_cal::provisional::BRAKE_PRESSURE_FULL_SCALE_ADC,
+        (uint16_t)realcar_cal::provisional::BRAKE_PRESSURE_VALID_MIN_ADC,
+        (uint16_t)realcar_cal::provisional::BRAKE_PRESSURE_VALID_MAX_ADC,
+        realcar_cal::provisional::BRAKE_PRESSURE_FULL_SCALE_BAR,
+        realcar_cal::provisional::BRAKE_ACTIVE_THRESHOLD_PCT,
+    };
     TVYawState       tv_yaw_state{};       // yaw 제어기 이력 (전역상태 아님, 여기서만 보유)
     DriveMode        drive_mode = DriveMode::Normal;
     constexpr float  TV_DT_S = realcar_cal::confirmed::CONTROL_PERIOD_S;
@@ -122,14 +130,16 @@ static void throttle_update() {
         ? throttle_compute({ state.throttle_raw_adc }) : Percent(0.0f);
 }
 static void brake_update() {
-    // Current bring-up vehicle has no brake sensor. Never read the floating
-    // PCB input: a random HIGH would otherwise request regen. Re-enable this
-    // path in realcar_calibration.h after the sensor polarity is verified.
-    const int raw = realcar_cal::bringup::BRAKE_SENSOR_INSTALLED
-        ? (digitalRead(board_pins::BRAKE_DIGITAL) == HIGH ? 4095 : 0)
-        : 0;
-    BrakeOutput o = brake_compute({ raw });
-    state.brake_pct = o.pct; state.brake_active = o.active;
+    // Do not sample the floating ADC before installation. Once enabled, one
+    // calibrated result feeds control, safety gates, CAN and diagnostics.
+    state.brake_raw_adc = realcar_cal::bringup::BRAKE_SENSOR_INSTALLED
+        ? analogRead(board_pins::BRAKE_PRESSURE_ADC) : 0;
+    const BrakeOutput o = realcar_cal::bringup::BRAKE_SENSOR_INSTALLED
+        ? brake_compute({state.brake_raw_adc}, BRAKE_CAL) : BrakeOutput{};
+    state.brake_pct = o.pct;
+    state.brake_pressure_bar = o.pressure_bar;
+    state.brake_signal_valid = o.valid;
+    state.brake_active = o.active;
 }
 static void steering_update() {
     const SteerRaw raw = steering_encoder_driver::read();
@@ -216,7 +226,8 @@ static void longitudinal_update() {
     state.total_torque = longitudinal_compute({
         state.throttle_pct, state.brake_pct, state.pack_soc, drive_mode,
         state.regen_auto_requested &&
-            realcar_cal::bringup::REGEN_HARDWARE_VALIDATED });
+            realcar_cal::bringup::REGEN_HARDWARE_VALIDATED &&
+            state.brake_signal_valid });
     state.longitudinal_regen_demand = state.total_torque < 0.0f;
     const bool throttle_released =
         (float)state.throttle_pct <= realcar_cal::bringup::THROTTLE_ARM_MAX_PCT;
@@ -372,7 +383,8 @@ void modules_init() {
     analogReadResolution(12);
     pinMode(board_pins::THROTTLE_ADC, INPUT);
     if (realcar_cal::bringup::BRAKE_SENSOR_INSTALLED) {
-        pinMode(board_pins::BRAKE_DIGITAL, INPUT);
+        pinMode(board_pins::BRAKE_PRESSURE_ADC, INPUT);
+        analogSetPinAttenuation(board_pins::BRAKE_PRESSURE_ADC, ADC_11db);
     }
     pinMode(board_pins::GEAR_ADC, INPUT);  // gear-ladder 모듈용 예약 입력
     for (int ch = 0; ch < WHEEL_COUNT; ++ch) wss_driver::begin(ch, PIN_WSS[ch]);

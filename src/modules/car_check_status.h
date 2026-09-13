@@ -6,7 +6,7 @@ struct CarCheckStatusInput {
     bool tv_requested, regen_requested, paddock_requested, paddock_active;
     bool cluster_fresh, tv_pipeline_active, gains_enabled, imu_valid;
     bool speed_valid, speed_above_tv_min, output_allowed, test_override;
-    bool regen_validated, brake_installed, bms_valid, brake_demand;
+    bool regen_validated, brake_installed, brake_valid, bms_valid, brake_demand;
     bool longitudinal_regen_demand;
     float pack_soc, left_a, right_a;
     int direction_sign; // +1 Drive, -1 Reverse, 0 other

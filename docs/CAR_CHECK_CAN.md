@@ -89,13 +89,14 @@ yaw와 accel의 개별 age를 판단하므로 일부 그룹만 수신되면 해�
 | 2 | bit4 | 일반 출력 허용 관측값. 벤치/동기화 override에서는 false |
 | 2 | bit5 | Cluster 명령 수신 fresh |
 | 2 | bit6 | 브레이크 센서 설치 설정 |
+| 2 | bit7 | 브레이크 압력 신호 유효 |
 | 3 | bitmap | TV 비활성 조건 |
 | 4 | bitmap | 회생 비활성 조건 |
 | 5..6 | 전체 | 예약 0 |
 | 7 | 전체 | life |
 
 TV active는 차등 전류가 반드시 0이 아니라는 뜻이 아니며 타이어에 실제 토크가 생겼다는 피드백도 아니다. 직진 오차 0에서도 제어 pipeline은 active일 수 있다.
-회생 available 진단 조건: 회생 요청 + Cluster fresh + REGEN_HARDWARE_VALIDATED + BRAKE_SENSOR_INSTALLED + pack_data_valid + 유효 SOC 0..0.95 미만 + 일반 출력 허용.
+회생 available 진단 조건: 회생 요청 + Cluster fresh + REGEN_HARDWARE_VALIDATED + BRAKE_SENSOR_INSTALLED + 브레이크 압력 valid + pack_data_valid + 유효 SOC 0..0.95 미만 + 일반 출력 허용.
 available은 현재 관측 조건의 요약이며 BMS charge-acceptance의 보증이 아니다. 이 코드가 제어 허용 조건을 새로 열거나 추가 보호를 실제 제어에 적용하지 않는다.
 회생 active는 위 조건에 브레이크 요구·음의 longitudinal 회생 요구·양쪽 최종 supervisor 전류가 기어 기준 반대 부호(최소 한쪽 nonzero)를 추가한다.
 회생 active도 실제 에너지 회수 측정값이 아니며 최종 CAN 전송 성공의 ACK가 아니다. 회생 부호 소실 결함 때문에 실제 명령이 구동 방향이면 active=false, direction mismatch를 보고한다.
@@ -108,7 +109,7 @@ bit0 요청 OFF, bit1 PID 게인 모두 0, bit2 IMU 무효, bit3 대표 차속 �
 여러 조건을 동시에 표시한다. 조건 존재는 장치 고장과 동의어가 아니다. 상태 active를 request로 대체하면 안 된다.
 
 ### byte4 회생 비활성 조건
-bit0 요청 OFF, bit1 회생 하드웨어 검증 OFF, bit2 브레이크 센서 미설치, bit3 BMS 무효,
+bit0 요청 OFF, bit1 회생 하드웨어 검증 OFF, bit2 브레이크 센서 미설치 또는 압력 신호 무효, bit3 BMS 무효,
 bit4 일반 출력 차단/override, bit5 브레이크 요구 없음, bit6 SOC 무효 또는 95% 이상,
 bit7 회생 요구와 최종 전류 방향 불일치.
 브레이크를 밟지 않은 available 상태에서는 bit5가 켜져도 고장이 아니다.
