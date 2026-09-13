@@ -68,6 +68,38 @@ void test_target_step_does_not_create_derivative_kick() {
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, output);
 }
 
+// Conditional integration must let the integral move OUT of saturation.
+// With ki tied to the Mz limit only a derivative spike can hold the output
+// saturated while the error has already reversed, so these use kd.
+void test_release_from_high_saturation_reduces_integral() {
+    TVParams p = active_params();
+    p.kp = 2.0f; p.ki = 1.0f; p.kd = 1.0f;
+    TVYawState s{};
+    s.integral = 5.0f; s.initialized = true; s.prev_measured_yaw = 10.0f;
+    // measured drops 10 -> 5: D is large and positive, error is negative
+    tv_yaw_compute(0.0f, 5.0f, 0.01f, p, s);
+    TEST_ASSERT_TRUE(s.integral < 5.0f);
+}
+
+void test_release_from_low_saturation_increases_integral() {
+    TVParams p = active_params();
+    p.kp = 2.0f; p.ki = 1.0f; p.kd = 1.0f;
+    TVYawState s{};
+    s.integral = -5.0f; s.initialized = true; s.prev_measured_yaw = -10.0f;
+    tv_yaw_compute(0.0f, -5.0f, 0.01f, p, s);
+    TEST_ASSERT_TRUE(s.integral > -5.0f);
+}
+
+void test_negative_saturation_does_not_wind_up() {
+    TVYawState s{};
+    TVParams p = active_params();
+    for (int i = 0; i < 100; ++i) {
+        const float mz = tv_yaw_compute(-100.0f, 0.0f, 0.01f, p, s);
+        TEST_ASSERT_TRUE(std::fabs(mz) <= p.yaw_moment_max);
+    }
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, s.integral);
+}
+
 void setUp() {}
 void tearDown() {}
 int main(int, char **) {
@@ -79,5 +111,8 @@ int main(int, char **) {
     RUN_TEST(test_integral_has_hard_limit);
     RUN_TEST(test_deadband_is_continuous);
     RUN_TEST(test_target_step_does_not_create_derivative_kick);
+    RUN_TEST(test_release_from_high_saturation_reduces_integral);
+    RUN_TEST(test_release_from_low_saturation_increases_integral);
+    RUN_TEST(test_negative_saturation_does_not_wind_up);
     return UNITY_END();
 }
