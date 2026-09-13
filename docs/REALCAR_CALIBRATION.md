@@ -18,6 +18,9 @@
 ### 현재 2모터 bring-up 설정
 
 - `BRAKE_SENSOR_INSTALLED = false`: 미장착 GPIO33을 읽지 않고 브레이크/회생 입력을 0으로 고정
+- `STEERING_SENSOR_INSTALLED = false`: 조향 포텐셔미터 미장착. 조향을 invalid로 보고하고 TV
+  게이트를 닫는다. 직진/좌최대/우최대 raw를 실측해 center·range를 교체한 뒤 true로 바꾼다.
+  유효 raw 범위는 100~16280 count(ADC 25~4070)이며 보정된 최대 조향이 이 안에 있어야 한다.
 - `REQUIRE_BOTH_MOTOR_CONTROLLERS = true`: 좌·우 컨트롤러가 모두 핸드셰이크되어야 시험 허용
 - 좌·우 Part I/II 피드백이 모두 250 ms 이내 fresh여야 최종 상전류 명령 허용
 - 컨트롤러 fault 또는 실제 상전류 1000 A 초과를 한 번이라도 받으면 전원 재인가까지 구동 차단

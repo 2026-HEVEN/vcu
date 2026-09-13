@@ -55,7 +55,20 @@ I_right = base_A + diff_A
 
 ## 안전 동작
 
-- `vehicle_speed < 1 m/s` 또는 차속 invalid 시 Mz를 0으로 하고 PID 상태를 초기화한다.
+- 저속 게이트는 히스테리시스로 동작한다. `tv_min_speed_on_mps`(1.5 m/s) 이상에서
+  켜지고 `tv_min_speed_mps`(1.0 m/s) 미만이거나 차속이 invalid면 꺼진다. 꺼지면 Mz를 0으로
+  하고 PID 상태를 초기화한다.
+- TV가 켜질 때마다 적용 Mz를 `mz_ramp_time_s`(0.25 s) 동안 0 → 100 %로 올린다.
+- IMU rate-of-turn 샘플이 실제로 fresh하고(`imu_telemetry.yaw_valid`) 조향 입력이 유효할
+  때만 켜진다. `STEERING_SENSOR_INSTALLED = false`인 현재 차량에서는 게인을 올려도 TV가
+  켜지지 않는다.
+- 적분 상태는 `integral_max`와 `yaw_moment_max / ki` 중 작은 값으로 제한한다.
+- D항은 `derivative_filter_tau_s`(20 ms) 1차 저역통과를 거친다. 같은 IMU 샘플을 다시
+  읽은 tick은 D를 유지하고, 다음 새 샘플에서 실제 샘플 간격으로 기울기를 계산한다.
+- `tv_config.h`의 음수 게인, 음수 데드밴드 같은 잘못된 기본값은 `static_assert`로
+  빌드 단계에서 거부한다.
+- 게인을 켠 파이프라인은 `tv_compute(in, state, params)`로 파라미터를 주입해 native
+  테스트에서 검증한다.
 - NaN, 잘못된 `dt`, 0/음수 차량·구동계 파라미터는 0 출력으로 처리한다.
 - 음의 수직하중과 마찰원 제곱근의 음수 입력을 차단한다.
 - 기본 `kp/ki/kd`는 모두 0이다. 실차 식별과 단계별 시험 전에는 TV가 차등
