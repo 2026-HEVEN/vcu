@@ -24,6 +24,10 @@ constexpr uint8_t SA_ENERGY_METER = 0x17;
 constexpr uint32_t CAN_ID_TORQUE_L = 0x0C01EFD0;
 constexpr uint32_t CAN_ID_TORQUE_R = 0x0C01F0D0;
 
+// --- Energy Meter IDs ---
+constexpr uint32_t CAN_ID_IVT_CURRENT = 0x00000521; // 실제 IVT-S 전류 ID로 맞춰주세요
+constexpr uint32_t CAN_ID_IVT_VOLTAGE = 0x00000522; // 실제 IVT-S 전압 ID로 맞춰주세요
+
 // --- Torque scaling: raw = (amps + 3200) * 10 ---
 uint16_t torque_to_raw(float amps);
 float    raw_to_torque(uint16_t raw);
@@ -102,6 +106,9 @@ struct ClusterBmsStatus {
 ControllerFeedbackPart1 decode_controller_feedback_part1(const uint8_t data[8]);
 ControllerFeedbackPart2 decode_controller_feedback_part2(const uint8_t data[8]);
 ClusterBmsStatus decode_cluster_bms_status(const uint8_t data[8]);
+
+float decode_ivt_current(const uint8_t data[8]);
+float decode_ivt_voltage(const uint8_t data[8]);
 
 // VCU -> Cluster status: byte0 gear (0=N,1=R,2=D,3=P), byte1 bit0 brake,
 // bit1 HV active, bit2 SOC valid, bit3 throttle valid, bit4 Paddock active,
