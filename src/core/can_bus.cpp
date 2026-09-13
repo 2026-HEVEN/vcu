@@ -459,15 +459,14 @@ void poll_rx() {
             continue;
         }
 
-        // --- Energy Meter (IVT-S) Data Processing ---
-        if (m.data_length_code == 8 && m.identifier == CAN_ID_IVT_CURRENT) {
-            state.energy_meter_current_a = decode_ivt_current(m.data);
-            state.energy_meter_last_rx_ms = now;
-            continue;
-        }
-        if (m.data_length_code == 8 && m.identifier == CAN_ID_IVT_VOLTAGE) {
-            state.energy_meter_voltage_v = decode_ivt_voltage(m.data);
-            state.energy_meter_last_rx_ms = now;
+        // --- Custom Energy Meter (Clone) Data Processing ---
+        if (m.data_length_code == 8 && m.identifier == CAN_ID_EM_RECORD) {
+            EnergyMeterRecord em = decode_em_record(m.data);
+            state.em_hv_voltage_v = em.hv_bus_voltage_v;
+            state.em_hv_current_a = em.hv_bus_current_a;
+            state.em_lv_voltage_v = em.lv_supply_voltage_v;
+            state.em_cpu_temp_c = em.cpu_temperature_c;
+            state.em_last_rx_ms = now;
             continue;
         }
     }
