@@ -103,17 +103,14 @@ ClusterBmsStatus decode_cluster_bms_status(const uint8_t data[8]) {
     return out;
 }
 
-// --- Energy Meter (IVT-S) Decoders ---
-float decode_ivt_current(const uint8_t data[8]) {
-    // IVT-S 기준: Byte 2~5에 Big Endian int32_t 형태로 전류(mA) 값이 들어옴
-    int32_t raw_current = (data[2] << 24) | (data[3] << 16) | (data[4] << 8) | data[5];
-    return static_cast<float>(raw_current) / 1000.0f; // mA를 A로 변환
-}
-
-float decode_ivt_voltage(const uint8_t data[8]) {
-    // IVT-S 기준: Byte 2~5에 Big Endian int32_t 형태로 전압(mV) 값이 들어옴
-    int32_t raw_voltage = (data[2] << 24) | (data[3] << 16) | (data[4] << 8) | data[5];
-    return static_cast<float>(raw_voltage) / 1000.0f; // mV를 V로 변환
+// --- 자체 제작 에너지미터 (EM RECORD) 디코더 ---
+EnergyMeterRecord decode_em_record(const uint8_t data[8]) {
+    EnergyMeterRecord out;
+    out.hv_bus_voltage_v = (float)(int16_t)get_u16le(data + 0) * 0.1f;
+    out.hv_bus_current_a = (float)(int16_t)get_u16le(data + 2) * 0.1f;
+    out.lv_supply_voltage_v = (float)(int16_t)get_u16le(data + 4) * 0.01f;
+    out.cpu_temperature_c = (float)(int16_t)get_u16le(data + 6) * 0.01f;
+    return out;
 }
 
 void encode_vcu_cluster_status(uint8_t gear, bool brake, bool hv_active,
