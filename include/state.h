@@ -45,10 +45,12 @@ struct VehicleState {
     Gear      gear = Gear::Neutral;
     bool      propulsion_direction_armed = false;
 
-    // --- Energy Meter (IVT-S) Data ---
-    float     energy_meter_current_a = 0.0f;
-    float     energy_meter_voltage_v = 0.0f;
-    uint32_t  energy_meter_last_rx_ms = 0U;
+    // --- Custom Energy Meter Data ---
+    float     em_hv_voltage_v = 0.0f;
+    float     em_hv_current_a = 0.0f;
+    float     em_lv_voltage_v = 0.0f;
+    float     em_cpu_temp_c = 0.0f;
+    uint32_t  em_last_rx_ms = 0U;
 
     // controller feedback (from CAN)
     ControllerFeedbackPart1 controller_fb1_L;
