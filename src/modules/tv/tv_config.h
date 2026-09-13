@@ -48,9 +48,30 @@ struct TVParams {
     float ki             = 0.0f;
     float kd             = 0.0f;
     float yaw_deadband_degps = 0.5f;
-    float integral_max       = 100.0f; // integral-state hard limit [deg]
+    // integral-state hard limit [deg]. yaw_control also caps it at
+    // yaw_moment_max / ki so the I term alone can never exceed the Mz limit.
+    float integral_max       = 100.0f;
     float yaw_moment_max = 100.0f;   // Mz 출력 상한 [N·m]
+    // D항 1차 저역통과 시정수 [s]. D는 1/dt(=100배)로 IMU 노이즈를 키우므로
+    // kd를 켜기 전에 필요하다. 0이면 필터 없음.
+    float derivative_filter_tau_s = 0.02f;
 };
 
 // 팀 공용 인스턴스. 위 기본값을 바꾸면 전체 파이프라인에 반영됩니다.
 constexpr TVParams TV_PARAMS{};
+
+// 잘못된 기본값은 빌드 단계에서 막는다. 음수 게인은 반대 방향 제어,
+// 음수 데드밴드는 작은 오차의 부호 반전을 만든다.
+static_assert(TV_PARAMS.kp >= 0.0f && TV_PARAMS.ki >= 0.0f && TV_PARAMS.kd >= 0.0f,
+              "TV PID gains must be non-negative");
+static_assert(TV_PARAMS.yaw_deadband_degps >= 0.0f,
+              "TV yaw deadband must be non-negative");
+static_assert(TV_PARAMS.integral_max >= 0.0f,
+              "TV integral_max must be non-negative");
+static_assert(TV_PARAMS.yaw_moment_max > 0.0f,
+              "TV yaw_moment_max must be positive");
+static_assert(TV_PARAMS.derivative_filter_tau_s >= 0.0f,
+              "TV derivative filter time constant must be non-negative");
+static_assert(TV_PARAMS.mu > 0.0f && TV_PARAMS.desired_yaw_max > 0.0f &&
+              TV_PARAMS.tv_min_speed_mps >= 0.0f,
+              "TV reference limits must be positive");

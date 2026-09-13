@@ -100,6 +100,47 @@ void test_negative_saturation_does_not_wind_up() {
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, s.integral);
 }
 
+void test_integral_limit_follows_ki_authority() {
+    TVYawState s{};
+    TVParams p = active_params();
+    p.kp = 0.0f; p.ki = 2.0f; p.kd = 0.0f;
+    p.integral_max = 100.0f; p.yaw_moment_max = 10.0f;  // ki*I <= 10 -> I <= 5
+    for (int i = 0; i < 100; ++i) tv_yaw_compute(10.0f, 0.0f, 1.0f, p, s);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 5.0f, s.integral);
+}
+
+void test_held_sample_uses_real_interval() {
+    TVYawState s{};
+    TVParams p = active_params();
+    p.kp = 0.0f; p.ki = 0.0f; p.kd = 1.0f;
+    p.yaw_moment_max = 1000.0f; p.derivative_filter_tau_s = 0.0f;
+    tv_yaw_compute(0.0f, 0.0f, 0.01f, p, s);                 // prime
+    tv_yaw_compute(0.0f, 0.0f, 0.01f, p, s, false);          // same sample re-read
+    const float out = tv_yaw_compute(0.0f, 2.0f, 0.01f, p, s, true);
+    // 2 deg/s change over the real 20 ms sample interval, not over 10 ms
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, -100.0f, out);
+}
+
+void test_derivative_filter_attenuates_a_step() {
+    TVYawState s{};
+    TVParams p = active_params();
+    p.kp = 0.0f; p.ki = 0.0f; p.kd = 1.0f;
+    p.yaw_moment_max = 1000.0f; p.derivative_filter_tau_s = 0.02f;
+    tv_yaw_compute(0.0f, 0.0f, 0.01f, p, s);
+    const float out = tv_yaw_compute(0.0f, 1.0f, 0.01f, p, s);
+    // raw -100 deg/s^2 scaled by alpha = 0.01 / (0.02 + 0.01)
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, -100.0f / 3.0f, out);
+}
+
+void test_negative_deadband_is_treated_as_zero() {
+    TVYawState s{};
+    TVParams p = active_params();
+    p.kp = 1.0f; p.ki = 0.0f; p.kd = 0.0f;
+    p.yaw_deadband_degps = -0.5f;
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, -0.2f,
+        tv_yaw_compute(0.0f, 0.2f, 0.01f, p, s));
+}
+
 void setUp() {}
 void tearDown() {}
 int main(int, char **) {
@@ -114,5 +155,9 @@ int main(int, char **) {
     RUN_TEST(test_release_from_high_saturation_reduces_integral);
     RUN_TEST(test_release_from_low_saturation_increases_integral);
     RUN_TEST(test_negative_saturation_does_not_wind_up);
+    RUN_TEST(test_integral_limit_follows_ki_authority);
+    RUN_TEST(test_held_sample_uses_real_interval);
+    RUN_TEST(test_derivative_filter_attenuates_a_step);
+    RUN_TEST(test_negative_deadband_is_treated_as_zero);
     return UNITY_END();
 }
