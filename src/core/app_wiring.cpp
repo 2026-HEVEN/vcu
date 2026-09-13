@@ -69,6 +69,8 @@ namespace {
         realcar_cal::provisional::STEERING_INVERT,
     };
     TVState          tv_state{};           // TV 제어기 이력 + 게이트 상태 (전역상태 아님, 여기서만 보유)
+    float            tv_last_yaw_rate = 0.0f;  // 같은 IMU 샘플 재사용 판별용
+    bool             tv_have_last_yaw = false;
     DriveMode        drive_mode = DriveMode::Normal;
     constexpr float  TV_DT_S = realcar_cal::confirmed::CONTROL_PERIOD_S;
     constexpr float  WHEEL_SPEED_DT_S = realcar_cal::confirmed::CONTROL_PERIOD_S;
@@ -135,7 +137,13 @@ static void steering_update() {
     const SteerRaw raw = steering_encoder_driver::read();
     state.steering_angle = steering_compute(raw, STEER_CAL);
     state.steering_telemetry.unit = (float)state.steering_angle;
-    state.steering_telemetry.valid = raw.counts <= 16380U &&
+    // Valid only when the potentiometer is fitted and the raw sample is off
+    // both ADC rails: an unconnected pin floats and an open or shorted wiper
+    // pins a rail. This flag also gates torque vectoring.
+    state.steering_telemetry.valid =
+        realcar_cal::bringup::STEERING_SENSOR_INSTALLED &&
+        raw.counts >= realcar_cal::bringup::STEERING_RAW_VALID_MIN_COUNTS &&
+        raw.counts <= realcar_cal::bringup::STEERING_RAW_VALID_MAX_COUNTS &&
         std::isfinite(state.steering_telemetry.unit);
 }
 static void imu_update() {
@@ -237,12 +245,25 @@ static void longitudinal_update() {
     }
 }
 static void torque_vectoring_update() {
+    // TV may act only on a real rate-of-turn sample and a trusted steering
+    // input. imu_valid alone accepts any MTData2 frame, even one without the
+    // rate-of-turn group, which would freeze yaw_rate while TV stays enabled.
+    const bool tv_inputs_valid = state.imu_valid &&
+        state.imu_telemetry.yaw_valid && state.steering_telemetry.valid;
+    // MTi frames are not locked to this 10 ms task. An identical value is a
+    // re-read of the same sample, so the yaw D term measures the slope over
+    // the real sample interval instead of seeing D=0 and then a doubled step.
+    const bool yaw_sample_repeated =
+        tv_have_last_yaw && state.yaw_rate == tv_last_yaw_rate;
+    tv_last_yaw_rate = state.yaw_rate;
+    tv_have_last_yaw = true;
     const TVInput tv_in{
         state.total_torque, state.yaw_rate, state.steering_angle,
         // 전륜 신호를 못 믿으면 차속 0 → reference stage의 저속 컷오프에 걸려 TV가 꺼진다.
         state.vehicle_speed_valid ? state.vehicle_speed_mps : 0.0f,
         state.accel_x, state.accel_y, TV_DT_S,
-        state.tv_enable_requested && state.imu_valid
+        state.tv_enable_requested && tv_inputs_valid,
+        yaw_sample_repeated,
     };
     TVOutput o = tv_compute(tv_in, tv_state);
     state.tv_pipeline_active = o.control_active;

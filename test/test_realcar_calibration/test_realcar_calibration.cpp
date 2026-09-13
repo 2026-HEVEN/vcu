@@ -119,6 +119,13 @@ void test_paddock_speed_current_profile_is_bounded() {
     TEST_ASSERT_TRUE(realcar_cal::bringup::PADDOCK_REQUIRE_PACK_DATA);
 }
 
+void test_steering_sensor_flag_defaults_off_until_calibrated() {
+    // Without a fitted potentiometer the ADC floats; TV must stay blocked.
+    TEST_ASSERT_FALSE(realcar_cal::bringup::STEERING_SENSOR_INSTALLED);
+    TEST_ASSERT_TRUE(realcar_cal::bringup::STEERING_RAW_VALID_MIN_COUNTS > 0U);
+    TEST_ASSERT_TRUE(realcar_cal::bringup::STEERING_RAW_VALID_MAX_COUNTS < 16380U);
+}
+
 void setUp(void) {}
 void tearDown(void) {}
 
@@ -135,5 +142,6 @@ int main(int, char **) {
     RUN_TEST(test_rehandshake_timeout_and_recovery_timing_are_configured);
     RUN_TEST(test_throttle_signal_and_zero_percent_thresholds);
     RUN_TEST(test_paddock_speed_current_profile_is_bounded);
+    RUN_TEST(test_steering_sensor_flag_defaults_off_until_calibrated);
     return UNITY_END();
 }

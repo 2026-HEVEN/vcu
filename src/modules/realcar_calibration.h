@@ -18,6 +18,19 @@ namespace realcar_cal {
 // Set these back to production requirements as hardware is installed.
 namespace bringup {
 constexpr bool BRAKE_SENSOR_INSTALLED = false;
+// The steering potentiometer is not fitted on the current vehicle. An
+// unconnected ADC pin reads arbitrary values, so while this is false the
+// steering sample is reported invalid and torque vectoring cannot engage.
+// Set true only after the center/full-lock values in provisional:: have been
+// measured on the car.
+constexpr bool STEERING_SENSOR_INSTALLED = false;
+// Raw steering counts (12-bit ADC x 4) pinned near either rail mean an open
+// or shorted wiper. A calibrated full lock must stay inside this band.
+constexpr unsigned STEERING_RAW_VALID_MIN_COUNTS = 100U;    // ADC 25
+constexpr unsigned STEERING_RAW_VALID_MAX_COUNTS = 16280U;  // ADC 4070
+static_assert(STEERING_RAW_VALID_MIN_COUNTS < STEERING_RAW_VALID_MAX_COUNTS &&
+              STEERING_RAW_VALID_MAX_COUNTS <= 16380U,
+              "steering valid band must lie inside the 12-bit x4 count range");
 // The completed harness connects the gear selector to GPIO27. Stable Drive
 // and Reverse classifications can grant propulsion after the stopped,
 // released-throttle direction interlock; Neutral/invalid readings halt it.
