@@ -44,6 +44,12 @@ struct VehicleState {
     Gear      gear_sensed = Gear::Neutral; // diagnostic; never grants authority
     Gear      gear = Gear::Neutral;
     bool      propulsion_direction_armed = false;
+
+    // --- Energy Meter (IVT-S) Data ---
+    float     energy_meter_current_a = 0.0f;
+    float     energy_meter_voltage_v = 0.0f;
+    uint32_t  energy_meter_last_rx_ms = 0U;
+
     // controller feedback (from CAN)
     ControllerFeedbackPart1 controller_fb1_L;
     ControllerFeedbackPart1 controller_fb1_R;
