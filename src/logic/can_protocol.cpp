@@ -103,6 +103,19 @@ ClusterBmsStatus decode_cluster_bms_status(const uint8_t data[8]) {
     return out;
 }
 
+// --- Energy Meter (IVT-S) Decoders ---
+float decode_ivt_current(const uint8_t data[8]) {
+    // IVT-S 기준: Byte 2~5에 Big Endian int32_t 형태로 전류(mA) 값이 들어옴
+    int32_t raw_current = (data[2] << 24) | (data[3] << 16) | (data[4] << 8) | data[5];
+    return static_cast<float>(raw_current) / 1000.0f; // mA를 A로 변환
+}
+
+float decode_ivt_voltage(const uint8_t data[8]) {
+    // IVT-S 기준: Byte 2~5에 Big Endian int32_t 형태로 전압(mV) 값이 들어옴
+    int32_t raw_voltage = (data[2] << 24) | (data[3] << 16) | (data[4] << 8) | data[5];
+    return static_cast<float>(raw_voltage) / 1000.0f; // mV를 V로 변환
+}
+
 void encode_vcu_cluster_status(uint8_t gear, bool brake, bool hv_active,
                                bool paddock_active,
                                bool soc_valid, uint8_t soc_pct,
