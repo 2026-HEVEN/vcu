@@ -1,12 +1,12 @@
 # M2 — 좌우 모터 명령 스냅샷과 크로스코어 원자성
 
 작업 브랜치: `fix/m2-command-snapshot` (base `origin/dev` @ `8498e2f`)
-상태: 설계 확정, 구현 대기
+상태: **구현 완료.** native 184 unit 통과, `esp32dev` 빌드 통과. 실차 검증 대기
 대상 결함: 코드 리뷰 MEDIUM · M2 (지적 ③)
 
-이 문서는 사람과 AI 에이전트 모두를 대상으로 한다. 이 작업을 이어받는
-에이전트는 이 문서의 "검증된 사실"과 "수정 범위"를 그대로 신뢰해도 되지만,
-줄 번호는 `origin/dev` @ `8498e2f` 기준이므로 편집 전 반드시 재확인한다.
+이 문서는 사람과 AI 에이전트 모두를 대상으로 한다. 3절의 줄 번호는 수정 **전**
+상태인 `origin/dev` @ `8498e2f` 기준이므로, 현재 코드에서는 위치가 다르다.
+5절 이후는 실제 구현과 일치한다.
 
 ---
 
@@ -224,10 +224,13 @@ struct MotorCommandSnapshot {
     bool     safety_allow;               // 같은 tick의 torque_allowed()
     bool     throttle_signal_valid;
     bool     propulsion_direction_armed;
-    bool     brake_active;
-    bool     controller_feedback_fresh;
-    bool     controller_fault_latched;
 };
+// 구현 시 확정: 브레이크·컨트롤러 fault·피드백 stale은 스냅샷에 **넣지 않았다.**
+// 이미 상위에서 명령값 자체를 0으로 만들기 때문이다(브레이크는
+// `longitudinal_compute()`의 Brake Override, 나머지는 `drive_supervisor.cpp:76-82`).
+// 여기서 다시 게이트로 쓰면 두 가지가 깨진다. 회생이 켜졌을 때 제동 중 명령까지
+// 차단되고, 피드백 stale 시 `run=false`가 되어 지금의 "0 A로 idle"이 "HALT"로
+// 바뀐다. 둘 다 거동 변경이므로 중복 게이트를 두지 않는다.
 
 // core 1이 자기 소유로 관리하는 게이트. 공유 상태가 아니다.
 struct MotorCommandGates {
@@ -265,8 +268,9 @@ allow    = s.safety_allow && g.scheduler_alive && g.snapshot_fresh && finite
         && !g.component_test_inhibit && s.propulsion_direction_armed
         && (s.gear == Gear::Drive || s.gear == Gear::Reverse)
 
-left_a   = allow ? s.left_a  * g.reconnect_ramp_scale : 0
-right_a  = allow ? s.right_a * g.reconnect_ramp_scale : 0
+scale    = isfinite(g.reconnect_ramp_scale) ? clamp01(g.reconnect_ramp_scale) : 0
+left_a   = allow ? s.left_a  * scale : 0
+right_a  = allow ? s.right_a * scale : 0
 run_L    = run_R = allow
 
 target_rpm(amps) = !allow             ? 0
@@ -282,6 +286,19 @@ NaN 처리는 **양쪽 동시 차단**이다. 한쪽만 0으로 만들면 그 �
 `total_current_a`의 부호에 따라 좌우를 `[0, max]` 또는 `[-max, 0]`으로
 클램프하므로, 좌우가 서로 반대 부호가 되는 일은 없다. 그럼에도 목표 rpm은
 **측별로** 계산한다. 부호 일치에 의존하지 않기 위해서다.
+
+구현에서 추가된 두 가지 방어가 있다.
+
+- **램프 스케일 위생.** `reconnect_ramp_scale`을 `[0, 1]`로 클램프하고 NaN이면
+  0으로 취급한다. 램프 값이 오염되어도 명령을 키우거나 NaN을 내보낼 수 없다.
+- **부팅 가드.** `seq`는 1부터 시작하므로 `seq == 0`은 "아직 아무것도 게시되지
+  않았다"를 뜻한다. life 태스크는 이 경우 신선도 판정을 실패시켜, 스케줄러가
+  첫 tick을 돌기 전에는 기본값 0으로 채워진 스냅샷을 명령으로 쓰지 않는다.
+
+**구조체 초기화 방식 주의.** 이 구조체들은 기본 멤버 초기화자를 가진다.
+Arduino-ESP32 툴체인의 C++ 표준에서는 이 경우 집합체 초기화(중괄호 초기화)가
+거부된다. `can_bus.cpp`에서는 필드 대입으로 채운다. native 환경은 `gnu++17`이라
+중괄호 초기화가 되지만, 두 환경 모두에서 빌드되어야 하므로 대입을 쓴다.
 
 ### 5.2 원자 게시·복사 (LOCKED · `can_bus`)
 
@@ -425,20 +442,23 @@ VCU 통제 밖에서 발생한다. 3회는 컨트롤러보다 먼저 움직이�
 
 ## 6. 수정 범위
 
-LOCKED 파일 변경이 불가피하다. `AGENTS.md`는 `src/core/`, `src/logic/`,
+LOCKED 파일 변경이 불가피했다. `AGENTS.md`는 `src/core/`, `src/logic/`,
 `include/`, `src/main.cpp`, `platformio.ini` 수정을 금지하고 요청 시 사용자에게
-먼저 확인하도록 규정한다. **아래 변경은 사용자 승인 후에만 적용한다.**
+먼저 확인하도록 규정한다. **아래 변경은 사용자 승인 후 적용했다.**
+`CODEOWNERS`에 따라 이 경로들의 PR은 팀장 리뷰가 필요하다.
 
 | 파일 | 상태 | 변경 |
 |---|---|---|
 | `src/modules/motor_command.h` | 신규 | 스냅샷/게이트/출력 타입 |
 | `src/modules/motor_command.cpp` | 신규 | `motor_command_resolve()` 순수 로직 |
-| `test/test_motor_command/test_motor_command.cpp` | 신규 | 단위 테스트 |
-| `src/core/can_bus.h` | LOCKED | `publish_motor_command()` 선언 |
+| `test/test_motor_command/test_motor_command.cpp` | 신규 | 단위 테스트 13건 |
+| `src/core/can_bus.h` | LOCKED | `publish_motor_command()` 선언, `motor_command.h` include |
 | `src/core/can_bus.cpp` | LOCKED | mux + 스냅샷, `life_task` 재작성, `send_torque` 시그니처, TX 실패 처리 |
-| `src/core/app_wiring.cpp` | LOCKED | 태스크 순서 1줄, 게시 호출 추가 |
-| `include/state.h` | LOCKED | `can_tx_fail_count_L/R` 진단 필드 |
+| `src/core/app_wiring.cpp` | LOCKED | 태스크 순서 1줄, 게시 호출, `motor_command_seq` |
+| `include/state.h` | LOCKED | `can_tx_fail_count_L/R`, `motor_command_seq` 진단 필드 |
 | `src/modules/realcar_calibration.h` | 계약 헤더 | `MOTOR_COMMAND_SNAPSHOT_MAX_AGE_MS`, `MOTOR_TX_FAIL_LIMIT` |
+
+`platformio.ini`, `src/main.cpp`, `src/logic/`은 건드리지 않았다.
 
 제어 로직의 **수치 거동은 바뀌지 않는다.** 같은 입력에 같은 전류가 나간다.
 바뀌는 것은 그 값이 어느 시점의 것인지에 대한 보장뿐이다.
@@ -464,17 +484,22 @@ LOCKED 파일 변경이 불가피하다. `AGENTS.md`는 `src/core/`, `src/logic/
 | 9 | `left_a = NaN` | **양측** `0 A`, `run = false` (한쪽만 0 아님) |
 | 10 | `propulsion_direction_armed = false` | 양측 `0 A` |
 | 11 | `throttle_signal_valid = false` | 양측 `0 A` |
+| 12 | core 1 게이트 3종 각각 차단 | 양측 `0 A` |
+| 13 | 램프 스케일 `2.0` / `-1.0` / `NaN` | 각각 클램프·0·0. 명령이 커지지 않음 |
 
-실행: `pio test -e native -f test_motor_command`
+9번은 `left_a = NaN`과 `right_a = Inf` 두 경우를 모두 확인한다.
+7번은 값뿐 아니라 **좌우 비가 보존되는지**까지 단언한다.
+
+실행: `pio test -e native -f test_motor_command` → **13건 통과**
 
 `platformio.ini`의 `build_dir`이 `C:\Users\jy02s\pio_build_vcu`로 고정되어 있다.
 다른 사람의 경로이므로 로컬에서 실패할 수 있다. 실패하면 `PLATFORMIO_BUILD_DIR`
 환경변수로 우회한다. `platformio.ini`는 LOCKED이므로 고치지 않는다.
 
-### 7.2 회귀
+### 7.2 회귀 (실행 결과)
 
-- `pio test -e native` 전체 (기존 165 unit이 그대로 통과해야 한다)
-- `pio run -e esp32dev` 빌드 통과
+- `pio test -e native` → **25개 스위트 184건 전부 통과** (신규 13건 포함)
+- `pio run -e esp32dev` → **빌드 성공.** RAM 7.0%, Flash 25.4%
 
 ### 7.3 실차 확인 항목
 
@@ -527,24 +552,31 @@ M2 수정이 아래 항목을 **강화**한다. 제거하거나 우회하지 않
 | 노션 항목 | M2에서의 처리 |
 |---|---|
 | 양쪽 handshake 완료 전 토크 금지 | 그대로 유지. 송신 가드 `g_handshaked_L/R` 유지 |
-| CAN stale → 양쪽 0 A | 스냅샷의 `controller_feedback_fresh`로 일관되게 평가 |
+| CAN stale → 양쪽 0 A | 기존 `drive_supervisor` 경로 유지. 스냅샷에 중복 게이트를 두지 않는다 (5.1 주석) |
 | 한쪽 fault → 양쪽 0 A | TX 연속 실패도 같은 경로로 연결 (5.5) |
 | bus-off → handshake 무효 · 재연결 0→램프 | 그대로 유지. TX 실패가 이 경로를 재사용 |
-| NaN/Inf 검사 + 모터별 상전류 clamp | **신규 추가.** 현재 최종 경로에 없다 (3.5) |
+| NaN/Inf 검사 + 모터별 상전류 clamp | **신규 추가.** 기존 최종 경로에 없었다 (3.5) |
 | 센서 오류 → TV만 OFF, 50:50 복귀 | 영향 없음. TV 상위 단계 |
 | 10 kW 규정 전력 제한 | 영향 없음. `drive_supervisor` 유지 |
-| 브레이크 입력 시 구동토크 차단 | 스냅샷의 `brake_active` 포함 |
+| 브레이크 입력 시 구동토크 차단 | 기존 `longitudinal_compute()` Brake Override 유지. 중복 게이트 없음 |
 | D/R 전환 정지 + 스로틀 해제 조건 | 스냅샷의 `propulsion_direction_armed` 포함 |
 
 ---
 
-## 11. 다음 작업자를 위한 체크리스트
+## 11. 리뷰어·다음 작업자를 위한 확인 포인트
 
-1. `git checkout fix/m2-command-snapshot` (base `origin/dev` @ `8498e2f`)
-2. 줄 번호를 현재 파일에서 재확인한다. 이 문서는 `8498e2f` 기준이다.
-3. `src/modules/motor_command.{h,cpp}`와 테스트를 **먼저** 작성하고
-   `pio test -e native -f test_motor_command`를 통과시킨다. LOCKED 파일은
-   이 단계에서 건드리지 않는다.
-4. LOCKED 파일 변경은 사용자 승인 후 6절 표의 범위 안에서만 한다.
-5. `pio test -e native` 전체와 `pio run -e esp32dev`를 통과시킨다.
-6. 실차 확인은 7.3을 따른다. 스탠드 또는 통제된 환경에서 먼저 한다.
+구현이 끝난 상태이므로 아래는 리뷰 시 확인할 항목이다.
+
+1. **거동 불변 확인.** 정상 경로의 허가 조건은 `origin/dev`와 동일하다.
+   새로 추가된 차단은 `snapshot_fresh`와 `finite_command` 두 개뿐이고, 둘 다
+   기존에 없던 보호다. 기존 조건을 빼거나 바꾼 것은 없다.
+2. **순서 의존성.** `app_wiring.cpp` 태스크 테이블에서 `safety_task`가
+   `drive_supervisor_update`보다 **앞**에 있어야 한다. 코드에 경고 주석이 있다.
+   이 둘의 순서를 되돌리면 4번 결함이 되살아난다.
+3. **임계구역 범위.** `portENTER_CRITICAL` 블록 안에 구조체 복사 외의 코드가
+   없어야 한다. `twai_transmit()`이 들어가면 시스템이 멈춘다.
+4. **life 바이트.** `g_life++`는 두 송신 **뒤**에 있어야 한다. 두 프레임이 같은
+   life 값을 공유해야 수신측에서 짝을 확인할 수 있다.
+5. **`MOTOR_TX_FAIL_LIMIT = 3`은 잠정치다.** 5.5절과
+   `docs/M2_FOLLOWUP_ITEMS.md` 1번 참조. 벤치 실측으로 확정한다.
+6. **실차 확인은 7.3을 따른다.** 스탠드 또는 통제된 환경에서 먼저 한다.

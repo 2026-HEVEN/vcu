@@ -93,6 +93,12 @@ struct VehicleState {
     float     can_commanded_current_R = 0.0f;
     bool      can_commanded_running_L = false;
     bool      can_commanded_running_R = false;
+    // Consecutive twai_transmit() failures per controller. Nonzero means the
+    // frame above never reached the TX queue, so the telemetry is a request,
+    // not a confirmed send.
+    unsigned  can_tx_fail_count_L = 0U;
+    unsigned  can_tx_fail_count_R = 0U;
+    uint32_t  motor_command_seq = 0U;  // snapshot id the life task last sent
     float     measured_bus_power_w = 0.0f;
     float     estimated_input_power_w = 0.0f;
     float     predicted_command_power_w = 0.0f;

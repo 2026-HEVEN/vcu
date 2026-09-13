@@ -1,7 +1,7 @@
 # M2 · 좌우 명령 스냅샷 · 크로스코어 원자성
 
 **브랜치** `fix/m2-command-snapshot` · **베이스** `origin/dev` @ `8498e2f`
-**심각도** MEDIUM · **상태** 설계 확정, 구현 대기
+**심각도** MEDIUM · **상태** 구현 완료. native 184건 통과, esp32dev 빌드 통과. 실차 검증 대기
 **상세 문서** 레포 `docs/M2_COMMAND_SNAPSHOT.md`
 **후속 항목 (M2 범위 밖)** 레포 `docs/M2_FOLLOWUP_ITEMS.md`
 
@@ -162,18 +162,20 @@ seqlock 같은 락프리 방식은 배리어 하나 빠뜨리면 조용히 깨�
 
 ## 수정 범위
 
-`AGENTS.md`는 `src/core/`, `src/logic/`, `include/`, `main.cpp`, `platformio.ini` 수정을 금지한다. M2는 구조상 이 파일들을 건드릴 수밖에 없다. **승인 후에만 적용한다.**
+`AGENTS.md`는 `src/core/`, `src/logic/`, `include/`, `main.cpp`, `platformio.ini` 수정을 금지한다. M2는 구조상 이 파일들을 건드릴 수밖에 없다. **승인 후 적용했다.** `CODEOWNERS`에 따라 이 경로들의 PR은 팀장 리뷰가 필요하다.
 
 | 파일 | 상태 | 변경 |
 | --- | --- | --- |
 | src/modules/motor_command.h | 신규 | 스냅샷·게이트·출력 타입 |
 | src/modules/motor_command.cpp | 신규 | motor_command_resolve 순수 로직 |
-| test/test_motor_command/ | 신규 | 단위 테스트 11건 |
-| src/core/can_bus.h | LOCKED | publish_motor_command 선언 |
+| test/test_motor_command/ | 신규 | 단위 테스트 13건 |
+| src/core/can_bus.h | LOCKED | publish_motor_command 선언, motor_command.h include |
 | src/core/can_bus.cpp | LOCKED | mux·스냅샷, life_task 재작성, send_torque 시그니처, TX 실패 |
-| src/core/app_wiring.cpp | LOCKED | 태스크 순서 1줄, 게시 호출 |
-| include/state.h | LOCKED | can_tx_fail_count_L/R 진단 필드 |
+| src/core/app_wiring.cpp | LOCKED | 태스크 순서 1줄, 게시 호출, motor_command_seq |
+| include/state.h | LOCKED | can_tx_fail_count_L/R, motor_command_seq 진단 필드 |
 | src/modules/realcar_calibration.h | 계약 헤더 | 스냅샷 최대 나이, TX 실패 한계 |
+
+`platformio.ini`, `main.cpp`, `src/logic/`은 건드리지 않았다.
 
 ---
 
@@ -196,12 +198,17 @@ seqlock 같은 락프리 방식은 배리어 하나 빠뜨리면 조용히 깨�
 | 9 | 왼쪽 전류 NaN | **양측** 0 A, run false |
 | 10 | 방향 미암 | 양측 0 A |
 | 11 | 스로틀 신호 무효 | 양측 0 A |
+| 12 | core 1 게이트 3종 각각 차단 | 양측 0 A |
+| 13 | 램프 스케일 2.0 / -1.0 / NaN | 클램프·0·0. 명령이 커지지 않음 |
+
+**13건 전부 통과.**
 
 > `platformio.ini`의 `build_dir`이 `C:\Users\jy02s\pio_build_vcu`로 고정돼 있다. 다른 사람 경로라 로컬에서 실패할 수 있다. 실패하면 `PLATFORMIO_BUILD_DIR` 환경변수로 우회한다. platformio.ini는 LOCKED이므로 고치지 않는다.
 
 ### 회귀
 
-`pio test -e native` 전체(기존 165 unit 유지) · `pio run -e esp32dev` 빌드
+`pio test -e native` → 25개 스위트 **184건 전부 통과**(신규 13건 포함)
+`pio run -e esp32dev` → **빌드 성공.** RAM 7.0%, Flash 25.4%
 
 ### 실차 확인
 
@@ -242,11 +249,11 @@ M2는 아래를 **강화**한다. 제거하거나 우회하지 않는다.
 | 반드시 유지 항목 | M2에서의 처리 |
 | --- | --- |
 | 양쪽 handshake 완료 전 토크 금지 | 그대로 유지 |
-| CAN stale → 양쪽 0 A | 스냅샷에 담아 일관되게 평가 |
+| CAN stale → 양쪽 0 A | 기존 drive_supervisor 경로 유지. 중복 게이트를 두지 않음 |
 | 한쪽 fault → 양쪽 0 A | TX 연속 실패도 같은 경로로 연결 |
 | bus-off → handshake 무효 · 0→램프 복원 | 그대로 유지, TX 실패가 이 경로 재사용 |
 | NaN/Inf 검사 + 모터별 상전류 clamp | **신규 추가** (현재 최종 경로에 없음) |
 | 센서 오류 → TV만 OFF, 50:50 복귀 | 영향 없음 (TV 상위 단계) |
 | 10 kW 규정 전력 제한 | 영향 없음 (drive_supervisor 유지) |
-| 브레이크 입력 시 구동토크 차단 | 스냅샷에 brake_active 포함 |
+| 브레이크 입력 시 구동토크 차단 | 기존 longitudinal Brake Override 유지. 중복 게이트를 두지 않음 |
 | D/R 전환 정지 + 스로틀 해제 | 스냅샷에 propulsion_direction_armed 포함 |

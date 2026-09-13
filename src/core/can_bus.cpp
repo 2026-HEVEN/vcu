@@ -26,10 +26,13 @@
 // hung scheduler). When CAN RX/handshake + throttle plausibility are
 // implemented, gate note_command() on a genuinely valid command instead.
 //
-// NOTE (concurrency): state.torque_L/R (float) are written by loop()/scheduler
-// and read here on the core-1 life task. Relies on 32-bit aligned float access
-// being word-atomic on ESP32; a one-cycle-stale value is benign and torque is
-// force-zeroed when not allowed. g_life is only touched inside life_task.
+// NOTE (concurrency): the final left/right command is NOT read field by field
+// from `state` any more. core-0 publishes one MotorCommandSnapshot per control
+// tick under g_cmd_mux and the core-1 life task copies it whole, so both
+// motors are always commanded from the same tick and the same gear reading.
+// Only g_cmd_mux-guarded data crosses the cores on the command path; g_life
+// and the TX failure counters are touched solely inside life_task.
+// See docs/M2_COMMAND_SNAPSHOT.md.
 
 namespace {
     constexpr uint32_t DEADMAN_MS = 200;
@@ -49,6 +52,34 @@ namespace {
     bool                g_bus_recovery_pending = false;
     uint8_t            g_life = 0;
     uint8_t            g_status_life = 0;
+    unsigned           g_tx_fail_L = 0U;   // life_task only
+    unsigned           g_tx_fail_R = 0U;   // life_task only
+
+    // The one piece of command data shared between the cores. Everything the
+    // life task needs from core 0 lives inside it, so a single short critical
+    // section gives a consistent view of all of it at once.
+    portMUX_TYPE         g_cmd_mux = portMUX_INITIALIZER_UNLOCKED;
+    MotorCommandSnapshot g_cmd_snapshot{};   // guarded by g_cmd_mux
+
+    // Field assignment rather than brace init: these structs carry default
+    // member initializers, which the Arduino-ESP32 toolchain's C++ standard
+    // does not treat as aggregates.
+    MotorCommandParams motor_command_params() {
+        MotorCommandParams p;
+        p.drive_target_speed_rpm = DRIVE_TARGET_SPEED_RPM;
+        p.regen_target_speed_rpm = REGEN_TARGET_SPEED_RPM;
+        return p;
+    }
+
+    // Copy under the lock, then leave. Never transmit inside the critical
+    // section: twai_transmit() can block for milliseconds.
+    MotorCommandSnapshot copy_motor_command() {
+        MotorCommandSnapshot out;
+        portENTER_CRITICAL(&g_cmd_mux);
+        out = g_cmd_snapshot;
+        portEXIT_CRITICAL(&g_cmd_mux);
+        return out;
+    }
 
     void invalidate_controller_link(bool left, const char *reason) {
         bool was_handshaked = false;
@@ -94,20 +125,20 @@ namespace {
         return twai_transmit(&m, wait_ticks) == ESP_OK;
     }
 
-    void send_torque(uint32_t id, float amps, bool running) {
-        // Confirmed on the vehicle: propulsion uses +4000 rpm while regen
-        // uses 0 rpm. Byte4 must be 0x01 or EZkontrol remains HALTED.
-        const int target_rpm = !running ? 0
-            : (state.gear == Gear::Reverse ? -DRIVE_TARGET_SPEED_RPM
-                : (amps < 0.0f ? REGEN_TARGET_SPEED_RPM
-                               : DRIVE_TARGET_SPEED_RPM));
+    // No `state` access. The target speed (confirmed on the vehicle: +4000 rpm
+    // for propulsion, 0 rpm for regen, negative in Reverse; byte4 must be 0x01
+    // or EZkontrol stays HALTED) is decided once per tick from the snapshot's
+    // single gear field and passed in, so the two motors cannot disagree about
+    // direction. Returns false when the frame never reached the TX queue.
+    bool send_torque(uint32_t id, float amps, int target_rpm,
+                     bool running, uint8_t life) {
         uint8_t data[8];
-        encode_motor_control(amps, target_rpm, running, g_life, data);
+        encode_motor_control(amps, target_rpm, running, life, data);
 
         twai_message_t m = {};
         m.identifier = id; m.extd = 1; m.data_length_code = 8;
         for (int i = 0; i < 8; ++i) m.data[i] = data[i];
-        twai_transmit(&m, pdMS_TO_TICKS(5));
+        return twai_transmit(&m, pdMS_TO_TICKS(5)) == ESP_OK;
     }
 
     void life_task(void *) {
@@ -153,18 +184,30 @@ namespace {
                     state.component_test_release_ticks = 0U;
                 }
             }
-            const bool propulsion_gear =
-                state.gear == Gear::Drive || state.gear == Gear::Reverse;
-            bool normal_allow = torque_allowed() && scheduler_alive &&
-                                state.throttle_signal_valid &&
-                                !g_reconnect_inhibit &&
-                                !state.component_test_normal_inhibit &&
-                                propulsion_gear &&
-                                state.propulsion_direction_armed;
-            float l = normal_allow ? (float)state.torque_L : 0.0f;
-            float r = normal_allow ? (float)state.torque_R : 0.0f;
-            bool run_l = normal_allow;
-            bool run_r = normal_allow;
+            // One consistent view of core 0's tick. Everything below reads the
+            // copy, never `state`, so left and right cannot come from
+            // different ticks and the gear is read exactly once.
+            const MotorCommandSnapshot snap = copy_motor_command();
+            const uint32_t snapshot_age_ms = now - snap.published_ms;
+            MotorCommandGates gates;
+            gates.scheduler_alive = scheduler_alive;
+            gates.reconnect_inhibit = g_reconnect_inhibit;
+            gates.component_test_inhibit = state.component_test_normal_inhibit;
+            gates.snapshot_fresh = snap.seq != 0U && snapshot_age_ms <=
+                realcar_cal::bringup::MOTOR_COMMAND_SNAPSHOT_MAX_AGE_MS;
+            // The reconnect ramp is applied below, after the component-test
+            // branch, so it does not scale a component-test command.
+            gates.reconnect_ramp_scale = 1.0f;
+            const MotorFrameCommand resolved =
+                motor_command_resolve(snap, gates, motor_command_params());
+
+            bool normal_allow = resolved.normal_allow;
+            float l = resolved.left_a;
+            float r = resolved.right_a;
+            bool run_l = resolved.run_L;
+            bool run_r = resolved.run_R;
+            int rpm_l = resolved.target_rpm_L;
+            int rpm_r = resolved.target_rpm_R;
 
             // Branch-only component test path. While a test is active it has
             // exclusive ownership of both command outputs: the unselected
@@ -175,6 +218,8 @@ namespace {
                 r = 0.0f;
                 run_l = false;
                 run_r = false;
+                rpm_l = 0;
+                rpm_r = 0;
 
                 const bool before_deadline =
                     static_cast<int32_t>(state.component_test_deadline_ms - now) > 0;
@@ -216,13 +261,18 @@ namespace {
                         const float test_a = std::fmax(0.0f, std::fmin(
                             state.component_test_current_a,
                             realcar_cal::bringup::COMPONENT_TEST_CURRENT_MAX_PER_MOTOR_A));
+                        // common_ok above already requires Gear::Drive, and
+                        // test_a is clamped non-negative, so the target speed
+                        // is the forward propulsion constant for both sides.
                         if (state.component_test_left) {
                             l = test_a;
                             run_l = true;
+                            rpm_l = DRIVE_TARGET_SPEED_RPM;
                         }
                         if (state.component_test_right) {
                             r = test_a;
                             run_r = true;
+                            rpm_r = DRIVE_TARGET_SPEED_RPM;
                         }
                     }
                 }
@@ -252,8 +302,35 @@ namespace {
             state.can_commanded_current_R = r;
             state.can_commanded_running_L = run_l;
             state.can_commanded_running_R = run_r;
-            if (g_handshaked_L) send_torque(CAN_ID_TORQUE_L, l, run_l);
-            if (g_handshaked_R) send_torque(CAN_ID_TORQUE_R, r, run_r);
+            state.motor_command_seq = snap.seq;
+
+            // Queue both frames back to back with no work in between, so the
+            // pair is as close together on the wire as CAN allows.
+            const bool tx_ok_L = !g_handshaked_L ||
+                send_torque(CAN_ID_TORQUE_L, l, rpm_l, run_l, g_life);
+            const bool tx_ok_R = !g_handshaked_R ||
+                send_torque(CAN_ID_TORQUE_R, r, rpm_r, run_r, g_life);
+
+            g_tx_fail_L = tx_ok_L ? 0U : g_tx_fail_L + 1U;
+            g_tx_fail_R = tx_ok_R ? 0U : g_tx_fail_R + 1U;
+            state.can_tx_fail_count_L = g_tx_fail_L;
+            state.can_tx_fail_count_R = g_tx_fail_R;
+
+            // A command we could not even queue is not a command. Rather than
+            // let one motor keep its last demand while the other follows a new
+            // one, hand the failure to the existing link-loss policy: both
+            // motors go to 0 A and recovery runs through the reconnect ramp.
+            if (g_tx_fail_L >= realcar_cal::bringup::MOTOR_TX_FAIL_LIMIT) {
+                g_tx_fail_L = 0U;
+                invalidate_controller_link(true, "tx failed");
+            }
+            if (g_tx_fail_R >= realcar_cal::bringup::MOTOR_TX_FAIL_LIMIT) {
+                g_tx_fail_R = 0U;
+                invalidate_controller_link(false, "tx failed");
+            }
+
+            // Both frames of a cycle share this life value. Keep the increment
+            // after both sends so a receiver can pair them.
             g_life++;
             vTaskDelayUntil(&next, period);   // configured exact cadence
         }
@@ -273,6 +350,13 @@ void begin() {
     twai_filter_config_t  f = TWAI_FILTER_CONFIG_ACCEPT_ALL();
     twai_driver_install(&g, &t, &f);
     twai_start();
+}
+
+void publish_motor_command(const MotorCommandSnapshot &snapshot) {
+    // Critical section holds a single struct copy and nothing else.
+    portENTER_CRITICAL(&g_cmd_mux);
+    g_cmd_snapshot = snapshot;
+    portEXIT_CRITICAL(&g_cmd_mux);
 }
 
 void start_life_task() {
