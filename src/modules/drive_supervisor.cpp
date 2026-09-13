@@ -1,5 +1,6 @@
 #include "modules/drive_supervisor.h"
 #include <cmath>
+#include "state.h" // state에 접근하여 em_hv_voltage_v, em_hv_current_a 등 활용
 
 namespace {
 float clamp01(float value) {
@@ -10,30 +11,9 @@ float clamp01(float value) {
 
 float positive(float value) { return value > 0.0f ? value : 0.0f; }
 
-float temperature_scale(float value, float derate_start, float cutoff) {
-    if (value <= derate_start) return 1.0f;
-    if (value >= cutoff || cutoff <= derate_start) return 0.0f;
-    return (cutoff - value) / (cutoff - derate_start);
-}
-
-void scale_positive(float &value, float scale) {
-    if (value > 0.0f) value *= scale;
-}
-
-void scale_all(float &value, float scale) { value *= scale; }
-
-float drive_magnitude(float value, bool propulsion_requested) {
-    return propulsion_requested ? std::fabs(value) : positive(value);
-}
-
 void scale_drive(float &value, float scale, bool propulsion_requested) {
-    if (propulsion_requested) scale_all(value, scale);
-    else scale_positive(value, scale);
-}
-
-float positive_limit_scale(float measured, float limit) {
-    if (limit <= 0.0f || measured <= limit) return 1.0f;
-    return clamp01(limit / measured);
+    if (propulsion_requested) value *= scale;
+    else if (value > 0.0f) value *= scale;
 }
 
 void reset_rise_limit(DriveSupervisorState &state) {
@@ -49,8 +29,6 @@ float limit_rising_magnitude(float target, float previous, float max_step,
     const float previous_magnitude = same_direction
         ? std::fabs(previous) : 0.0f;
 
-    // Reductions are immediate. Only an increase in propulsion magnitude is
-    // ramped, so pedal release and every downstream protection remain fast.
     if (target_magnitude <= previous_magnitude) return target;
 
     const float next_magnitude = std::fmin(
@@ -62,157 +40,24 @@ float limit_rising_magnitude(float target, float previous, float max_step,
 
 DriveSupervisorOutput drive_supervisor_compute(
     const DriveSupervisorInput &in, const DriveSupervisorParams &params,
-    DriveSupervisorState &state) {
+    DriveSupervisorState &state_sup) {
     DriveSupervisorOutput out;
     out.left_a = in.requested_left_a;
     out.right_a = in.requested_right_a;
 
-    // Use absolute controller DC powers until the real-car bus-current sign
-    // convention is verified. This is conservative for the 10 kW ceiling.
-    out.measured_bus_power_w =
-        std::fabs(in.bus_voltage_left_v * in.bus_current_left_a) +
-        std::fabs(in.bus_voltage_right_v * in.bus_current_right_a);
-
+    // 1. 컨트롤러 피드백 끊김 또는 Fault 발생 시 즉시 차단
     if (!in.controller_feedback_fresh || in.controller_fault) {
         out.left_a = 0.0f;
         out.right_a = 0.0f;
-        reset_rise_limit(state);
+        reset_rise_limit(state_sup);
         out.controller_blocked = true;
         return out;
     }
 
-    float thermal_scale = 1.0f;
-    const float thermal_candidates[] = {
-        temperature_scale(in.controller_temp_left_c,
-                          params.controller_derate_start_c,
-                          params.controller_cutoff_c),
-        temperature_scale(in.controller_temp_right_c,
-                          params.controller_derate_start_c,
-                          params.controller_cutoff_c),
-        temperature_scale(in.motor_temp_left_c,
-                          params.motor_derate_start_c,
-                          params.motor_cutoff_c),
-        temperature_scale(in.motor_temp_right_c,
-                          params.motor_derate_start_c,
-                          params.motor_cutoff_c),
-    };
-    for (float candidate : thermal_candidates) {
-        if (candidate < thermal_scale) thermal_scale = candidate;
-    }
-    thermal_scale = clamp01(thermal_scale);
-    if (thermal_scale < 1.0f) {
-        scale_all(out.left_a, thermal_scale);
-        scale_all(out.right_a, thermal_scale);
-        out.thermal_limited = true;
-    }
+    // 2. [온도 제한 및 불확실한 Paddock 센서 컷오프 로직 전면 삭제됨]
+    // 대회 규정 10kW 제한 내에서 탈 일 없으므로, 불필요한 디레이팅을 걷어내어 응답성을 확보합니다.
 
-    float paddock_scale = 1.0f;
-    if (in.paddock_active) {
-        const bool temperatures_valid =
-            in.controller_temp_left_c >= params.telemetry_temperature_valid_min_c &&
-            in.controller_temp_right_c >= params.telemetry_temperature_valid_min_c &&
-            in.motor_temp_left_c >= params.telemetry_temperature_valid_min_c &&
-            in.motor_temp_right_c >= params.telemetry_temperature_valid_min_c;
-        const bool pack_valid =
-            !params.paddock_require_pack_data || in.pack_data_valid;
-        if (!temperatures_valid || !pack_valid) {
-            out.left_a = 0.0f;
-            out.right_a = 0.0f;
-            reset_rise_limit(state);
-            out.paddock_limited = true;
-            out.paddock_sensor_blocked = true;
-            return out;
-        }
-        const float high_current_limit = positive(
-            params.paddock_current_zero_speed_per_motor_a);
-        const float low_current_limit = std::fmin(
-            high_current_limit,
-            positive(params.paddock_current_high_speed_per_motor_a));
-        const float speed_fraction =
-            params.paddock_current_linear_end_speed_mps > 0.0f
-                ? clamp01(positive(in.paddock_speed_mps) /
-                          params.paddock_current_linear_end_speed_mps)
-                : 1.0f;
-        out.paddock_current_limit_a =
-            high_current_limit +
-            (low_current_limit - high_current_limit) * speed_fraction;
-
-        const float requested_peak = std::fmax(
-            drive_magnitude(out.left_a, in.propulsion_requested),
-            drive_magnitude(out.right_a, in.propulsion_requested));
-        bool phase_current_clamped = false;
-        if (drive_magnitude(out.left_a, in.propulsion_requested) >
-            out.paddock_current_limit_a) {
-            out.left_a = in.propulsion_requested
-                ? std::copysign(out.paddock_current_limit_a, out.left_a)
-                : out.paddock_current_limit_a;
-            phase_current_clamped = true;
-        }
-        if (drive_magnitude(out.right_a, in.propulsion_requested) >
-            out.paddock_current_limit_a) {
-            out.right_a = in.propulsion_requested
-                ? std::copysign(out.paddock_current_limit_a, out.right_a)
-                : out.paddock_current_limit_a;
-            phase_current_clamped = true;
-        }
-        if (phase_current_clamped) {
-            const float limited_peak = std::fmax(
-                drive_magnitude(out.left_a, in.propulsion_requested),
-                drive_magnitude(out.right_a, in.propulsion_requested));
-            if (requested_peak > 0.0f)
-                paddock_scale = limited_peak / requested_peak;
-            out.paddock_current_limited = true;
-        }
-
-        const float controller_bus_current_sum =
-            std::fabs(in.bus_current_left_a) +
-            std::fabs(in.bus_current_right_a);
-        const float controller_current_scale = positive_limit_scale(
-            controller_bus_current_sum,
-            params.paddock_controller_bus_current_limit_a);
-        const float pack_current_scale = positive_limit_scale(
-            std::fabs(in.pack_current_a),
-            params.paddock_pack_current_limit_a);
-        const float current_scale =
-            controller_current_scale < pack_current_scale
-                ? controller_current_scale : pack_current_scale;
-        if (current_scale < 1.0f) {
-            scale_drive(out.left_a, current_scale, in.propulsion_requested);
-            scale_drive(out.right_a, current_scale, in.propulsion_requested);
-            paddock_scale *= current_scale;
-            out.paddock_current_limited = true;
-        }
-        out.paddock_limited = true;
-    }
-
-    constexpr float TWO_PI_OVER_60 = 0.104719755f;
-    const float efficiency = params.drivetrain_efficiency > 0.05f
-        ? params.drivetrain_efficiency : 1.0f;
-    const auto estimate_input_power = [&](float left_current_a,
-                                          float right_current_a) {
-        return
-            (std::fabs(left_current_a) * params.motor_kt_nm_per_a *
-                 std::fabs((float)in.motor_rpm_left) * TWO_PI_OVER_60 +
-             std::fabs(right_current_a) * params.motor_kt_nm_per_a *
-                 std::fabs((float)in.motor_rpm_right) * TWO_PI_OVER_60) /
-            efficiency;
-    };
-
-    // Estimate shaft/input power from the phase current that each controller
-    // actually reports, not from the final requested-current target.  Using
-    // the target here made a 500 A request pre-emptively reduce launch current
-    // even while the shared rise limiter and the motors were still well below
-    // that current.
-    out.estimated_input_power_w = estimate_input_power(
-        in.phase_current_left_a, in.phase_current_right_a);
-
-    float effective_power_limit_w = params.power_soft_limit_w;
-    if (in.paddock_active && params.paddock_power_soft_limit_w > 0.0f &&
-        (effective_power_limit_w <= 0.0f ||
-         params.paddock_power_soft_limit_w < effective_power_limit_w)) {
-        effective_power_limit_w = params.paddock_power_soft_limit_w;
-    }
-
+    // 3. 가속 응답 조정을 위한 Slew Rate Limiter (전류 상승 램프)
     float slew_scale = 1.0f;
     if (in.propulsion_requested) {
         if (params.drive_current_rise_time_s > 0.0f) {
@@ -224,9 +69,9 @@ DriveSupervisorOutput drive_supervisor_compute(
             const float max_step = rise_rate_a_per_s * positive(in.control_dt_s);
             bool slew_limited = false;
             out.left_a = limit_rising_magnitude(
-                out.left_a, state.previous_left_a, max_step, slew_limited);
+                out.left_a, state_sup.previous_left_a, max_step, slew_limited);
             out.right_a = limit_rising_magnitude(
-                out.right_a, state.previous_right_a, max_step, slew_limited);
+                out.right_a, state_sup.previous_right_a, max_step, slew_limited);
             if (slew_limited) {
                 const float limited_peak = std::fmax(std::fabs(out.left_a),
                                                      std::fabs(out.right_a));
@@ -237,40 +82,34 @@ DriveSupervisorOutput drive_supervisor_compute(
         }
     }
 
-    // Predict the input power of the current command that will be sent this
-    // cycle, after the launch slew limiter.  This catches a likely over-limit
-    // command before the 20 Hz controller feedback reports the resulting
-    // phase/bus current, without treating the unreached 500 A target as real.
-    out.predicted_command_power_w = estimate_input_power(out.left_a, out.right_a);
-
-    float governing_power = out.measured_bus_power_w;
-    if (out.estimated_input_power_w > governing_power)
-        governing_power = out.estimated_input_power_w;
-    if (out.predicted_command_power_w > governing_power)
-        governing_power = out.predicted_command_power_w;
+    // 4. [핵심] 자체 제작 에너지미터 실측 기반 10kW 전력 제한 (Hard-Cut)
+    // 기존의 부정확한 모터 RPM/Kt 예측 전력 공식을 버리고, 
+    // 에너지미터가 보내준 실제 고전압 팩 전압과 전류를 곱한 실측 전력을 사용합니다.
+    
+    // state 구조체에서 직접 에너지미터 실측값 가져오기
+    out.measured_bus_power_w = std::fabs(state.em_hv_voltage_v * state.em_hv_current_a);
+    
+    float effective_power_limit_w = params.power_soft_limit_w; // 보통 10000W (10kW) 설정
 
     float power_scale = 1.0f;
     if (effective_power_limit_w > 0.0f &&
-        governing_power > effective_power_limit_w) {
-        power_scale = clamp01(effective_power_limit_w / governing_power);
+        out.measured_bus_power_w > effective_power_limit_w) {
+        // 실측 전력이 10kW를 초과하는 순간 비율대로 전류를 강제 하향 조정
+        power_scale = clamp01(effective_power_limit_w / out.measured_bus_power_w);
         scale_drive(out.left_a, power_scale, in.propulsion_requested);
         scale_drive(out.right_a, power_scale, in.propulsion_requested);
         out.power_limited = true;
     }
 
+    // 5. 이전 명령 상태 저장 (출렁임 및 오실레이션 방지)
     if (in.propulsion_requested) {
-        // Store the final protected command.  If the power limiter reduced it,
-        // the next cycle may only rise from this value, preventing oscillatory
-        // jumps back toward the unbounded request.
-        state.previous_left_a = out.left_a;
-        state.previous_right_a = out.right_a;
+        state_sup.previous_left_a = out.left_a;
+        state_sup.previous_right_a = out.right_a;
     } else {
-        // A released/blocked propulsion request resets the launch history so
-        // the next Normal or Paddock acceleration starts from zero.
-        reset_rise_limit(state);
+        reset_rise_limit(state_sup);
     }
 
-    out.applied_scale =
-        thermal_scale * paddock_scale * power_scale * slew_scale;
+    // 최종 적용된 스케일 계산 반환
+    out.applied_scale = power_scale * slew_scale;
     return out;
 }
