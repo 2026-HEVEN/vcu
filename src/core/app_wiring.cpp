@@ -68,7 +68,7 @@ namespace {
         realcar_cal::provisional::STEERING_COUNTS_PER_UNIT,
         realcar_cal::provisional::STEERING_INVERT,
     };
-    TVYawState       tv_yaw_state{};       // yaw 제어기 이력 (전역상태 아님, 여기서만 보유)
+    TVState          tv_state{};           // TV 제어기 이력 + 게이트 상태 (전역상태 아님, 여기서만 보유)
     DriveMode        drive_mode = DriveMode::Normal;
     constexpr float  TV_DT_S = realcar_cal::confirmed::CONTROL_PERIOD_S;
     constexpr float  WHEEL_SPEED_DT_S = realcar_cal::confirmed::CONTROL_PERIOD_S;
@@ -244,7 +244,7 @@ static void torque_vectoring_update() {
         state.accel_x, state.accel_y, TV_DT_S,
         state.tv_enable_requested && state.imu_valid
     };
-    TVOutput o = tv_compute(tv_in, tv_yaw_state);
+    TVOutput o = tv_compute(tv_in, tv_state);
     state.tv_pipeline_active = o.control_active;
     state.requested_torque_L = o.torque_L;
     state.requested_torque_R = o.torque_R;

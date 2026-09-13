@@ -62,7 +62,7 @@ void test_regen_observation_checks_sign_and_freshness() {
     TEST_ASSERT_FALSE(car_check_status_compute(i).regen_active);
 }
 void test_tv_pipeline_flag_and_override() {
-    TVYawState state{};
+    TVState state{};
     const TVInput i{100,0,0,10,0,0,0.01f,true};
     TEST_ASSERT_FALSE(tv_compute(i,state).control_active); // real defaults: zero gains
     CarCheckStatusInput c{};

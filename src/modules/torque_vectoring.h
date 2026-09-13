@@ -22,6 +22,10 @@ struct TVInput {
     // (native 툴체인에서는 통과하지만 esp32dev에서만 실패해서 발견하기 어려움).
     // 안전 기본값은 state.h의 tv_enable_requested=false에서 오므로 여기선 필요 없다.
     bool  tv_enable_requested;
+    // 이번 yaw_rate가 직전 tick과 같은 IMU 샘플을 다시 읽은 값인가.
+    // true면 yaw D항이 실제 샘플 간격으로 기울기를 계산한다. 생략하면(false)
+    // 매 tick 새 샘플로 간주한다. 위와 같은 이유로 기본 멤버 초기화자 금지.
+    bool  yaw_sample_repeated;
 };
 
 struct TVOutput {
@@ -36,5 +40,16 @@ struct TVOutput {
     bool control_active; // actual pipeline gate, independent of nonzero Mz
 };
 
-// 5개 stage를 순서대로 조립한다. s는 yaw 제어기 이력(코어가 static으로 보유).
-TVOutput tv_compute(const TVInput &in, TVYawState &s);
+// 오케스트레이터 상태 (코어가 static으로 하나 보유).
+// yaw는 TV가 꺼질 때마다 초기화되는 제어기 이력이고, 나머지는 꺼져 있는
+// 동안에도 유지해야 하는 게이트 상태다.
+struct TVState {
+    TVYawState yaw{};
+    bool  speed_gate_open = false; // 저속 게이트 (히스테리시스)
+    float mz_ramp         = 0.0f;  // 0..1, TV가 켜진 직후 적용 Mz 배율
+};
+
+// 5개 stage를 순서대로 조립한다. 차량은 기본 TV_PARAMS를 쓴다.
+TVOutput tv_compute(const TVInput &in, TVState &s);
+// 같은 파이프라인에 파라미터를 주입한다 (게인을 켠 통합 테스트·튜닝용).
+TVOutput tv_compute(const TVInput &in, TVState &s, const TVParams &p);

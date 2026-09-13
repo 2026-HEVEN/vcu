@@ -40,7 +40,10 @@ struct TVParams {
     float max_steer_rad  = realcar_cal::provisional::MAX_ROAD_WHEEL_STEER_RAD;
     float understeer_grad= 0.0f;     // 언더스티어 구배 K_us (0=중립)
     float desired_yaw_max= 60.0f;    // 목표 yaw rate 상한 (deg/s)
-    float tv_min_speed_mps= 1.0f;    // 이 속도 미만에서는 TV 차등 금지
+    float tv_min_speed_mps= 1.0f;    // 이 속도 미만에서는 TV 차등 금지 (켜진 상태에서 꺼지는 기준)
+    // 꺼진 상태에서 다시 켜지는 기준. 저속 WSS 추정치가 1 m/s 부근에서 출렁일 때
+    // TV가 매 tick 켜졌다 꺼졌다 하지 않도록 끄는 기준보다 높게 둔다.
+    float tv_min_speed_on_mps = 1.5f;
 
     // --- yaw 제어기 (yaw_control stage) PID ---
     // 0/0/0은 master OFF다. 잭업·직선 검증 전에는 바꾸지 않는다.
@@ -55,6 +58,8 @@ struct TVParams {
     // D항 1차 저역통과 시정수 [s]. D는 1/dt(=100배)로 IMU 노이즈를 키우므로
     // kd를 켜기 전에 필요하다. 0이면 필터 없음.
     float derivative_filter_tau_s = 0.02f;
+    // TV가 켜질 때마다 적용 Mz를 0 → 100%로 올리는 시간 [s]. 0이면 즉시.
+    float mz_ramp_time_s = 0.25f;
 };
 
 // 팀 공용 인스턴스. 위 기본값을 바꾸면 전체 파이프라인에 반영됩니다.
@@ -75,3 +80,7 @@ static_assert(TV_PARAMS.derivative_filter_tau_s >= 0.0f,
 static_assert(TV_PARAMS.mu > 0.0f && TV_PARAMS.desired_yaw_max > 0.0f &&
               TV_PARAMS.tv_min_speed_mps >= 0.0f,
               "TV reference limits must be positive");
+static_assert(TV_PARAMS.tv_min_speed_on_mps >= TV_PARAMS.tv_min_speed_mps,
+              "TV speed gate must open at or above the speed where it closes");
+static_assert(TV_PARAMS.mz_ramp_time_s >= 0.0f,
+              "TV Mz ramp time must be non-negative");

@@ -10,39 +10,68 @@
 #include "modules/tv/allocation.h"
 #include <cmath>
 
-TVOutput tv_compute(const TVInput &in, TVYawState &s) {
+TVOutput tv_compute(const TVInput &in, TVState &s) {
+    return tv_compute(in, s, TV_PARAMS);
+}
+
+TVOutput tv_compute(const TVInput &in, TVState &s, const TVParams &p) {
     // 1) 조향 의도 → 목표 yaw rate
-    float desired_yaw = tv_reference_compute(in.steering_angle, in.vehicle_speed, TV_PARAMS);
+    float desired_yaw = tv_reference_compute(in.steering_angle, in.vehicle_speed, p);
     // 2) yaw 오차 → 요 모멘트 Mz
-    const bool gains_enabled = std::fabs(TV_PARAMS.kp) > 1.0e-6f ||
-                               std::fabs(TV_PARAMS.ki) > 1.0e-6f ||
-                               std::fabs(TV_PARAMS.kd) > 1.0e-6f;
-    const bool speed_enabled = std::isfinite(in.vehicle_speed) &&
-        std::fabs(in.vehicle_speed) >= TV_PARAMS.tv_min_speed_mps;
-    const bool control_enabled = gains_enabled && speed_enabled && in.tv_enable_requested;
+    const bool gains_enabled = std::fabs(p.kp) > 1.0e-6f ||
+                               std::fabs(p.ki) > 1.0e-6f ||
+                               std::fabs(p.kd) > 1.0e-6f;
+    // Low-speed gate with hysteresis. The quantized WSS speed estimate ripples
+    // around 1 m/s, so a single threshold would toggle TV and reset the
+    // controller every few ticks. It opens at tv_min_speed_on_mps and closes
+    // below tv_min_speed_mps; an invalid speed always closes it.
+    const float off_speed = p.tv_min_speed_mps;
+    const float on_speed = p.tv_min_speed_on_mps > off_speed
+        ? p.tv_min_speed_on_mps : off_speed;
+    if (!std::isfinite(in.vehicle_speed)) {
+        s.speed_gate_open = false;
+    } else {
+        const float speed = std::fabs(in.vehicle_speed);
+        s.speed_gate_open = s.speed_gate_open ? speed >= off_speed
+                                              : speed >= on_speed;
+    }
+    const bool control_enabled =
+        gains_enabled && s.speed_gate_open && in.tv_enable_requested;
 
     float mz = 0.0f;
     if (control_enabled) {
-        mz = tv_yaw_compute(desired_yaw, in.yaw_rate, in.dt, TV_PARAMS, s);
+        mz = tv_yaw_compute(desired_yaw, in.yaw_rate, in.dt, p, s.yaw,
+                            !in.yaw_sample_repeated);
+        // Ramp the applied Mz in after every enable so a standing yaw error
+        // does not step the left/right split the moment TV engages.
+        if (p.mz_ramp_time_s > 0.0f && std::isfinite(in.dt) && in.dt > 0.0f) {
+            s.mz_ramp += in.dt / p.mz_ramp_time_s;
+            if (s.mz_ramp > 1.0f) s.mz_ramp = 1.0f;
+        } else {
+            s.mz_ramp = 1.0f;
+        }
+        mz *= s.mz_ramp;
     } else {
         // Strict 50:50 OFF whenever any gate fails: kp=ki=kd=0 (gains),
         // low/invalid speed, or the dash TC/TV switch is off
         // (in.tv_enable_requested, wired from state.tv_enable_requested,
         // decoded from Cluster's CAN_ID_CLUSTER_CMD). Always clear history
-        // at any of these boundaries.
-        s = TVYawState{};
+        // at any of these boundaries. The speed gate itself is kept so its
+        // hysteresis survives, and the Mz ramp restarts on the next enable.
+        s.yaw = TVYawState{};
+        s.mz_ramp = 0.0f;
     }
     // 3) 가속도 → 바퀴별 수직하중 Fz
-    WheelLoads fz = tv_load_compute(in.ax, in.ay, TV_PARAMS);
+    WheelLoads fz = tv_load_compute(in.ax, in.ay, p);
     // 4) Fz + 마찰원 → 모터별 최대 상전류
-    MaxTorque lim = tv_traction_compute(fz, in.ay, TV_PARAMS);
+    MaxTorque lim = tv_traction_compute(fz, in.ay, p);
     // 5) 총전류 + Mz, 상한 제약 → 좌/우 상전류 명령
     // Strict OFF must be behaviorally identical to the pre-TV 50:50 split.
     // In particular, Stage 4 may still calculate diagnostic limits but must
     // not silently reduce longitudinal demand while TV is disabled.
     TVAllocOutput a{};
     if (control_enabled) {
-        a = tv_alloc_compute(in.total_torque, mz, lim, TV_PARAMS);
+        a = tv_alloc_compute(in.total_torque, mz, lim, p);
     } else {
         const float safe_total = std::isfinite(in.total_torque)
             ? in.total_torque : 0.0f;
