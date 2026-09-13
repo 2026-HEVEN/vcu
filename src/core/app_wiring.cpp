@@ -74,8 +74,12 @@ namespace {
         (uint16_t)realcar_cal::provisional::BRAKE_PRESSURE_VALID_MIN_ADC,
         (uint16_t)realcar_cal::provisional::BRAKE_PRESSURE_VALID_MAX_ADC,
         realcar_cal::provisional::BRAKE_PRESSURE_FULL_SCALE_BAR,
-        realcar_cal::provisional::BRAKE_ACTIVE_THRESHOLD_PCT,
+        realcar_cal::confirmed::CONTROL_PERIOD_S,
+        realcar_cal::provisional::BRAKE_FILTER_TIME_CONSTANT_S,
+        realcar_cal::provisional::BRAKE_ACTIVE_ON_THRESHOLD_PCT,
+        realcar_cal::provisional::BRAKE_ACTIVE_OFF_THRESHOLD_PCT,
     };
+    BrakeFilterState brake_filter_state{};
     TVYawState       tv_yaw_state{};       // yaw 제어기 이력 (전역상태 아님, 여기서만 보유)
     DriveMode        drive_mode = DriveMode::Normal;
     constexpr float  TV_DT_S = realcar_cal::confirmed::CONTROL_PERIOD_S;
@@ -135,8 +139,10 @@ static void brake_update() {
     state.brake_raw_adc = realcar_cal::bringup::BRAKE_SENSOR_INSTALLED
         ? analogRead(board_pins::BRAKE_PRESSURE_ADC) : 0;
     const BrakeOutput o = realcar_cal::bringup::BRAKE_SENSOR_INSTALLED
-        ? brake_compute({state.brake_raw_adc}, BRAKE_CAL) : BrakeOutput{};
+        ? brake_compute({state.brake_raw_adc}, BRAKE_CAL, brake_filter_state)
+        : BrakeOutput{};
     state.brake_pct = o.pct;
+    state.brake_filtered_adc = o.filtered_adc;
     state.brake_pressure_bar = o.pressure_bar;
     state.brake_signal_valid = o.valid;
     state.brake_active = o.active;
@@ -227,7 +233,8 @@ static void longitudinal_update() {
         state.throttle_pct, state.brake_pct, state.pack_soc, drive_mode,
         state.regen_auto_requested &&
             realcar_cal::bringup::REGEN_HARDWARE_VALIDATED &&
-            state.brake_signal_valid });
+            state.brake_signal_valid,
+        state.brake_active });
     state.longitudinal_regen_demand = state.total_torque < 0.0f;
     const bool throttle_released =
         (float)state.throttle_pct <= realcar_cal::bringup::THROTTLE_ARM_MAX_PCT;

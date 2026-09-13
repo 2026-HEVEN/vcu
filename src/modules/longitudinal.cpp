@@ -37,13 +37,20 @@ float longitudinal_compute(const LongInput &in) {
 
     // 3. 최종 토크(전류) 계산
     float drive = (in.throttle_pct / 100.0f) * drive_max_a;
+    float regen_request_pct = 0.0f;
+    if (in.brake_pct > realcar_cal::provisional::BRAKE_REGEN_START_PCT) {
+        regen_request_pct =
+            (in.brake_pct - realcar_cal::provisional::BRAKE_REGEN_START_PCT) /
+            (100.0f - realcar_cal::provisional::BRAKE_REGEN_START_PCT) * 100.0f;
+    }
     float regen = in.regen_auto_enabled
-        ? (in.brake_pct / 100.0f) * regen_max_a
+        ? (regen_request_pct / 100.0f) * regen_max_a
         : 0.0f;
 
     // 4. 안전 로직: Brake Override (양발 운전 급발진 방지)
-    // [권장 피드백 반영] 센서 노이즈나 발을 살짝 올려둔 상태(데드존)를 무시하기 위해 5% 초과일 때만 구동 차단
-    if (in.brake_pct > realcar_cal::provisional::BRAKE_ACTIVE_THRESHOLD_PCT) {
+    // 브레이크 모듈의 필터·5% ON/3% OFF 히스테리시스 결과를 그대로 사용해
+    // 임계값 근처의 ADC 노이즈가 구동 허용을 반복 전환하지 않게 한다.
+    if (in.brake_active) {
         drive = 0.0f; 
     }
 

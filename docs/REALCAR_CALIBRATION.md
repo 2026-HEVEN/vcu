@@ -218,7 +218,8 @@ CarMaker 타이어 반경 0.22606 m와 감속비 3.73은 시뮬레이션 플랜�
 - CAN RX/TX = D16/D17, throttle ADC = D32, brake pressure ADC = D26, gear ADC = D27
 - WSS FL/FR/RL/RR = D36/D39/D34/D35
 - steering ADC = D25, IMU RX/TX = D22/D21
-- 브레이크는 PCB의 12 V→3.3 V 디지털 변환 뒤 HIGH를 raw 4095로 매핑한다.
+- 브레이크 압력센서는 5 V 센서 출력에 보호용 분압을 적용한 뒤 GPIO26 ADC로 읽는다.
+  실측 2점 보정, 입력 필터, 5% ON/3% OFF 히스테리시스를 거쳐 제어에 사용한다.
 - 하네스 v5에 shutdown/start 전용 VCU GPIO가 없으므로 safety wrapper도
   `GPIO-fixed`와 동일하게 hard-wire/Cluster 경로를 전제로 한다.
 

@@ -32,12 +32,12 @@ int main() {
         if(m.yaw_valid) assert(std::fabs(rx.imu.yaw_dps-m.yaw_dps)<.011f);
         if(m.accel_valid) assert(std::fabs(rx.imu.ay_g-m.ay_g)<.011f);
     }
-    for(int flags=0;flags<128;++flags) {
+    for(int flags=0;flags<256;++flags) {
         car_check::Control c;
         c.tv_requested=c.regen_requested=c.paddock_requested=true;
         c.tv_active=flags&1; c.regen_available=flags&2; c.regen_active=flags&4;
         c.paddock_active=flags&8; c.output_allowed=flags&16;
-        c.cluster_fresh=flags&32; c.brake_installed=flags&64;
+        c.cluster_fresh=flags&32; c.brake_installed=flags&64; c.brake_valid=flags&128;
         c.tv_block=0x7f; c.regen_block=0xff; c.life=42;
         car_check::encode_control(c,d);
         assert(rx.receive(car_check::CONTROL_ID,true,8,d,3000));
@@ -46,10 +46,11 @@ int main() {
         assert(r.tv_active==c.tv_active && r.regen_available==c.regen_available);
         assert(r.regen_active==c.regen_active && r.paddock_active==c.paddock_active);
         assert(r.output_allowed==c.output_allowed && r.cluster_fresh==c.cluster_fresh);
-        assert(r.brake_installed==c.brake_installed && r.tv_block==0x7f && r.regen_block==0xff);
+        assert(r.brake_installed==c.brake_installed && r.brake_valid==c.brake_valid);
+        assert(r.tv_block==0x7f && r.regen_block==0xff);
         assert(r.life==42);
     }
     assert(rx.control_quality(3300)==car_check::Quality::Valid);
     assert(rx.control_quality(3301)==car_check::Quality::Stale);
-    std::puts("PASS: actual VCU encoder -> actual Cluster receiver (2149 vectors + freshness)");
+    std::puts("PASS: actual VCU encoder -> actual Cluster receiver (2277 vectors + freshness)");
 }

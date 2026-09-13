@@ -76,8 +76,14 @@ void test_provisional_brake_pressure_calibration_is_bounded() {
     TEST_ASSERT_TRUE(realcar_cal::provisional::BRAKE_PRESSURE_FULL_SCALE_ADC <
         realcar_cal::provisional::BRAKE_PRESSURE_VALID_MAX_ADC);
     TEST_ASSERT_TRUE(realcar_cal::provisional::BRAKE_PRESSURE_VALID_MAX_ADC <= 4095U);
+    TEST_ASSERT_TRUE(realcar_cal::provisional::BRAKE_FILTER_TIME_CONSTANT_S > 0.0f);
+    TEST_ASSERT_TRUE(realcar_cal::provisional::BRAKE_ACTIVE_OFF_THRESHOLD_PCT <
+        realcar_cal::provisional::BRAKE_ACTIVE_ON_THRESHOLD_PCT);
     TEST_ASSERT_EQUAL_FLOAT(5.0f,
-        realcar_cal::provisional::BRAKE_ACTIVE_THRESHOLD_PCT);
+        realcar_cal::provisional::BRAKE_ACTIVE_ON_THRESHOLD_PCT);
+    TEST_ASSERT_EQUAL_FLOAT(
+        realcar_cal::provisional::BRAKE_ACTIVE_ON_THRESHOLD_PCT,
+        realcar_cal::provisional::BRAKE_REGEN_START_PCT);
 }
 
 void test_can_rx_queue_has_burst_margin_for_debug_logging() {

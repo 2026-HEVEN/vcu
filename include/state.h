@@ -18,6 +18,7 @@ struct VehicleState {
     bool      throttle_signal_valid = false; // false below disconnected-signal floor
     Percent   throttle_pct;       // 0..100 (clamped both ways)
     int       brake_raw_adc = 0;  // diagnostics/calibration; ESP32 ADC 0..4095
+    float     brake_filtered_adc = 0.0f;
     Pct0to100 brake_pct;
     float     brake_pressure_bar = 0.0f;
     bool      brake_signal_valid = false;

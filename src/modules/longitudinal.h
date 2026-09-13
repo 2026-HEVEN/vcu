@@ -9,6 +9,7 @@ struct LongInput {
     float pack_soc;       // 0..1
     DriveMode mode;
     bool regen_auto_enabled;
+    bool brake_active;    // filtered + hysteretic discrete brake state
 };
 
 float longitudinal_compute(const LongInput &in);   // + = drive, - = regen
