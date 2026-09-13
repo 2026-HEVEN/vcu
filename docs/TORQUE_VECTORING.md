@@ -61,7 +61,8 @@ I_right = base_A + diff_A
 - TV가 켜질 때마다 적용 Mz를 `mz_ramp_time_s`(0.25 s) 동안 0 → 100 %로 올린다.
 - IMU rate-of-turn 샘플이 실제로 fresh하고(`imu_telemetry.yaw_valid`) 조향 입력이 유효할
   때만 켜진다. `STEERING_SENSOR_INSTALLED = false`인 현재 차량에서는 게인을 올려도 TV가
-  켜지지 않는다.
+  켜지지 않는다. 판단 로직은 `tv/input_gate.cpp`와 `steering_sample_valid()`에 있고
+  `app_wiring.cpp`는 결과를 전달만 한다.
 - 적분 상태는 `integral_max`와 `yaw_moment_max / ki` 중 작은 값으로 제한한다.
 - D항은 `derivative_filter_tau_s`(20 ms) 1차 저역통과를 거친다. 같은 IMU 샘플을 다시
   읽은 tick은 D를 유지하고, 다음 새 샘플에서 실제 샘플 간격으로 기울기를 계산한다.

@@ -9,3 +9,9 @@ struct SteerRaw   { uint16_t counts; };                          // 12-bit ADC -
 struct SteerCalib { uint16_t center_counts; float counts_per_unit; bool invert; };
 
 Unit steering_compute(const SteerRaw &raw, const SteerCalib &c);
+
+// 조향 샘플을 믿을 수 있는가. 센서 미설치(ADC 핀이 떠 있음), ADC 레일 근처
+// (단선·단락), 계산 결과가 유한하지 않으면 false. 계기판 valid와 TV 게이트가
+// 같은 판단을 쓰도록 여기 한 곳에 둔다.
+bool steering_sample_valid(const SteerRaw &raw, float steering_unit,
+                           bool sensor_installed);
