@@ -46,8 +46,7 @@ namespace {
     bool                g_bus_recovery_pending = false;
     uint8_t            g_life = 0;
     uint8_t            g_status_life = 0;
-    unsigned           g_tx_fail_L = 0U;   // life_task only
-    unsigned           g_tx_fail_R = 0U;   // life_task only
+    unsigned           g_tx_fail[2] = {0U, 0U};   // [0]=L, [1]=R, life_task only
 
     // The only command data shared between the cores.
     portMUX_TYPE         g_cmd_mux = portMUX_INITIALIZER_UNLOCKED;
@@ -117,6 +116,18 @@ namespace {
         m.identifier = id; m.extd = 1; m.data_length_code = 8;
         for (int i = 0; i < 8; ++i) m.data[i] = data[i];
         return twai_transmit(&m, pdMS_TO_TICKS(5)) == ESP_OK;
+    }
+
+    // A frame we could not even queue is not a command. Repeated failure goes
+    // to the existing link-loss policy: both motors 0 A, reconnect ramp back.
+    void note_tx_result(bool left, bool tx_ok, unsigned &telemetry) {
+        unsigned &fails = g_tx_fail[left ? 0 : 1];
+        fails = tx_ok ? 0U : fails + 1U;
+        telemetry = fails;
+        if (fails >= realcar_cal::bringup::MOTOR_TX_FAIL_LIMIT) {
+            fails = 0U;
+            invalidate_controller_link(left, "tx failed");
+        }
     }
 
     void life_task(void *) {
@@ -282,21 +293,8 @@ namespace {
             const bool tx_ok_R = !g_handshaked_R ||
                 send_torque(CAN_ID_TORQUE_R, r, rpm_r, run_r, g_life);
 
-            g_tx_fail_L = tx_ok_L ? 0U : g_tx_fail_L + 1U;
-            g_tx_fail_R = tx_ok_R ? 0U : g_tx_fail_R + 1U;
-            state.can_tx_fail_count_L = g_tx_fail_L;
-            state.can_tx_fail_count_R = g_tx_fail_R;
-
-            // Hand repeated failure to the existing link-loss policy:
-            // both motors to 0 A, recovery through the reconnect ramp.
-            if (g_tx_fail_L >= realcar_cal::bringup::MOTOR_TX_FAIL_LIMIT) {
-                g_tx_fail_L = 0U;
-                invalidate_controller_link(true, "tx failed");
-            }
-            if (g_tx_fail_R >= realcar_cal::bringup::MOTOR_TX_FAIL_LIMIT) {
-                g_tx_fail_R = 0U;
-                invalidate_controller_link(false, "tx failed");
-            }
+            note_tx_result(true,  tx_ok_L, state.can_tx_fail_count_L);
+            note_tx_result(false, tx_ok_R, state.can_tx_fail_count_R);
 
             g_life++;   // after both sends: the pair shares one life value
             vTaskDelayUntil(&next, period);   // configured exact cadence
