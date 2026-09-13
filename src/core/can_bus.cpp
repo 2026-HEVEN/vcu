@@ -458,6 +458,18 @@ void poll_rx() {
             state.bms_last_rx_ms = now;
             continue;
         }
+
+        // --- Energy Meter (IVT-S) Data Processing ---
+        if (m.data_length_code == 8 && m.identifier == CAN_ID_IVT_CURRENT) {
+            state.energy_meter_current_a = decode_ivt_current(m.data);
+            state.energy_meter_last_rx_ms = now;
+            continue;
+        }
+        if (m.data_length_code == 8 && m.identifier == CAN_ID_IVT_VOLTAGE) {
+            state.energy_meter_voltage_v = decode_ivt_voltage(m.data);
+            state.energy_meter_last_rx_ms = now;
+            continue;
+        }
     }
     const uint32_t now = millis();
     const auto fresh = [now](uint32_t timestamp, uint32_t max_age_ms) {
