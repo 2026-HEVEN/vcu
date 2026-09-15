@@ -44,7 +44,7 @@ total phase current + Mz -> left/right phase-current commands
 |---|---|---|---|
 | Reference | `tv/reference.cpp` | `(Unit, Mps) → DegPerSec` | 정상원선회 바이시클 모델, 저속·마찰 yaw 상한 |
 | Yaw control | `tv/yaw_control.cpp` | `(DegPerSec, DegPerSec, Seconds) → NewtonMetre` | PID, measurement derivative, 연속 deadband, 조건부 적분 및 하드 제한 |
-| Load | `tv/load.cpp` | `(GForce, GForce) → Newton×2` | 후축 정적하중, 종하중 이동, 별도 LLTD 기반 횡하중 이동 |
+| Load | `tv/load.cpp` | `(GForce, GForce) → Newton×2` | 후축 정적하중, 종하중 이동, 롤 모멘트 평형 기반 LLTD 횡하중 이동 |
 | Traction | `tv/traction.cpp` | `(Newton×2, GForce) → Ampere×2` | 마찰원, `Kt×gear×radius` 전류 변환, 잘못된 입력에서 0 A |
 | Allocation | `tv/allocation.cpp` | `(Ampere, NewtonMetre, Ampere×2) → Amp×2` | yaw 우선, 공통 전류 축소, 장비/그립 한도와 구동·회생 부호 보존 |
 
@@ -79,7 +79,9 @@ I_right = base_A + diff_A
   바퀴 RPM을 만들고, RPM은 타이어 유효 구름반경으로 차속에 환산한다.
 
 - 운전자 포함 질량, 축거, 윤거, CG 높이
-- 정적 후축 하중 배분과 후축 LLTD
+- 정적 후축 하중 배분과 후축 LLTD (안티롤바가 없으므로 LLTD는 스프링 레이트,
+  모션비, 롤센터 높이로 결정된다. 측정 항목과 산출 절차는 Notion 「LLTD 실측」
+  참고 자료에 정리돼 있다.)
 - steering `Unit`과 실제 타이어 조향각의 매핑
 - IMU yaw, 조향 및 좌·우 모터의 실제 부호
 - 노면별 `mu`와 좌우 차등 전류의 허용 변화율
