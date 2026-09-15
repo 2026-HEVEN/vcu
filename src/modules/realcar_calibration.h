@@ -63,6 +63,11 @@ constexpr int COMPONENT_TEST_START_MAX_MOTOR_RPM = 50;
 // Energy Meter remains authoritative when validating the model.
 constexpr bool ENABLE_DRIVE_POWER_LIMIT = true;
 constexpr float DRIVE_POWER_SOFT_LIMIT_W = 8000.0f;
+
+// [신규] 에너지 미터 제어 파라미터 (검증 전에는 관찰만 수행)
+constexpr bool ENABLE_ENERGY_METER_LIMIT = false; 
+constexpr unsigned ENERGY_METER_STALE_MS = 50U; // 100Hz 기준 5프레임 누락 시 타임아웃
+
 constexpr float DRIVETRAIN_EFFICIENCY = 0.92f;
 constexpr float CONTROLLER_FEEDBACK_STALE_MS = 250.0f;
 // Motor-controller command/life frame cadence. Set 10 ms for 100 Hz or 50 ms
@@ -161,7 +166,7 @@ constexpr float THROTTLE_RAW_MAX = 3000.0f;
 // 누적 WSS 펄스와 실주행 거리로 다시 식별한다.
 constexpr float WHEEL_SPEED_ROLLING_RADIUS_M = 0.2387f;
 // 토크->타이어 종력 환산용 유효반경. 우선 같은 값을 쓰되 별도 이름으로
-// 유지하여 필요할 때 차속용 반경과 독립 보정할 수 있게 한다.
+// 유지하여 필요할 때 차속용 반경과 독립 보정할 수 있게 전용 이름 부여.
 constexpr float TV_FORCE_RADIUS_M = 0.2387f;
 
 // CarMaker BOM197/설계 형상에서 가져온 실차 시험 시작값. 줄자·코너웨이트
