@@ -20,10 +20,10 @@ constexpr uint8_t SA_CONTROLLER_L = 0xEF;
 constexpr uint8_t SA_CONTROLLER_R = 0xF0;
 constexpr uint8_t SA_ENERGY_METER = 0x17;
 
-// --- CAN IDs ---
+// --- Torque command IDs (29-bit extended) ---
 constexpr uint32_t CAN_ID_TORQUE_L = 0x0C01EFD0;
 constexpr uint32_t CAN_ID_TORQUE_R = 0x0C01F0D0;
-constexpr uint32_t CAN_ID_ENERGY_METER = 0x180117D0; // 에너지 미터 CAN ID (DBC에 맞게 수정 필요)
+constexpr uint32_t CAN_ID_ENERGY_METER = 0x180117D0; // TODO: DBC에 맞춰 수정
 
 // --- Torque scaling: raw = (amps + 3200) * 10 ---
 uint16_t torque_to_raw(float amps);
