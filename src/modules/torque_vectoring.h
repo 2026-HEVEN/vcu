@@ -1,6 +1,7 @@
 #pragma once
 #include "types.h"
 #include "modules/tv/yaw_control.h"   // TVYawState (제어기 이력) 재노출
+#include "modules/tv/gate.h"          // TVGate (게이트 판정 결과) 재노출
 // ============================================================
 //  [ORCHESTRATOR] 토크벡터링 통합 이음새 — 수정 불필요(코어 담당 영역).
 //  실제 로직은 src/modules/tv/ 의 5개 stage에 있습니다. 팀원은 거기만 채우세요.
@@ -22,6 +23,12 @@ struct TVInput {
     // (native 툴체인에서는 통과하지만 esp32dev에서만 실패해서 발견하기 어려움).
     // 안전 기본값은 state.h의 tv_enable_requested=false에서 오므로 여기선 필요 없다.
     bool  tv_enable_requested;
+    // 이전에는 app_wiring이 이 둘을 입력에 "밀수"했다: !vehicle_speed_valid를
+    // vehicle_speed=0으로 바꿔 저속 컷오프에 걸리게 하고, imu_valid는
+    // tv_enable_requested에 AND로 접어 넣었다. 그래서 tv_compute는 "진짜 정지"와
+    // "속도센서 사망"을 구분할 수 없었고 차단 사유도 관측 불가였다. 명시 필드로 승격.
+    bool  vehicle_speed_valid;
+    bool  imu_valid;
 };
 
 struct TVOutput {
@@ -33,7 +40,7 @@ struct TVOutput {
     float yaw_moment;
     float fz_L, fz_R;
     float max_torque_L, max_torque_R;
-    bool control_active; // actual pipeline gate, independent of nonzero Mz
+    TVGate gate;         // 게이트 판정 + 개별 차단 사유 (계기판 진단용)
 };
 
 // 5개 stage를 순서대로 조립한다. s는 yaw 제어기 이력(코어가 static으로 보유).

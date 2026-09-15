@@ -235,15 +235,17 @@ static void longitudinal_update() {
     }
 }
 static void torque_vectoring_update() {
+    // 게이트 조건을 여기서 미리 접지 않는다. 원본 값과 유효성 플래그를 그대로
+    // 넘기고, 판정은 tv_gate_evaluate()가 단독으로 한다.
     const TVInput tv_in{
         state.total_torque, state.yaw_rate, state.steering_angle,
-        // 전륜 신호를 못 믿으면 차속 0 → reference stage의 저속 컷오프에 걸려 TV가 꺼진다.
-        state.vehicle_speed_valid ? state.vehicle_speed_mps : 0.0f,
+        state.vehicle_speed_mps,
         state.accel_x, state.accel_y, TV_DT_S,
-        state.tv_enable_requested && state.imu_valid
+        state.tv_enable_requested, state.vehicle_speed_valid, state.imu_valid
     };
     TVOutput o = tv_compute(tv_in, tv_yaw_state);
-    state.tv_pipeline_active = o.control_active;
+    state.tv_gate = o.gate;
+    state.tv_pipeline_active = o.gate.active;
     state.requested_torque_L = o.torque_L;
     state.requested_torque_R = o.torque_R;
     // 중간신호 관측용 복사 (debug_monitor / Cluster에서 튜닝에 사용)

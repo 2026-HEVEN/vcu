@@ -9,6 +9,7 @@
 #include "car_check_protocol.h"
 #include "modules/gear.h"
 #include "modules/vehicle_speed.h"   // WheelIdx / WHEEL_COUNT
+#include "modules/torque_vectoring.h" // TVGate
 // [LOCKED] Shared state bus. ONLY core/app_wiring.cpp may include this.
 // Module files (src/modules/*) must never include state.h.
 
@@ -29,6 +30,8 @@ struct VehicleState {
     car_check::Imu imu_telemetry;
     car_check::Wheels wheel_telemetry;
     bool tv_pipeline_active = false;
+    // 게이트 판정 결과. can_bus가 차단 사유를 재계산하지 않고 이 값을 읽는다.
+    TVGate tv_gate{};
     uint32_t sensor_telemetry_tx_drops = 0; // best-effort display CAN queue failures
     Rpm       wheel_speed[WHEEL_COUNT];   // FL, FR, RL, RR (개별 휠속)
     uint32_t  wheel_pulse_total[WHEEL_COUNT]{}; // hand-spin sensor check

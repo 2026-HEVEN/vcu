@@ -63,8 +63,13 @@ void test_regen_observation_checks_sign_and_freshness() {
 }
 void test_tv_pipeline_flag_and_override() {
     TVYawState state{};
-    const TVInput i{100,0,0,10,0,0,0.01f,true};
-    TEST_ASSERT_FALSE(tv_compute(i,state).control_active); // real defaults: zero gains
+    // 스위치/차속유효/IMU를 전부 정상으로 두고도 게인이 0이면 TV는 비활성이어야
+    // 한다. (다른 조건까지 같이 꺼두면 "게인 0 때문"이라는 걸 증명하지 못한다)
+    const TVInput i{100,0,0,10,0,0,0.01f,true,true,true};
+    const TVGate g = tv_compute(i,state).gate;
+    TEST_ASSERT_FALSE(g.active);        // real defaults: zero gains
+    TEST_ASSERT_FALSE(g.gains_enabled);
+    TEST_ASSERT_TRUE(g.driver_switch_on);
     CarCheckStatusInput c{};
     c.tv_pipeline_active=c.output_allowed=c.cluster_fresh=true;
     TEST_ASSERT_TRUE(car_check_status_compute(c).tv_active);

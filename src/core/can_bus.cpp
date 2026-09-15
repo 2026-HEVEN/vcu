@@ -327,15 +327,15 @@ void send_sensor_telemetry() {
         !state.component_test_normal_inhibit && state.propulsion_direction_armed &&
         state.controller_feedback_fresh && !state.controller_fault_latched &&
         (state.gear == Gear::Drive || state.gear == Gear::Reverse);
-    const bool gains = std::fabs(TV_PARAMS.kp)>1.0e-6f ||
-        std::fabs(TV_PARAMS.ki)>1.0e-6f || std::fabs(TV_PARAMS.kd)>1.0e-6f;
+    // 차단 사유를 여기서 재계산하지 않는다. 판정은 tv_gate_evaluate()가 이미
+    // 했고, app_wiring이 state.tv_gate에 넣어둔 그 결과만 그대로 보고한다.
+    const TVGate &tv_gate = state.tv_gate;
     const CarCheckStatusInput in {
         state.tv_enable_requested, state.regen_auto_requested,
         state.paddock_requested, state.paddock_active, state.cluster_cmd_alive,
-        state.tv_pipeline_active, gains, state.imu_valid,
-        state.vehicle_speed_valid,
-        std::isfinite(state.vehicle_speed_mps) &&
-            std::fabs(state.vehicle_speed_mps)>=TV_PARAMS.tv_min_speed_mps,
+        state.tv_pipeline_active, tv_gate.gains_enabled, tv_gate.imu_valid,
+        tv_gate.speed_valid,
+        tv_gate.speed_above_min,
         output_allowed, state.component_test_active || state.time_sync_active,
         realcar_cal::bringup::REGEN_HARDWARE_VALIDATED,
         realcar_cal::bringup::BRAKE_SENSOR_INSTALLED, state.pack_data_valid,
