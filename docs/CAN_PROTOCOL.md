@@ -205,7 +205,8 @@
 | 1 | Flags | bit0 Brake, bit1 HV active, bit2 SOC valid, bit3 Throttle valid, bit4 Paddock active, bit7-5 reserved(0) |
 | 2 | SOC | 0~100, bit2가 1일 때만 유효 |
 | 3 | Throttle | 보정된 스로틀 0~100%, bit3가 1일 때만 유효 |
-| 4~6 | 예약 | 0 |
+| 4~5 | Brake pressure | unsigned little-endian, raw × 0.1 bar; invalid이면 0 |
+| 6 | Brake pressure validity | bit0=1일 때 byte4~5 유효, bit7~1=0 |
 | 7 | Life | 0~255 |
 
 현재 VCU는 Cluster가 BLE BMS를 직접 표시하므로 SOC valid를 0으로 보낸다.
@@ -216,6 +217,11 @@ Throttle은 VCU의 보정 범위 `(raw - RAW_MIN) / (RAW_MAX - RAW_MIN)`를 0~10
 출력에 사용한다.
 Paddock active는 Cluster의 스위치 요청값이 아니라 VCU가 실제로 패독 제한을
 적용 중일 때만 1로 보내는 확인 신호다.
+
+Brake ON/OFF bit는 필터된 보정 압력이 5%를 초과하면 1, 이후 3% 이하로
+내려가면 0이 된다. 압력센서 미설치,
+단선·단락 범위 또는 미보정 상태에서는 valid=0, 압력 raw=0으로 보내며 회생을
+허용하지 않는다. 압력의 영점·풀스케일은 실차 2점 보정값으로 교체해야 한다.
 
 ### 5.9 VCU → Cluster/TMA-1 : 단일 차량속도 `0x1803C0D0` (HEVEN 정의) · 50ms
 

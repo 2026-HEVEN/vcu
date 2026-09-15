@@ -60,11 +60,30 @@ void test_bringup_drive_phase_current_ceiling_is_500_a_per_motor() {
 
 void test_unverified_inputs_are_fail_closed() {
     TEST_ASSERT_TRUE(realcar_cal::bringup::GEAR_SELECTOR_INSTALLED);
+    TEST_ASSERT_FALSE(realcar_cal::bringup::BRAKE_SENSOR_INSTALLED);
     TEST_ASSERT_FALSE(realcar_cal::bringup::REGEN_HARDWARE_VALIDATED);
     TEST_ASSERT_TRUE(realcar_cal::bringup::ENABLE_DRIVE_POWER_LIMIT);
     TEST_ASSERT_FALSE(realcar_cal::bringup::PADDOCK_CURRENT_CALIBRATED);
     TEST_ASSERT_EQUAL_FLOAT(8000.0f,
         realcar_cal::bringup::DRIVE_POWER_SOFT_LIMIT_W);
+}
+
+void test_provisional_brake_pressure_calibration_is_bounded() {
+    TEST_ASSERT_TRUE(realcar_cal::provisional::BRAKE_PRESSURE_VALID_MIN_ADC <
+        realcar_cal::provisional::BRAKE_PRESSURE_ZERO_ADC);
+    TEST_ASSERT_TRUE(realcar_cal::provisional::BRAKE_PRESSURE_ZERO_ADC <
+        realcar_cal::provisional::BRAKE_PRESSURE_FULL_SCALE_ADC);
+    TEST_ASSERT_TRUE(realcar_cal::provisional::BRAKE_PRESSURE_FULL_SCALE_ADC <
+        realcar_cal::provisional::BRAKE_PRESSURE_VALID_MAX_ADC);
+    TEST_ASSERT_TRUE(realcar_cal::provisional::BRAKE_PRESSURE_VALID_MAX_ADC <= 4095U);
+    TEST_ASSERT_TRUE(realcar_cal::provisional::BRAKE_FILTER_TIME_CONSTANT_S > 0.0f);
+    TEST_ASSERT_TRUE(realcar_cal::provisional::BRAKE_ACTIVE_OFF_THRESHOLD_PCT <
+        realcar_cal::provisional::BRAKE_ACTIVE_ON_THRESHOLD_PCT);
+    TEST_ASSERT_EQUAL_FLOAT(5.0f,
+        realcar_cal::provisional::BRAKE_ACTIVE_ON_THRESHOLD_PCT);
+    TEST_ASSERT_EQUAL_FLOAT(
+        realcar_cal::provisional::BRAKE_ACTIVE_ON_THRESHOLD_PCT,
+        realcar_cal::provisional::BRAKE_REGEN_START_PCT);
 }
 
 void test_can_rx_queue_has_burst_margin_for_debug_logging() {
@@ -131,6 +150,7 @@ int main(int, char **) {
     RUN_TEST(test_dual_motor_bringup_requires_both_controllers);
     RUN_TEST(test_bringup_drive_phase_current_ceiling_is_500_a_per_motor);
     RUN_TEST(test_unverified_inputs_are_fail_closed);
+    RUN_TEST(test_provisional_brake_pressure_calibration_is_bounded);
     RUN_TEST(test_can_rx_queue_has_burst_margin_for_debug_logging);
     RUN_TEST(test_rehandshake_timeout_and_recovery_timing_are_configured);
     RUN_TEST(test_throttle_signal_and_zero_percent_thresholds);

@@ -41,7 +41,7 @@ void encode_control(const Control &in, uint8_t out[8]) {
     out[1]=(in.tv_requested?1:0)|(in.regen_requested?2:0)|(in.paddock_requested?4:0);
     out[2]=(in.tv_active?1:0)|(in.regen_available?2:0)|(in.regen_active?4:0)|
         (in.paddock_active?8:0)|(in.output_allowed?16:0)|(in.cluster_fresh?32:0)|
-        (in.brake_installed?64:0);
+        (in.brake_installed?64:0)|(in.brake_valid?128:0);
     out[3]=in.tv_block; out[4]=in.regen_block; out[7]=in.life;
 }
 }

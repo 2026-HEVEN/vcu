@@ -17,6 +17,10 @@ namespace realcar_cal {
 // Temporary bring-up profile for the current dual-motor vehicle.
 // Set these back to production requirements as hardware is installed.
 namespace bringup {
+// Keep false until the pressure sensor is physically installed, DOT4
+// compatibility is confirmed, and the provisional ADC calibration below has
+// been replaced by measurements. The firmware is analog-pressure ready while
+// remaining fail-closed for regenerative braking during bring-up.
 constexpr bool BRAKE_SENSOR_INSTALLED = false;
 // The completed harness connects the gear selector to GPIO27. Stable Drive
 // and Reverse classifications can grant propulsion after the stopped,
@@ -156,6 +160,25 @@ namespace provisional {
 // readings from the 5 Hz serial diagnostics before a driven test.
 constexpr float THROTTLE_RAW_MIN = 500.0f;
 constexpr float THROTTLE_RAW_MAX = 3000.0f;
+
+// Provisional 35342-2E500 brake-pressure calibration for a 5 V ratiometric
+// 0.5--4.5 V sensor behind the documented 2/3 divider into a 3.3 V, 12-bit ADC.
+// 414 and 3723 are electrical estimates, NOT vehicle calibration. Replace
+// zero/full-scale counts and full-scale pressure from a parallel gauge test
+// before setting BRAKE_SENSOR_INSTALLED=true.
+constexpr unsigned BRAKE_PRESSURE_ZERO_ADC = 414U;
+constexpr unsigned BRAKE_PRESSURE_FULL_SCALE_ADC = 3723U;
+constexpr unsigned BRAKE_PRESSURE_VALID_MIN_ADC = 200U;
+constexpr unsigned BRAKE_PRESSURE_VALID_MAX_ADC = 3950U;
+constexpr float BRAKE_PRESSURE_FULL_SCALE_BAR = 200.0f;
+// A short first-order filter removes ADC jitter without intentionally slowing
+// the hydraulic brake. ON/OFF thresholds provide hysteresis around release.
+constexpr float BRAKE_FILTER_TIME_CONSTANT_S = 0.02f;
+constexpr float BRAKE_ACTIVE_ON_THRESHOLD_PCT = 5.0f;
+constexpr float BRAKE_ACTIVE_OFF_THRESHOLD_PCT = 3.0f;
+// No regenerative current is requested at or below this input. Above it, the
+// remaining range is remapped continuously to 0..100% regen demand.
+constexpr float BRAKE_REGEN_START_PCT = 5.0f;
 
 // 초기값: 구름둘레 1.50 m / 2pi. 운전자 탑승·실사용 공기압 상태에서
 // 누적 WSS 펄스와 실주행 거리로 다시 식별한다.

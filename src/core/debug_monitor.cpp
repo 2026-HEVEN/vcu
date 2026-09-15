@@ -261,7 +261,7 @@ void debug_update() {
             last_summary_ms = now;
             const imu_driver::Diagnostics imu_diag = imu_driver::diagnostics();
             Serial.printf(
-                "STAT arm=%d dm=%d hs=%d/%d fb=%d/%d fault=%d gear=%u/%u raw=%u thr=%d/%d/%.1f imu=%d sync=%d/%d test=%d/%u\n"
+                "STAT arm=%d dm=%d hs=%d/%d fb=%d/%d fault=%d gear=%u/%u raw=%u thr=%d/%d/%.1f brk=%d/%.1f/%d/%.1fbar/%.1f%% imu=%d sync=%d/%d test=%d/%u\n"
                 "MCU V=%.1f/%.1f Ibus=%+.1f/%+.1f Iph=%+.1f/%+.1f rpm=%d/%d tempC=%d/%d,%d/%d err=%02X%02X%02X/%02X%02X%02X\n"
                 "CAN state=%u age1=%u/%u age2=%u/%u q=%u peak=%u rxMiss=%u busErr=%u arbLost=%u txFail=%u | WSS=%.0f/%.0f/%.0f/%.0f pulse=%u/%u/%u/%u\n"
                 "IMU valid=%d yaw=%+.2f ax=%+.3f ay=%+.3f rxBytes=%u frames=%u csErr=%u\n",
@@ -273,6 +273,9 @@ void debug_update() {
                 (unsigned)state.gear_sensed, (unsigned)state.gear_raw_adc,
                 state.throttle_raw_adc, state.throttle_signal_valid,
                 (float)state.throttle_pct,
+                state.brake_raw_adc, state.brake_filtered_adc,
+                state.brake_signal_valid,
+                state.brake_pressure_bar, (float)state.brake_pct,
                 state.imu_valid, state.time_sync_armed, state.time_sync_active,
                 state.component_test_active, test_remaining_ms,
                 state.controller_fb1_L.bus_voltage_v,

@@ -47,9 +47,13 @@ void test_requested_is_not_active() {
 void test_regen_observation_checks_sign_and_freshness() {
     CarCheckStatusInput i{};
     i.regen_requested=i.cluster_fresh=i.output_allowed=i.regen_validated=true;
-    i.brake_installed=i.bms_valid=i.brake_demand=i.longitudinal_regen_demand=true;
+    i.brake_installed=i.brake_valid=i.bms_valid=i.brake_demand=
+        i.longitudinal_regen_demand=true;
     i.pack_soc=0.5f; i.direction_sign=1; i.left_a=i.right_a=-10;
-    TEST_ASSERT_TRUE(car_check_status_compute(i).regen_active);
+    const auto ready = car_check_status_compute(i);
+    TEST_ASSERT_TRUE(ready.regen_active);
+    uint8_t d[8]; car_check::encode_control(ready, d);
+    TEST_ASSERT_EQUAL_UINT8(0xC0, d[2] & 0xC0);
     i.left_a=i.right_a=10;
     auto o=car_check_status_compute(i);
     TEST_ASSERT_FALSE(o.regen_active);
@@ -58,7 +62,12 @@ void test_regen_observation_checks_sign_and_freshness() {
     i.bms_valid=false; TEST_ASSERT_FALSE(car_check_status_compute(i).regen_active);
     i.bms_valid=true; i.pack_soc=NAN;
     TEST_ASSERT_FALSE(car_check_status_compute(i).regen_available);
-    i.pack_soc=0.5f; i.test_override=true;
+    i.pack_soc=0.5f; i.brake_valid=false;
+    TEST_ASSERT_FALSE(car_check_status_compute(i).regen_available);
+    TEST_ASSERT_TRUE(car_check_status_compute(i).regen_block &
+                     car_check::REGEN_NO_BRAKE_SENSOR);
+    i.brake_valid=true;
+    i.test_override=true;
     TEST_ASSERT_FALSE(car_check_status_compute(i).regen_active);
 }
 void test_tv_pipeline_flag_and_override() {

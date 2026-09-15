@@ -363,6 +363,8 @@ void send_cluster_status() {
                               state.paddock_active,
                               false, 0,
                               state.throttle_signal_valid, throttle_pct,
+                              state.brake_signal_valid,
+                              state.brake_pressure_bar,
                               g_status_life++, data);
     transmit_ext(CAN_ID_VCU_CLUSTER_STATUS, data);
 }
@@ -399,7 +401,8 @@ void send_sensor_telemetry() {
         tv_gate.speed_above_min,
         output_allowed, state.component_test_active || state.time_sync_active,
         realcar_cal::bringup::REGEN_HARDWARE_VALIDATED,
-        realcar_cal::bringup::BRAKE_SENSOR_INSTALLED, state.pack_data_valid,
+        realcar_cal::bringup::BRAKE_SENSOR_INSTALLED,
+        state.brake_signal_valid, state.pack_data_valid,
         state.brake_active, state.longitudinal_regen_demand,
         state.pack_soc, (float)state.torque_L, (float)state.torque_R,
         state.gear==Gear::Drive ? 1 : (state.gear==Gear::Reverse ? -1 : 0)

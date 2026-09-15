@@ -56,7 +56,8 @@ struct Control {
     bool paddock_active = false;
     bool output_allowed = false;
     bool cluster_fresh = false;
-    bool brake_installed = false;
+    bool brake_installed = false; // byte2 bit6: configured hardware present
+    bool brake_valid = false;     // byte2 bit7: current pressure sample usable
     uint8_t tv_block = 0;
     uint8_t regen_block = 0;
     uint8_t life = 0;

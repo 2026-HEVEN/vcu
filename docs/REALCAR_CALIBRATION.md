@@ -17,7 +17,7 @@
 
 ### 현재 2모터 bring-up 설정
 
-- `BRAKE_SENSOR_INSTALLED = false`: 미장착 GPIO33을 읽지 않고 브레이크/회생 입력을 0으로 고정
+- `BRAKE_SENSOR_INSTALLED = false`: 미장착 GPIO26 ADC를 읽지 않고 브레이크/회생 입력을 0으로 고정. DOT4 호환성과 2점 압력 보정 뒤에만 true로 변경
 - `REQUIRE_BOTH_MOTOR_CONTROLLERS = true`: 좌·우 컨트롤러가 모두 핸드셰이크되어야 시험 허용
 - 좌·우 Part I/II 피드백이 모두 250 ms 이내 fresh여야 최종 상전류 명령 허용
 - 컨트롤러 fault 또는 실제 상전류 1000 A 초과를 한 번이라도 받으면 전원 재인가까지 구동 차단
@@ -215,10 +215,11 @@ CarMaker 타이어 반경 0.22606 m와 감속비 3.73은 시뮬레이션 플랜�
 ### 하네스 v5 / `origin/GPIO-fixed` 반영값
 
 - 단일 핀 기준은 `src/core/board_pins.h`다.
-- CAN RX/TX = D16/D17, throttle ADC = D32, brake digital = D33, gear ADC = D27
+- CAN RX/TX = D16/D17, throttle ADC = D32, brake pressure ADC = D26, gear ADC = D27
 - WSS FL/FR/RL/RR = D36/D39/D34/D35
 - steering ADC = D25, IMU RX/TX = D22/D21
-- 브레이크는 PCB의 12 V→3.3 V 디지털 변환 뒤 HIGH를 raw 4095로 매핑한다.
+- 브레이크 압력센서는 5 V 센서 출력에 보호용 분압을 적용한 뒤 GPIO26 ADC로 읽는다.
+  실측 2점 보정, 입력 필터, 5% ON/3% OFF 히스테리시스를 거쳐 제어에 사용한다.
 - 하네스 v5에 shutdown/start 전용 VCU GPIO가 없으므로 safety wrapper도
   `GPIO-fixed`와 동일하게 hard-wire/Cluster 경로를 전제로 한다.
 
