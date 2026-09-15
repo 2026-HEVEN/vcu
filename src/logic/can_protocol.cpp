@@ -204,12 +204,14 @@ void encode_vcu_log_clamp(uint32_t high_count, uint32_t low_count,
     put_i16le(out + 6, telemetry_to_i16(low_peak_a, 10.0f));
 }
 
-// 에너지 미터 데이터 디코딩 함수 (DBC 문서에 맞춰 바이트 스케일/오프셋 수정 필수)
 EnergyMeterStatus decode_energy_meter_status(const uint8_t data[8]) {
     EnergyMeterStatus out;
+    // TODO: 실제 센서 DBC로 스케일, 부호, 오프셋을 확정할 것.
     out.bus_voltage_v = (float)get_u16le(data + 0) * 0.1f;
-    out.bus_current_a = (float)get_u16le(data + 2) * 0.1f - 3200.0f;
-    out.total_power_w = out.bus_voltage_v * out.bus_current_a;
+    out.bus_current_a = (float)get_u16le(data + 2) * 0.1f; // EZkontrol 임시 오프셋(-3200) 제거
+    
+    // 부호 오설정 시 전력이 음수가 되어 silent failure가 발생하는 것을 막기 위해 절댓값 사용.
+    out.total_power_w = std::fabs(out.bus_voltage_v * out.bus_current_a);
     out.valid = true;
     return out;
 }
