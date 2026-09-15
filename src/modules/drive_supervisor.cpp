@@ -49,6 +49,8 @@ float limit_rising_magnitude(float target, float previous, float max_step,
     const float previous_magnitude = same_direction
         ? std::fabs(previous) : 0.0f;
 
+    // Reductions are immediate. Only an increase in propulsion magnitude is
+    // ramped, so pedal release and every downstream protection remain fast.
     if (target_magnitude <= previous_magnitude) return target;
 
     const float next_magnitude = std::fmin(
@@ -65,6 +67,8 @@ DriveSupervisorOutput drive_supervisor_compute(
     out.left_a = in.requested_left_a;
     out.right_a = in.requested_right_a;
 
+    // Use absolute controller DC powers until the real-car bus-current sign
+    // convention is verified. This is conservative for the 10 kW ceiling.
     out.measured_bus_power_w =
         std::fabs(in.bus_voltage_left_v * in.bus_current_left_a) +
         std::fabs(in.bus_voltage_right_v * in.bus_current_right_a);
@@ -194,6 +198,11 @@ DriveSupervisorOutput drive_supervisor_compute(
             efficiency;
     };
 
+    // Estimate shaft/input power from the phase current that each controller
+    // actually reports, not from the final requested-current target.  Using
+    // the target here made a 500 A request pre-emptively reduce launch current
+    // even while the shared rise limiter and the motors were still well below
+    // that current.
     out.estimated_input_power_w = estimate_input_power(
         in.phase_current_left_a, in.phase_current_right_a);
 
@@ -228,17 +237,19 @@ DriveSupervisorOutput drive_supervisor_compute(
         }
     }
 
+    // Predict the input power of the current command that will be sent this
+    // cycle, after the launch slew limiter.  This catches a likely over-limit
+    // command before the 20 Hz controller feedback reports the resulting
+    // phase/bus current, without treating the unreached 500 A target as real.
     out.predicted_command_power_w = estimate_input_power(out.left_a, out.right_a);
 
-    // --- 에너지 미터 데이터 우선순위 적용 ---
     float governing_power = out.measured_bus_power_w;
     
-    // 에너지 미터 데이터가 유효하고 자체 측정 전력보다 크면 에너지 미터를 governing_power로 덮어씌움
-    if (in.energy_meter_valid && in.energy_meter_power_w > governing_power) {
+    if (params.enable_energy_meter_limit && in.energy_meter_valid && 
+        in.energy_meter_power_w > governing_power) {
         governing_power = in.energy_meter_power_w;
     }
-    
-    // 이후 기존 페일세이프 (예측 전력이 현재보다 크면 예측값으로 제어)
+
     if (out.estimated_input_power_w > governing_power)
         governing_power = out.estimated_input_power_w;
     if (out.predicted_command_power_w > governing_power)
@@ -254,9 +265,14 @@ DriveSupervisorOutput drive_supervisor_compute(
     }
 
     if (in.propulsion_requested) {
+        // Store the final protected command.  If the power limiter reduced it,
+        // the next cycle may only rise from this value, preventing oscillatory
+        // jumps back toward the unbounded request.
         state.previous_left_a = out.left_a;
         state.previous_right_a = out.right_a;
     } else {
+        // A released/blocked propulsion request resets the launch history so
+        // the next Normal or Paddock acceleration starts from zero.
         reset_rise_limit(state);
     }
 
