@@ -212,7 +212,7 @@ static void paddock_update() {
 }
 static void longitudinal_update() {
     state.total_torque = longitudinal_compute({
-        state.throttle_pct, state.brake_pct, state.pack_soc, drive_mode,
+        (float)state.throttle_pct, (float)state.brake_pct, state.pack_soc, drive_mode,
         state.regen_auto_requested &&
             realcar_cal::bringup::REGEN_HARDWARE_VALIDATED });
     state.longitudinal_regen_demand = state.total_torque < 0.0f;
@@ -325,8 +325,10 @@ static void drive_supervisor_update() {
     const DriveSupervisorOutput out =
         drive_supervisor_compute(in, DRIVE_SUPERVISOR_PARAMS,
                                  drive_supervisor_state);
-    state.torque_L = out.left_a;
-    state.torque_R = out.right_a;
+    // drive_supervisor는 생 float[A]로 계산한다. 여기가 그 값이 모터 명령
+    // 차원으로 확정되는 경계다 -- Amp(...)로 의도를 명시한다.
+    state.torque_L = Amp{out.left_a};
+    state.torque_R = Amp{out.right_a};
     state.measured_bus_power_w = out.measured_bus_power_w;
     state.estimated_input_power_w = out.estimated_input_power_w;
     state.predicted_command_power_w = out.predicted_command_power_w;

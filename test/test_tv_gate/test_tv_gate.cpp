@@ -10,7 +10,7 @@ static TVInput healthy() {
     TVInput in{};
     in.total_torque         = 20.0f;
     in.yaw_rate             = 0.0f;
-    in.steering_angle       = 0.0f;
+    in.steering_angle       = Unit{};
     in.vehicle_speed        = 10.0f;
     in.ax                   = 0.0f;
     in.ay                   = 0.0f;

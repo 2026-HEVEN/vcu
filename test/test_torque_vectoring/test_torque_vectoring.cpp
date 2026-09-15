@@ -5,7 +5,7 @@
 
 static TVInput straight() {
     // total=20, 직진(조향0/yaw0/가속0), dt=10ms, 대시 TC/TV 스위치=on
-    return TVInput{ 20.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.01f, true };
+    return TVInput{ 20.0f, 0.0f, Unit{}, 0.0f, 0.0f, 0.0f, 0.01f, true, true, true };
 }
 
 void test_straight_is_symmetric(void) {
@@ -49,7 +49,7 @@ void test_zero_gains_are_strict_5050_off_even_beyond_friction_model(void) {
     TVYawState s{};
     TVInput in = straight();
     in.vehicle_speed = 15.0f;
-    in.steering_angle = 0.8f;
+    in.steering_angle = Unit{0.8f};
     in.yaw_rate = -30.0f;
     in.ay = 10.0f; // deliberately drives the Stage-4 diagnostic limit to zero
     TVOutput o = tv_compute(in, s);
@@ -65,7 +65,7 @@ void test_dash_switch_off_is_strict_5050_even_with_gains_and_speed(void) {
     TVYawState s{};
     TVInput in = straight();
     in.vehicle_speed = 15.0f;
-    in.steering_angle = 0.8f;
+    in.steering_angle = Unit{0.8f};
     in.yaw_rate = -30.0f;
     in.ay = 10.0f;
     in.tv_enable_requested = false;   // dash switch OFF
@@ -80,7 +80,7 @@ void test_dash_switch_on_allows_differential(void) {
     // guard against accidentally inverting the condition).
     TVYawState s{};
     TVOutput o = tv_compute(straight(), s);
-    TEST_ASSERT_TRUE(o.torque_L >= 0.0f && o.torque_R >= 0.0f);
+    TEST_ASSERT_TRUE((float)o.torque_L >= 0.0f && (float)o.torque_R >= 0.0f);
 }
 
 void setUp(void) {}
