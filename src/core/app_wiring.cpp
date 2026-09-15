@@ -100,6 +100,7 @@ namespace {
         realcar_cal::bringup::CONTROLLER_CUTOFF_C,
         realcar_cal::bringup::MOTOR_DERATE_START_C,
         realcar_cal::bringup::MOTOR_CUTOFF_C,
+        realcar_cal::bringup::ENABLE_ENERGY_METER_LIMIT,
     };
     const TimeSyncPulseParams TIME_SYNC_PARAMS {
         realcar_cal::bringup::ENABLE_TIME_SYNC_PULSE,
@@ -122,6 +123,9 @@ static void throttle_update() {
         ? throttle_compute({ state.throttle_raw_adc }) : Percent(0.0f);
 }
 static void brake_update() {
+    // Current bring-up vehicle has no brake sensor. Never read the floating
+    // PCB input: a random HIGH would otherwise request regen. Re-enable this
+    // path in realcar_calibration.h after the sensor polarity is verified.
     const int raw = realcar_cal::bringup::BRAKE_SENSOR_INSTALLED
         ? (digitalRead(board_pins::BRAKE_DIGITAL) == HIGH ? 4095 : 0)
         : 0;
@@ -178,18 +182,25 @@ static void vehicle_speed_update() {
     state.vehicle_speed_valid = o.valid;
 }
 static void gear_update_task() {
+    // Read the raw ladder on every build so the wiring can be checked even
+    // when selector authority is temporarily disabled.
     state.gear_raw_adc = (uint16_t)analogRead(board_pins::GEAR_ADC);
     state.gear_sensed = gear_update(state.gear_raw_adc, GEAR_CAL,
                                     realcar_cal::bringup::GEAR_STABLE_SAMPLES,
                                     gear_filter_state);
     if (!realcar_cal::bringup::GEAR_SELECTOR_INSTALLED) {
+        // Legacy fallback for a build without a connected selector.
         state.gear = Gear::Drive;
         return;
     }
     state.gear = state.gear_sensed;
 }
 static void paddock_update() {
-    if (!state.cluster_cmd_alive) return;
+    if (!state.cluster_cmd_alive) {
+        // Do not unexpectedly remove an already-active limit when the dash
+        // disappears. At boot the default remains inactive.
+        return;
+    }
     if (!state.paddock_requested) {
         state.paddock_active = false;
         return;
@@ -225,6 +236,8 @@ static void longitudinal_update() {
     }
 }
 static void torque_vectoring_update() {
+    // 게이트 조건을 여기서 미리 접지 않는다. 원본 값과 유효성 플래그를 그대로
+    // 넘기고, 판정은 tv_gate_evaluate()가 단독으로 한다.
     const TVInput tv_in{
         Ampere{state.total_torque}, DegPerSec{state.yaw_rate},
         state.steering_angle,
@@ -237,6 +250,9 @@ static void torque_vectoring_update() {
     state.tv_pipeline_active = o.gate.active;
     state.requested_torque_L = o.torque_L;
     state.requested_torque_R = o.torque_R;
+    // 중간신호 관측용 복사 (debug_monitor / Cluster에서 튜닝에 사용)
+    // state는 텔레메트리/CAN 인코딩용이라 생 float로 유지한다. 여기가 파이프라인
+    // 밖으로 나가는 경계다.
     state.desired_yaw_rate = (float)o.desired_yaw_rate;
     state.yaw_moment       = (float)o.yaw_moment;
     state.fz_L = (float)o.fz_L; state.fz_R = (float)o.fz_R;
@@ -293,7 +309,6 @@ static void drive_supervisor_update() {
         state.propulsion_direction_armed && state.throttle_signal_valid &&
         (float)state.throttle_pct > realcar_cal::bringup::THROTTLE_ARM_MAX_PCT &&
         !state.brake_active;
-    
     const DriveSupervisorInput in {
         requested_left_a, requested_right_a,
         state.controller_feedback_fresh,
@@ -311,11 +326,13 @@ static void drive_supervisor_update() {
         propulsion_requested, realcar_cal::confirmed::CONTROL_PERIOD_S,
         state.vehicle_speed_mps, state.paddock_speed_mps,
         state.pack_data_valid, state.pack_current_a,
-        state.energy_meter.valid, state.energy_meter.total_power_w // 새로 추가된 에너지 미터 변수 넘겨주기
+        state.energy_meter.valid, state.energy_meter.total_power_w
     };
     const DriveSupervisorOutput out =
         drive_supervisor_compute(in, DRIVE_SUPERVISOR_PARAMS,
                                  drive_supervisor_state);
+    // drive_supervisor는 생 float[A]로 계산한다. 여기가 그 값이 모터 명령
+    // 차원으로 확정되는 경계다 -- Amp(...)로 의도를 명시한다.
     state.torque_L = Amp{out.left_a};
     state.torque_R = Amp{out.right_a};
     state.measured_bus_power_w = out.measured_bus_power_w;
@@ -340,13 +357,13 @@ static void safety_task()    { safety_update(); }
 
 // --- task table: add a new module here (one line) ---
 Task g_tasks[] = {
-    { can_rx_update,            5, 0 }, 
-    { throttle_update,         10, 0 },  
+    { can_rx_update,            5, 0 },   // 200 Hz drain; feedback precedes control
+    { throttle_update,         10, 0 },   // 100 Hz
     { brake_update,            10, 0 },
     { steering_update,         10, 0 },
     { imu_update,              10, 0 },
     { wheel_speed_update,      10, 0 },
-    { vehicle_speed_update,    10, 0 },   
+    { vehicle_speed_update,    10, 0 },   // 반드시 wheel_speed 다음
     { gear_update_task,        10, 0 },
     { paddock_update,          10, 0 },
     { longitudinal_update,     10, 0 },
@@ -354,12 +371,12 @@ Task g_tasks[] = {
     { time_sync_pulse_update,  10, 0 },
     { drive_supervisor_update, 10, 0 },
     { safety_task,             10, 0 },
-    { vehicle_speed_can_tx_update, 50, 0 }, 
-    { log_can_tx_update,       10, 0 },   
-    { clamp_stats_can_tx_update, 1000, 0 }, 
-    { cluster_status_can_tx_update, 50, 0 }, 
-    { sensor_telemetry_can_tx_update, car_check::PERIOD_MS, 0 }, 
-    { debug_update,            50, 0 },   
+    { vehicle_speed_can_tx_update, 50, 0 }, // 20 Hz VCU -> Cluster/TMA-1 single speed telemetry
+    { log_can_tx_update,       10, 0 },   // 100 Hz VCU -> Monolith 고속 로깅 (Prio 7)
+    { clamp_stats_can_tx_update, 1000, 0 }, // 1 Hz Amp 포화 통계 (Prio 7)
+    { cluster_status_can_tx_update, 50, 0 }, // 20 Hz gear/brake/HV display status
+    { sensor_telemetry_can_tx_update, car_check::PERIOD_MS, 0 }, // steering/IMU/WSS/control diagnostics
+    { debug_update,            50, 0 },   // 20 Hz compact test log; 1 Hz idle summary
 };
 const int G_TASK_COUNT = sizeof(g_tasks) / sizeof(g_tasks[0]);
 
@@ -369,7 +386,7 @@ void modules_init() {
     if (realcar_cal::bringup::BRAKE_SENSOR_INSTALLED) {
         pinMode(board_pins::BRAKE_DIGITAL, INPUT);
     }
-    pinMode(board_pins::GEAR_ADC, INPUT); 
+    pinMode(board_pins::GEAR_ADC, INPUT);  // gear-ladder 모듈용 예약 입력
     for (int ch = 0; ch < WHEEL_COUNT; ++ch) wss_driver::begin(ch, PIN_WSS[ch]);
     imu_driver::begin();
     steering_encoder_driver::begin();
