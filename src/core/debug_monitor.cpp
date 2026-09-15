@@ -89,6 +89,44 @@ void request_motor_test(bool left, bool right, float current_a,
                   duration_ms);
 }
 
+// 포화 진단 보고. 기록은 Clamped::set()이 하고(제어 루프 안이라 I/O 금지),
+// 문자열 출력은 여기서만 한다.
+void print_clamp_stats(const char *name, const ClampStats &s) {
+    if (s.high_count == 0U && s.low_count == 0U) {
+        Serial.printf("[CLAMP] %-9s clean\n", name);
+        return;
+    }
+    Serial.printf("[CLAMP] %-9s high=%lu low=%lu\n", name,
+                  (unsigned long)s.high_count, (unsigned long)s.low_count);
+    if (s.high_count != 0U)
+        Serial.printf("          worst high raw=%.2f @ %s:%d %s()\n",
+                      s.high_worst.raw, s.high_worst.file ? s.high_worst.file : "?",
+                      s.high_worst.line, s.high_worst.fn ? s.high_worst.fn : "?");
+    if (s.low_count != 0U)
+        Serial.printf("          worst low  raw=%.2f @ %s:%d %s()\n",
+                      s.low_worst.raw, s.low_worst.file ? s.low_worst.file : "?",
+                      s.low_worst.line, s.low_worst.fn ? s.low_worst.fn : "?");
+    Serial.printf("          last       raw=%.2f @ %s:%d %s()\n",
+                  s.last.raw, s.last.file ? s.last.file : "?",
+                  s.last.line, s.last.fn ? s.last.fn : "?");
+}
+
+void report_all_clamp_stats() {
+    print_clamp_stats("Amp", Amp::clamp_stats());
+    print_clamp_stats("Percent", Percent::clamp_stats());
+    print_clamp_stats("Pct0to100", Pct0to100::clamp_stats());
+    print_clamp_stats("Unit", Unit::clamp_stats());
+    print_clamp_stats("Rpm", Rpm::clamp_stats());
+}
+
+void reset_all_clamp_stats() {
+    Amp::reset_clamp_stats();
+    Percent::reset_clamp_stats();
+    Pct0to100::reset_clamp_stats();
+    Unit::reset_clamp_stats();
+    Rpm::reset_clamp_stats();
+}
+
 void accept_serial_command() {
     g_serial_line[g_serial_line_length] = '\0';
     float test_current_a = 0.0f;
@@ -103,6 +141,11 @@ void accept_serial_command() {
     } else if (std::strcmp(g_serial_line, "SYNC_CANCEL") == 0) {
         g_sync_cancel_request = true;
         Serial.println("[SYNC] cancel requested");
+    } else if (std::strcmp(g_serial_line, "CLAMP") == 0) {
+        report_all_clamp_stats();
+    } else if (std::strcmp(g_serial_line, "CLAMP_RESET") == 0) {
+        reset_all_clamp_stats();
+        Serial.println("[CLAMP] stats cleared");
     } else if (std::sscanf(g_serial_line, "MOTOR_L %f %u %c",
                            &test_current_a, &test_duration_ms, &trailing) == 2) {
         request_motor_test(true, false, test_current_a, test_duration_ms);
@@ -115,7 +158,7 @@ void accept_serial_command() {
     } else if (g_serial_line_length != 0U) {
         Serial.println(
             "[CMD] use MOTOR_L|MOTOR_R|MOTOR_BOTH <A> <ms> or "
-            "SYNC_ARM|SYNC_RUN|SYNC_CANCEL");
+            "SYNC_ARM|SYNC_RUN|SYNC_CANCEL or CLAMP|CLAMP_RESET");
     }
     g_serial_line_length = 0U;
 }
