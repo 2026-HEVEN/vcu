@@ -7,18 +7,22 @@ float clampf(float value, float lo, float hi) {
 }
 }
 
-TVAllocOutput tv_alloc_compute(float total_current_a, float yaw_moment_nm,
+TVAllocOutput tv_alloc_compute(Ampere total_current_q, NewtonMetre yaw_moment_q,
                                MaxTorque limit, const TVParams &p) {
+    const float total_current_a = (float)total_current_q;
+    const float yaw_moment_nm   = (float)yaw_moment_q;
+    const float limit_l_in      = (float)limit.max_L;
+    const float limit_r_in      = (float)limit.max_R;
     if (!std::isfinite(total_current_a) || !std::isfinite(yaw_moment_nm) ||
-        !std::isfinite(limit.max_L) || !std::isfinite(limit.max_R) ||
+        !std::isfinite(limit_l_in) || !std::isfinite(limit_r_in) ||
         std::fabs(total_current_a) < 1.0e-6f || p.track_m <= 0.0f ||
         p.tire_radius_m <= 0.0f || p.gear_ratio <= 0.0f ||
         p.motor_kt_nm_per_a <= 0.0f || p.motor_current_max_a <= 0.0f) {
         return {Amp(0.0f), Amp(0.0f)};
     }
 
-    const float max_l = clampf(limit.max_L, 0.0f, p.motor_current_max_a);
-    const float max_r = clampf(limit.max_R, 0.0f, p.motor_current_max_a);
+    const float max_l = clampf(limit_l_in, 0.0f, p.motor_current_max_a);
+    const float max_r = clampf(limit_r_in, 0.0f, p.motor_current_max_a);
 
     // With I_L=base-diff and I_R=base+diff:
     // Mz=(F_R-F_L)*track/2 = diff*Kt*gear*track/tire_radius.

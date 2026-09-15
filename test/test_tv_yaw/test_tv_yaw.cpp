@@ -1,5 +1,11 @@
 #include <unity.h>
 #include "modules/tv/yaw_control.h"
+
+static float yaw_f(float desired_degps, float measured_degps, float dt_s,
+                   const TVParams &p, TVYawState &s) {
+    return (float)tv_yaw_compute(DegPerSec{desired_degps},
+                                 DegPerSec{measured_degps}, Seconds{dt_s}, p, s);
+}
 #include <cmath>
 
 static TVParams active_params() {
@@ -13,12 +19,12 @@ static TVParams active_params() {
 void test_zero_error_zero_moment() {
     TVYawState s{};
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f,
-        tv_yaw_compute(10.0f, 10.0f, 0.01f, active_params(), s));
+        yaw_f(10.0f, 10.0f, 0.01f, active_params(), s));
 }
 
 void test_positive_error_produces_positive_moment() {
     TVYawState s{};
-    TEST_ASSERT_TRUE(tv_yaw_compute(10.0f, 0.0f, 0.01f,
+    TEST_ASSERT_TRUE(yaw_f(10.0f, 0.0f, 0.01f,
                                     active_params(), s) > 0.0f);
 }
 
@@ -26,7 +32,7 @@ void test_output_saturates_without_windup() {
     TVYawState s{};
     TVParams p = active_params();
     for (int i = 0; i < 100; ++i) {
-        const float mz = tv_yaw_compute(100.0f, 0.0f, 0.01f, p, s);
+        const float mz = yaw_f(100.0f, 0.0f, 0.01f, p, s);
         TEST_ASSERT_TRUE(std::fabs(mz) <= p.yaw_moment_max);
     }
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, s.integral);
@@ -35,7 +41,7 @@ void test_output_saturates_without_windup() {
 void test_invalid_dt_is_safe() {
     TVYawState s{};
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f,
-        tv_yaw_compute(10.0f, 0.0f, 0.0f, active_params(), s));
+        yaw_f(10.0f, 0.0f, 0.0f, active_params(), s));
 }
 
 void test_integral_has_hard_limit() {
@@ -44,7 +50,7 @@ void test_integral_has_hard_limit() {
     p.kp = 0.0f; p.ki = 0.01f; p.kd = 0.0f;
     p.integral_max = 2.0f;
     p.yaw_moment_max = 100.0f;
-    for (int i = 0; i < 100; ++i) tv_yaw_compute(10.0f, 0.0f, 1.0f, p, s);
+    for (int i = 0; i < 100; ++i) yaw_f(10.0f, 0.0f, 1.0f, p, s);
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 2.0f, s.integral);
 }
 
@@ -53,8 +59,8 @@ void test_deadband_is_continuous() {
     TVParams p = active_params();
     p.kp = 1.0f; p.ki = 0.0f; p.kd = 0.0f;
     p.yaw_deadband_degps = 0.5f;
-    const float inside = tv_yaw_compute(0.49f, 0.0f, 0.01f, p, a);
-    const float just_outside = tv_yaw_compute(0.51f, 0.0f, 0.01f, p, b);
+    const float inside = yaw_f(0.49f, 0.0f, 0.01f, p, a);
+    const float just_outside = yaw_f(0.51f, 0.0f, 0.01f, p, b);
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, inside);
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.01f, just_outside);
 }
@@ -63,8 +69,8 @@ void test_target_step_does_not_create_derivative_kick() {
     TVYawState s{};
     TVParams p = active_params();
     p.kp = 0.0f; p.ki = 0.0f; p.kd = 1.0f;
-    tv_yaw_compute(0.0f, 0.0f, 0.01f, p, s);
-    const float output = tv_yaw_compute(20.0f, 0.0f, 0.01f, p, s);
+    yaw_f(0.0f, 0.0f, 0.01f, p, s);
+    const float output = yaw_f(20.0f, 0.0f, 0.01f, p, s);
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, output);
 }
 

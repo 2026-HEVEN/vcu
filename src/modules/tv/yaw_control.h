@@ -1,4 +1,5 @@
 #pragma once
+#include "types.h"
 #include "modules/tv/tv_config.h"
 // [FILL-IN] Stage 2/5 — yaw 제어기. yaw 오차 → 요 모멘트 Mz.
 
@@ -15,5 +16,5 @@ struct TVYawState {
 // measured_yaw : IMU 실측 yaw rate [deg/s]
 // dt           : 이 tick의 시간간격 [s]
 // 반환          : 요 모멘트 Mz  (allocation이 좌우 토크차로 환산)
-float tv_yaw_compute(float desired_yaw, float measured_yaw, float dt,
-                     const TVParams &p, TVYawState &s);
+NewtonMetre tv_yaw_compute(DegPerSec desired_yaw, DegPerSec measured_yaw,
+                           Seconds dt, const TVParams &p, TVYawState &s);

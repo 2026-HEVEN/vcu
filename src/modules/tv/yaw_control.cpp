@@ -7,12 +7,16 @@ float clampf(float value, float lo, float hi) {
 }
 }
 
-float tv_yaw_compute(float desired_yaw, float measured_yaw, float dt,
-                     const TVParams &p, TVYawState &s) {
+NewtonMetre tv_yaw_compute(DegPerSec desired_yaw_q, DegPerSec measured_yaw_q,
+                           Seconds dt_q, const TVParams &p, TVYawState &s) {
+    // 경계에서 한 번 벗기고 이후는 생 float로 계산한다.
+    const float desired_yaw  = (float)desired_yaw_q;
+    const float measured_yaw = (float)measured_yaw_q;
+    const float dt           = (float)dt_q;
     if (!std::isfinite(desired_yaw) || !std::isfinite(measured_yaw) ||
         !std::isfinite(dt) || dt <= 0.0f || p.yaw_moment_max <= 0.0f) {
         s.initialized = false;
-        return 0.0f;
+        return NewtonMetre{};
     }
 
     float error = desired_yaw - measured_yaw;
@@ -48,5 +52,5 @@ float tv_yaw_compute(float desired_yaw, float measured_yaw, float dt,
     }
 
     const float output = p.kp * error + p.ki * s.integral + p.kd * derivative;
-    return clampf(output, -p.yaw_moment_max, p.yaw_moment_max);
+    return NewtonMetre{clampf(output, -p.yaw_moment_max, p.yaw_moment_max)};
 }

@@ -238,9 +238,10 @@ static void torque_vectoring_update() {
     // 게이트 조건을 여기서 미리 접지 않는다. 원본 값과 유효성 플래그를 그대로
     // 넘기고, 판정은 tv_gate_evaluate()가 단독으로 한다.
     const TVInput tv_in{
-        state.total_torque, state.yaw_rate, state.steering_angle,
-        state.vehicle_speed_mps,
-        state.accel_x, state.accel_y, TV_DT_S,
+        Ampere{state.total_torque}, DegPerSec{state.yaw_rate},
+        state.steering_angle,
+        Mps{state.vehicle_speed_mps},
+        GForce{state.accel_x}, GForce{state.accel_y}, Seconds{TV_DT_S},
         state.tv_enable_requested, state.vehicle_speed_valid, state.imu_valid
     };
     TVOutput o = tv_compute(tv_in, tv_yaw_state);
@@ -249,10 +250,13 @@ static void torque_vectoring_update() {
     state.requested_torque_L = o.torque_L;
     state.requested_torque_R = o.torque_R;
     // 중간신호 관측용 복사 (debug_monitor / Cluster에서 튜닝에 사용)
-    state.desired_yaw_rate = o.desired_yaw_rate;
-    state.yaw_moment       = o.yaw_moment;
-    state.fz_L = o.fz_L; state.fz_R = o.fz_R;
-    state.max_torque_L = o.max_torque_L; state.max_torque_R = o.max_torque_R;
+    // state는 텔레메트리/CAN 인코딩용이라 생 float로 유지한다. 여기가 파이프라인
+    // 밖으로 나가는 경계다.
+    state.desired_yaw_rate = (float)o.desired_yaw_rate;
+    state.yaw_moment       = (float)o.yaw_moment;
+    state.fz_L = (float)o.fz_L; state.fz_R = (float)o.fz_R;
+    state.max_torque_L = (float)o.max_torque_L;
+    state.max_torque_R = (float)o.max_torque_R;
 }
 static void time_sync_pulse_update() {
     const bool throttle_released =

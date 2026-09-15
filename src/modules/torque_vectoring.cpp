@@ -15,9 +15,9 @@ TVOutput tv_compute(const TVInput &in, TVYawState &s) {
     // 0) 게이트 판정 — 조건은 tv_gate_evaluate() 안에만 있다.
     const TVGate gate = tv_gate_evaluate(in, TV_PARAMS);
     // 1) 조향 의도 -> 목표 yaw rate
-    float desired_yaw = tv_reference_compute(in.steering_angle, in.vehicle_speed, TV_PARAMS);
+    DegPerSec desired_yaw = tv_reference_compute(in.steering_angle, in.vehicle_speed, TV_PARAMS);
     // 2) yaw 오차 -> 요 모멘트 Mz
-    float mz = 0.0f;
+    NewtonMetre mz{};
     if (gate.active) {
         mz = tv_yaw_compute(desired_yaw, in.yaw_rate, in.dt, TV_PARAMS, s);
     } else {
@@ -36,8 +36,8 @@ TVOutput tv_compute(const TVInput &in, TVYawState &s) {
     if (gate.active) {
         a = tv_alloc_compute(in.total_torque, mz, lim, TV_PARAMS);
     } else {
-        const float safe_total = std::isfinite(in.total_torque)
-            ? in.total_torque : 0.0f;
+        const float total_in = (float)in.total_torque;
+        const float safe_total = std::isfinite(total_in) ? total_in : 0.0f;
         const float half = 0.5f * safe_total;
         a = {Amp(half), Amp(half)};
     }

@@ -8,14 +8,16 @@
 // ============================================================
 
 struct TVInput {
-    float total_torque;    // longitudinal 출력: 부호 있는 총 상전류 [A]
-    float yaw_rate;        // IMU 실측 yaw rate [deg/s]
+    // 좌우 합이라 ±1000까지 간다. 모터 1개 명령(Amp, ±500 클램프)과는 다른
+    // 물건이므로 클램프 없는 Ampere를 쓴다.
+    Ampere    total_torque;  // longitudinal 출력: 부호 있는 총 상전류 [A]
+    DegPerSec yaw_rate;      // IMU 실측 yaw rate [deg/s]
     Unit  steering_angle;  // 운전자 조향 (-1..+1). float로 받으면 steering_compute가
                            // 돌려준 Unit이 여기서 벗겨져 차원이 사라진다.
-    float vehicle_speed;   // 추정 차속 [m/s] (vehicle_speed 모듈 출력)
-    float ax;              // 종가속도 [g] (IMU driver 출력 계약)
-    float ay;              // 횡가속도 [g]
-    float dt;              // tick 간격 [s]
+    Mps       vehicle_speed; // 추정 차속 [m/s] (vehicle_speed 모듈 출력)
+    GForce    ax;            // 종가속도 [g] (IMU driver 출력 계약)
+    GForce    ay;            // 횡가속도 [g]
+    Seconds   dt;            // tick 간격 [s]
     // 대시보드 TC/TV 스위치 (Cluster CAN_ID_CLUSTER_CMD -> state.tv_enable_requested).
     // false: 기존 strict-OFF와 동일하게 좌우 50:50, 차등(Mz)만 0. 총 추진력은 안 끊음.
     // 주의: 여기 기본 멤버 초기화자를 넣지 말 것 — 일부 ESP32 Xtensa GCC 툴체인이
@@ -37,10 +39,10 @@ struct TVOutput {
     Amp torque_L;          // motor phase-current command [A]
     Amp torque_R;
     // 관측용 중간신호 (app_wiring이 VehicleState로 복사 → debug/Cluster에서 보임)
-    float desired_yaw_rate;
-    float yaw_moment;
-    float fz_L, fz_R;
-    float max_torque_L, max_torque_R;
+    DegPerSec   desired_yaw_rate;
+    NewtonMetre yaw_moment;
+    Newton      fz_L, fz_R;
+    Ampere      max_torque_L, max_torque_R;
     TVGate gate;         // 게이트 판정 + 개별 차단 사유 (계기판 진단용)
 };
 

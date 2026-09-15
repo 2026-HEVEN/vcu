@@ -65,7 +65,8 @@ void test_tv_pipeline_flag_and_override() {
     TVYawState state{};
     // 스위치/차속유효/IMU를 전부 정상으로 두고도 게인이 0이면 TV는 비활성이어야
     // 한다. (다른 조건까지 같이 꺼두면 "게인 0 때문"이라는 걸 증명하지 못한다)
-    const TVInput i{100.0f,0.0f,Unit{},10.0f,0.0f,0.0f,0.01f,true,true,true};
+    const TVInput i{Ampere{100.0f},DegPerSec{},Unit{},Mps{10.0f},
+                    GForce{},GForce{},Seconds{0.01f},true,true,true};
     const TVGate g = tv_compute(i,state).gate;
     TEST_ASSERT_FALSE(g.active);        // real defaults: zero gains
     TEST_ASSERT_FALSE(g.gains_enabled);

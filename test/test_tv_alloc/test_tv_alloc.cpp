@@ -2,45 +2,50 @@
 #include <cmath>
 #include "modules/tv/allocation.h"
 
-static MaxTorque unlimited() { return {1.0e6f, 1.0e6f}; }
+static MaxTorque unlimited() { return {Ampere{1.0e6f}, Ampere{1.0e6f}}; }
+
+static TVAllocOutput alloc_f(float total_a, float mz_nm, MaxTorque lim,
+                             const TVParams &p) {
+    return tv_alloc_compute(Ampere{total_a}, NewtonMetre{mz_nm}, lim, p);
+}
 
 void test_no_yaw_is_symmetric_and_preserves_total() {
-    const TVAllocOutput o = tv_alloc_compute(20.0f, 0.0f, unlimited(), TV_PARAMS);
+    const TVAllocOutput o = alloc_f(20.0f, 0.0f, unlimited(), TV_PARAMS);
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 10.0f, (float)o.torque_L);
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 10.0f, (float)o.torque_R);
 }
 
 void test_positive_yaw_increases_right_current() {
-    const TVAllocOutput o = tv_alloc_compute(40.0f, 10.0f, unlimited(), TV_PARAMS);
+    const TVAllocOutput o = alloc_f(40.0f, 10.0f, unlimited(), TV_PARAMS);
     TEST_ASSERT_TRUE((float)o.torque_R > (float)o.torque_L);
 }
 
 void test_drive_never_crosses_into_regen() {
-    const TVAllocOutput o = tv_alloc_compute(5.0f, 1000.0f, unlimited(), TV_PARAMS);
+    const TVAllocOutput o = alloc_f(5.0f, 1000.0f, unlimited(), TV_PARAMS);
     TEST_ASSERT_TRUE((float)o.torque_L >= 0.0f);
     TEST_ASSERT_TRUE((float)o.torque_R >= 0.0f);
 }
 
 void test_regen_never_crosses_into_drive() {
-    const TVAllocOutput o = tv_alloc_compute(-60.0f, 1000.0f, unlimited(), TV_PARAMS);
+    const TVAllocOutput o = alloc_f(-60.0f, 1000.0f, unlimited(), TV_PARAMS);
     TEST_ASSERT_TRUE((float)o.torque_L <= 0.0f);
     TEST_ASSERT_TRUE((float)o.torque_R <= 0.0f);
 }
 
 void test_asymmetric_limits_are_respected() {
-    const TVAllocOutput o = tv_alloc_compute(40.0f, 10.0f, {10.0f, 20.0f}, TV_PARAMS);
+    const TVAllocOutput o = alloc_f(40.0f, 10.0f, {Ampere{10.0f}, Ampere{20.0f}}, TV_PARAMS);
     TEST_ASSERT_TRUE((float)o.torque_L <= 10.0f);
     TEST_ASSERT_TRUE((float)o.torque_R <= 20.0f);
 }
 
 void test_zero_demand_cannot_create_torque() {
-    const TVAllocOutput o = tv_alloc_compute(0.0f, 100.0f, unlimited(), TV_PARAMS);
+    const TVAllocOutput o = alloc_f(0.0f, 100.0f, unlimited(), TV_PARAMS);
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, (float)o.torque_L);
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, (float)o.torque_R);
 }
 
 void test_physical_yaw_to_current_conversion() {
-    const TVAllocOutput o = tv_alloc_compute(40.0f, 10.0f, unlimited(), TV_PARAMS);
+    const TVAllocOutput o = alloc_f(40.0f, 10.0f, unlimited(), TV_PARAMS);
     const float expected_diff = 10.0f * TV_PARAMS.tire_radius_m /
         (TV_PARAMS.track_m * TV_PARAMS.motor_kt_nm_per_a * TV_PARAMS.gear_ratio);
     const float actual_diff = ((float)o.torque_R - (float)o.torque_L) * 0.5f;
@@ -48,7 +53,7 @@ void test_physical_yaw_to_current_conversion() {
 }
 
 void test_bringup_limit_allows_500_a_but_no_more() {
-    const TVAllocOutput o = tv_alloc_compute(1000.0f, 0.0f, unlimited(), TV_PARAMS);
+    const TVAllocOutput o = alloc_f(1000.0f, 0.0f, unlimited(), TV_PARAMS);
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 500.0f, (float)o.torque_L);
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 500.0f, (float)o.torque_R);
 }
@@ -56,7 +61,7 @@ void test_bringup_limit_allows_500_a_but_no_more() {
 void test_saturation_keeps_yaw_before_common_current() {
     TVParams p = TV_PARAMS;
     p.motor_current_max_a = 20.0f;
-    const TVAllocOutput o = tv_alloc_compute(100.0f, 10.0f, {20.0f, 20.0f}, p);
+    const TVAllocOutput o = alloc_f(100.0f, 10.0f, {Ampere{20.0f}, Ampere{20.0f}}, p);
     TEST_ASSERT_TRUE((float)o.torque_L + (float)o.torque_R < 100.0f);
     TEST_ASSERT_TRUE((float)o.torque_R > (float)o.torque_L);
 }
@@ -68,18 +73,18 @@ void test_saturation_keeps_yaw_before_common_current() {
 // exact shape (small total, huge Mz) but only asserted non-negativity, not
 // that the total was preserved.
 void test_small_total_with_large_yaw_does_not_manufacture_current() {
-    const TVAllocOutput o = tv_alloc_compute(1.0f, 100.0f, unlimited(), TV_PARAMS);
+    const TVAllocOutput o = alloc_f(1.0f, 100.0f, unlimited(), TV_PARAMS);
     const float sum = (float)o.torque_L + (float)o.torque_R;
     TEST_ASSERT_TRUE(sum <= 1.0f + 0.01f);
     TEST_ASSERT_TRUE(sum >= 0.0f);
 }
 void test_near_zero_total_with_large_yaw_does_not_manufacture_current() {
-    const TVAllocOutput o = tv_alloc_compute(0.001f, 100.0f, unlimited(), TV_PARAMS);
+    const TVAllocOutput o = alloc_f(0.001f, 100.0f, unlimited(), TV_PARAMS);
     const float sum = (float)o.torque_L + (float)o.torque_R;
     TEST_ASSERT_TRUE(std::fabs(sum) <= 0.01f);
 }
 void test_regen_small_total_with_large_yaw_does_not_manufacture_current() {
-    const TVAllocOutput o = tv_alloc_compute(-1.0f, 100.0f, unlimited(), TV_PARAMS);
+    const TVAllocOutput o = alloc_f(-1.0f, 100.0f, unlimited(), TV_PARAMS);
     const float sum = (float)o.torque_L + (float)o.torque_R;
     TEST_ASSERT_TRUE(sum >= -1.0f - 0.01f);
     TEST_ASSERT_TRUE(sum <= 0.0f);
@@ -91,7 +96,7 @@ void test_sum_never_exceeds_total_across_a_sweep() {
     const float moments[] = {-1000.0f, -100.0f, -10.0f, 0.0f, 10.0f, 100.0f, 1000.0f};
     for (float total : totals) {
         for (float mz : moments) {
-            const TVAllocOutput o = tv_alloc_compute(total, mz, unlimited(), TV_PARAMS);
+            const TVAllocOutput o = alloc_f(total, mz, unlimited(), TV_PARAMS);
             const float sum = (float)o.torque_L + (float)o.torque_R;
             TEST_ASSERT_TRUE(std::fabs(sum) <= std::fabs(total) + 0.05f);
         }
@@ -100,7 +105,7 @@ void test_sum_never_exceeds_total_across_a_sweep() {
 // Preserved from before the fix: with ample total current relative to the
 // yaw demand, the differential should still be applied undiminished.
 void test_ample_total_still_gets_full_differential() {
-    const TVAllocOutput o = tv_alloc_compute(50.0f, 20.0f, unlimited(), TV_PARAMS);
+    const TVAllocOutput o = alloc_f(50.0f, 20.0f, unlimited(), TV_PARAMS);
     const float expected_diff = 20.0f * TV_PARAMS.tire_radius_m /
         (TV_PARAMS.track_m * TV_PARAMS.motor_kt_nm_per_a * TV_PARAMS.gear_ratio);
     const float actual_diff = ((float)o.torque_R - (float)o.torque_L) * 0.5f;

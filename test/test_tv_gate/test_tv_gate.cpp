@@ -8,13 +8,13 @@
 // 모든 게이트 조건을 만족하는 입력. 각 테스트는 여기서 하나씩만 무너뜨린다.
 static TVInput healthy() {
     TVInput in{};
-    in.total_torque         = 20.0f;
-    in.yaw_rate             = 0.0f;
+    in.total_torque         = Ampere{20.0f};
+    in.yaw_rate             = DegPerSec{};
     in.steering_angle       = Unit{};
-    in.vehicle_speed        = 10.0f;
-    in.ax                   = 0.0f;
-    in.ay                   = 0.0f;
-    in.dt                   = 0.01f;
+    in.vehicle_speed        = Mps{10.0f};
+    in.ax                   = GForce{};
+    in.ay                   = GForce{};
+    in.dt                   = Seconds{0.01f};
     in.tv_enable_requested  = true;
     in.vehicle_speed_valid  = true;
     in.imu_valid            = true;
@@ -80,7 +80,7 @@ void test_speed_invalid_deactivates_even_at_healthy_speed(void) {
 
 void test_low_speed_deactivates(void) {
     TVInput in = healthy();
-    in.vehicle_speed = 0.5f;   // tv_min_speed_mps = 1.0
+    in.vehicle_speed = Mps{0.5f};   // tv_min_speed_mps = 1.0
     const TVGate g = tv_gate_evaluate(in, tuned());
     TEST_ASSERT_FALSE(g.active);
     TEST_ASSERT_FALSE(g.speed_above_min);
@@ -89,7 +89,7 @@ void test_low_speed_deactivates(void) {
 
 void test_nan_speed_deactivates(void) {
     TVInput in = healthy();
-    in.vehicle_speed = NAN;
+    in.vehicle_speed = Mps{NAN};
     const TVGate g = tv_gate_evaluate(in, tuned());
     TEST_ASSERT_FALSE(g.active);
     TEST_ASSERT_FALSE(g.speed_above_min);
@@ -98,7 +98,7 @@ void test_nan_speed_deactivates(void) {
 void test_reverse_speed_magnitude_counts(void) {
     // 차속 부호는 방향이고, TV 임계는 크기로 본다 (기존 |v| 검사 유지).
     TVInput in = healthy();
-    in.vehicle_speed = -10.0f;
+    in.vehicle_speed = Mps{-10.0f};
     const TVGate g = tv_gate_evaluate(in, tuned());
     TEST_ASSERT_TRUE(g.speed_above_min);
 }
@@ -106,7 +106,7 @@ void test_reverse_speed_magnitude_counts(void) {
 void test_multiple_failures_are_reported_independently(void) {
     TVInput in = healthy();
     in.imu_valid = false;
-    in.vehicle_speed = 0.2f;
+    in.vehicle_speed = Mps{0.2f};
     const TVGate g = tv_gate_evaluate(in, TV_PARAMS);
     TEST_ASSERT_FALSE(g.active);
     TEST_ASSERT_FALSE(g.imu_valid);

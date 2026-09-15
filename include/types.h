@@ -96,6 +96,42 @@ using Unit      = Clamped<-1, 1>;      // steering angle
 using Pct0to100 = Clamped<0, 100>;     // brake
 using Rpm       = Clamped<0, 6000>;    // wheel/motor speed
 
+// ── 차원 타입 (Qty) ──────────────────────────────────────────────────────
+// Clamped가 "경계가 있는 액추에이터 명령/센서 값"이라면 Qty는 "계산 중인
+// 물리량"이다. 파이프라인 단계 사이를 오가는 값에 차원을 붙여, deg/s 를 N.m
+// 자리에 넣는 사고를 시그니처에서 막는다.
+//
+// 결정적으로 Qty는 자르지 않는다. dt가 NaN이거나 ax가 50 g로 들어오면 각
+// stage의 isfinite 가드까지 그대로 전달돼야 한다. 경계값으로 둔갑시키면
+// 진단이 아니라 은폐다. 범위를 강제해야 하는 값에는 Clamped를 쓴다.
+//
+// 태그는 선언만 하고 정의하지 않는다(incomplete type). 실체가 필요 없고,
+// 실수로 생성하는 것도 막힌다.
+namespace dim {
+struct Mps; struct DegPerSec; struct GForce; struct Seconds;
+struct Newton; struct NewtonMetre; struct Ampere;
+}
+
+template <class Tag>
+class Qty {
+    float v_;
+public:
+    constexpr Qty() : v_(0.0f) {}
+    explicit constexpr Qty(float x) : v_(x) {}
+    explicit constexpr operator float() const { return v_; }
+};
+
+using Mps         = Qty<dim::Mps>;          // 차속 [m/s]
+using DegPerSec   = Qty<dim::DegPerSec>;    // yaw rate [deg/s]
+using GForce      = Qty<dim::GForce>;       // 가속도 [g] (IMU 드라이버 계약)
+using Seconds     = Qty<dim::Seconds>;      // tick 간격 [s]
+using Newton      = Qty<dim::Newton>;       // 수직하중 [N]
+using NewtonMetre = Qty<dim::NewtonMetre>;  // 요 모멘트 Mz [N·m]
+// 물리량으로서의 전류. 아래 Amp과 단위는 같지만 다른 물건이다 -- Amp은 모터
+// 1개에 나가는 명령이라 ±500에서 잘리고, Ampere는 좌우 합(±1000)이나 계산
+// 중간의 한계값처럼 자르면 안 되는 값에 쓴다.
+using Ampere      = Qty<dim::Ampere>;       // 전류 [A], 클램프 없음
+
 // EZkontrol Target Phase Current is an ampere command, not a percentage.
 // The domain range follows the configured short-duration software command
 // ceiling; continuous and paddock limits are enforced separately.

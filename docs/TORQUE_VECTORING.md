@@ -24,19 +24,29 @@ total phase current + Mz -> left/right phase-current commands
 - IMU 가속도 입력은 현재 드라이버 계약에 맞춰 `g` 단위다.
 - yaw rate는 `deg/s`, Mz는 `N·m`, Fz는 `N`이다.
 - 최종 출력은 백분율이 아니라 모터 목표 상전류 `Amp`다.
+- 이 계약은 이제 주석이 아니라 타입이 강제한다. stage 사이를 오가는 값은
+  `Mps`/`DegPerSec`/`GForce`/`Seconds`/`Newton`/`NewtonMetre`/`Ampere`
+  (`include/types.h`의 `Qty<Tag>`)를 쓰고, 서로 변환되지 않는다. deg/s를 N·m
+  자리에, yaw rate를 차속 자리에 넣으면 컴파일이 실패한다.
+- `Qty`는 클램프하지 않는다. `dt`가 NaN이거나 `ax`가 비정상 값으로 들어오면
+  각 stage의 `isfinite` 가드까지 그대로 전달된다. 범위를 강제해야 하는 값
+  (모터 1개 명령 `Amp`, 조향 `Unit`)에만 클램프하는 `Clamped`를 쓴다.
+- `Amp`과 `Ampere`는 다른 물건이다. `Amp`은 모터 1개에 나가는 명령이라 ±500에서
+  잘리고, `Ampere`는 좌우 합(±1000)이나 계산 중간 한계값처럼 자르면 안 되는
+  물리량에 쓴다.
 - `Amp` 타입의 표현 범위와 현재 bring-up 단시간 구동 상한은 모터별 ±500 A다.
   별도의 103 A/모터 값은 `13 N·m ÷ Kt`로 얻은 연속 운전 참고값이며,
   500 A를 연속 허용한다는 뜻이 아니다.
 
 ## 단계별 구현
 
-| Stage | 파일 | 현재 정책 |
-|---|---|---|
-| Reference | `tv/reference.cpp` | 정상원선회 바이시클 모델, 저속·마찰 yaw 상한 |
-| Yaw control | `tv/yaw_control.cpp` | PID, measurement derivative, 연속 deadband, 조건부 적분 및 하드 제한 |
-| Load | `tv/load.cpp` | 후축 정적하중, 종하중 이동, 별도 LLTD 기반 횡하중 이동 |
-| Traction | `tv/traction.cpp` | 마찰원, `Kt×gear×radius` 전류 변환, 잘못된 입력에서 0 A |
-| Allocation | `tv/allocation.cpp` | yaw 우선, 공통 전류 축소, 장비/그립 한도와 구동·회생 부호 보존 |
+| Stage | 파일 | 시그니처 | 현재 정책 |
+|---|---|---|---|
+| Reference | `tv/reference.cpp` | `(Unit, Mps) → DegPerSec` | 정상원선회 바이시클 모델, 저속·마찰 yaw 상한 |
+| Yaw control | `tv/yaw_control.cpp` | `(DegPerSec, DegPerSec, Seconds) → NewtonMetre` | PID, measurement derivative, 연속 deadband, 조건부 적분 및 하드 제한 |
+| Load | `tv/load.cpp` | `(GForce, GForce) → Newton×2` | 후축 정적하중, 종하중 이동, 별도 LLTD 기반 횡하중 이동 |
+| Traction | `tv/traction.cpp` | `(Newton×2, GForce) → Ampere×2` | 마찰원, `Kt×gear×radius` 전류 변환, 잘못된 입력에서 0 A |
+| Allocation | `tv/allocation.cpp` | `(Ampere, NewtonMetre, Ampere×2) → Amp×2` | yaw 우선, 공통 전류 축소, 장비/그립 한도와 구동·회생 부호 보존 |
 
 `Mz`의 대칭 좌우 차등 전류는 다음 식으로 계산한다.
 

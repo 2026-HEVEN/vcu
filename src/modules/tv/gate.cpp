@@ -14,8 +14,9 @@ TVGate tv_gate_evaluate(const TVInput &in, const TVParams &p) {
     g.speed_valid = in.vehicle_speed_valid;
     // 부호는 주행 방향이고 TV 임계는 크기로 판단한다. NaN은 두 비교 모두 false라
     // 자동으로 차단된다.
-    g.speed_above_min = std::isfinite(in.vehicle_speed) &&
-                        std::fabs(in.vehicle_speed) >= p.tv_min_speed_mps;
+    const float speed = (float)in.vehicle_speed;
+    g.speed_above_min = std::isfinite(speed) &&
+                        std::fabs(speed) >= p.tv_min_speed_mps;
 
     g.active = g.driver_switch_on && g.gains_enabled && g.imu_valid &&
                g.speed_valid && g.speed_above_min;
