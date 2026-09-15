@@ -43,6 +43,11 @@ struct VehicleState {
     float     pack_current_a = 0.0f;
     int       pack_temperature_c = -40;
     uint32_t  bms_last_rx_ms = 0;
+    
+    // --- 에너지 미터 데이터 ---
+    EnergyMeterStatus energy_meter;
+    uint32_t  energy_meter_last_rx_ms = 0;
+    
     uint16_t  gear_raw_adc = 0;
     Gear      gear_sensed = Gear::Neutral; // diagnostic; never grants authority
     Gear      gear = Gear::Neutral;
