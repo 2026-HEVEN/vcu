@@ -429,9 +429,17 @@ void poll_rx() {
         const bool from_l = (m.identifier == CAN_ID_FB1_L);
         const bool from_r = (m.identifier == CAN_ID_FB1_R);
 
-        // 에너지 미터 데이터 수신
-        if (m.data_length_code == 8 && m.identifier == CAN_ID_ENERGY_METER) {
-            state.energy_meter = decode_energy_meter_status(m.data);
+        // 에너지미터 RECORD 수신 (게이트웨이 0x1CF5FFC1, Extended). cluster dev 확정.
+        if (m.data_length_code == 8 && m.identifier == CAN_ID_EM_RECORD) {
+            EnergyMeterStatus em = decode_energy_meter_status(m.data);
+            // plausibility: 범위 밖이면 무효 → 오독된 거대값이 제한기를 오작동시키지 못하게.
+            if (em.bus_voltage_v < realcar_cal::bringup::EM_VOLTAGE_MIN_V ||
+                em.bus_voltage_v > realcar_cal::bringup::EM_VOLTAGE_MAX_V ||
+                em.bus_current_a < realcar_cal::bringup::EM_CURRENT_MIN_A ||
+                em.bus_current_a > realcar_cal::bringup::EM_CURRENT_MAX_A) {
+                em.valid = false;
+            }
+            state.energy_meter = em;
             state.energy_meter_last_rx_ms = millis();
             continue;
         }

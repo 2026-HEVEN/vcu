@@ -64,9 +64,14 @@ constexpr int COMPONENT_TEST_START_MAX_MOTOR_RPM = 50;
 constexpr bool ENABLE_DRIVE_POWER_LIMIT = true;
 constexpr float DRIVE_POWER_SOFT_LIMIT_W = 8000.0f;
 
-// [신규] 에너지 미터 제어 파라미터 (검증 전에는 관찰만 수행)
-constexpr bool ENABLE_ENERGY_METER_LIMIT = false; 
-constexpr unsigned ENERGY_METER_STALE_MS = 50U; // 100Hz 기준 5프레임 누락 시 타임아웃
+// [에너지미터] cluster dev 확정: RECORD 0x1CF5FFC1, Extended, 10ms(100Hz). 검증 전엔 관찰만.
+constexpr bool ENABLE_ENERGY_METER_LIMIT = false;
+constexpr unsigned ENERGY_METER_STALE_MS = 30U; // 100Hz RECORD 3프레임 누락 시 타임아웃
+// plausibility 범위 — 범위 밖 값은 무효 처리(오독된 거대값 차단). ★팩 사양으로 확정.
+constexpr float EM_VOLTAGE_MIN_V = 0.0f;
+constexpr float EM_VOLTAGE_MAX_V = 700.0f;
+constexpr float EM_CURRENT_MIN_A = -600.0f;
+constexpr float EM_CURRENT_MAX_A = 600.0f;
 
 constexpr float DRIVETRAIN_EFFICIENCY = 0.92f;
 constexpr float CONTROLLER_FEEDBACK_STALE_MS = 250.0f;

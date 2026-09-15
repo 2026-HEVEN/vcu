@@ -328,6 +328,11 @@ void debug_update() {
                 state.imu_telemetry.yaw_valid, state.imu_telemetry.accel_valid,
                 state.wheel_telemetry.valid[0], state.wheel_telemetry.valid[1],
                 state.wheel_telemetry.valid[2], state.wheel_telemetry.valid[3]);
+            // 에너지미터 관찰 (ENABLE_ENERGY_METER_LIMIT 켜기 전 값·수신 검증용)
+            Serial.printf("EM valid=%d V=%.1f I=%+.1f P=%.0fW age=%u\n",
+                state.energy_meter.valid, state.energy_meter.bus_voltage_v,
+                state.energy_meter.bus_current_a, state.energy_meter.total_power_w,
+                age_ms(state.energy_meter_last_rx_ms));
         }
     }
     was_fast_log_active = fast_log_active;
