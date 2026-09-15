@@ -54,6 +54,18 @@ constexpr uint32_t CAN_ID_VCU_STEERING = car_check::STEERING_ID;
 constexpr uint32_t CAN_ID_VCU_IMU = car_check::IMU_ID;
 constexpr uint32_t CAN_ID_VCU_WHEEL_SPEEDS = car_check::WHEELS_ID;
 constexpr uint32_t CAN_ID_VCU_CONTROL_STATUS = car_check::CONTROL_ID;
+// ── 고속 로깅 프레임 (VCU -> Monolith 데이터로거) ────────────────────────
+// Prio 7(0x1C...)로 보내 컨트롤러 Life Signal을 절대 지연시키지 않는다.
+// em-gateway(0x1CF5FFC1/0x1CF6FFC1)와 같은 등급이다.
+// Monolith는 수신 프레임 전부를 타임스탬프와 함께 raw로 SD에 남기므로 로거
+// 측 수정 없이 기록된다. 디코딩은 오프라인에서 한다.
+//
+// 0x1806/0x1807C0D0은 car_check(WSS/적용상태)가 이미 쓰고 있어 피했다.
+constexpr uint32_t CAN_ID_VCU_LOG_DRIVE   = 0x1C01C0D0; // 10ms 명령/실측 전류
+constexpr uint32_t CAN_ID_VCU_LOG_MOTOR   = 0x1C02C0D0; // 10ms 회전수/모선전류
+constexpr uint32_t CAN_ID_VCU_LOG_TV_YAW  = 0x1C03C0D0; // 20ms TV 요 제어
+constexpr uint32_t CAN_ID_VCU_LOG_TV_LOAD = 0x1C04C0D0; // 20ms TV 하중/한계
+
 // Cluster -> logger BMS summary. VCU may observe this for diagnostics only;
 // the BLE path is not an authoritative safety input.
 constexpr uint32_t CAN_ID_CLUSTER_BMS_STATUS = 0x18F3FFC0;
@@ -116,6 +128,22 @@ void encode_vcu_cluster_status(uint8_t gear, bool brake, bool hv_active,
 // VCU -> Cluster/TMA-1 single vehicle speed frame (0x1803C0D0). HEVEN-defined.
 uint16_t vehicle_speed_kph_to_raw(float kph);
 void encode_vcu_vehicle_speed(float speed_kph, bool valid, uint8_t out[8]);
+
+// 로깅 인코더. 전부 little-endian int16 4개 (tv_load만 예외).
+//   drive  : cmd_L, cmd_R, iph_L, iph_R          0.1 A/bit
+//   motor  : rpm_L, rpm_R (1 rpm/bit), ibus_L, ibus_R (0.1 A/bit)
+//   tv_yaw : desired_yaw, Mz (0.01/bit), req_L, req_R (0.1 A/bit)
+//   tv_load: fz_L, fz_R (1 N/bit), max_L, max_R (uint8, 4 A/bit),
+//            gate 비트필드, life
+void encode_vcu_log_drive(float cmd_l_a, float cmd_r_a,
+                          float iph_l_a, float iph_r_a, uint8_t out[8]);
+void encode_vcu_log_motor(int rpm_l, int rpm_r,
+                          float ibus_l_a, float ibus_r_a, uint8_t out[8]);
+void encode_vcu_log_tv_yaw(float desired_yaw_dps, float yaw_moment_nm,
+                           float req_l_a, float req_r_a, uint8_t out[8]);
+void encode_vcu_log_tv_load(float fz_l_n, float fz_r_n,
+                            float max_l_a, float max_r_a,
+                            uint8_t gate_bits, uint8_t life, uint8_t out[8]);
 int16_t telemetry_to_i16(float value, float scale);
 // Legacy numeric-only helpers retained for compatibility/tests. Runtime Car Check
 // uses car_check::encode_* so validity and life bytes are always present.
