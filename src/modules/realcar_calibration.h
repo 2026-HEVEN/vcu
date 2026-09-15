@@ -87,6 +87,17 @@ constexpr unsigned COMPONENT_TEST_RELEASE_TICKS =
 constexpr unsigned MOTOR_RECONNECT_RAMP_MS = 1000U;
 static_assert(MOTOR_RECONNECT_RAMP_MS > 0U,
               "motor reconnect ramp must be nonzero");
+// Max age of a command snapshot the CAN life task will act on. Normal age is
+// one control tick, so this is wide margin yet tighter than the 200 ms deadman.
+constexpr unsigned MOTOR_COMMAND_SNAPSHOT_MAX_AGE_MS = 100U;
+static_assert(MOTOR_COMMAND_SNAPSHOT_MAX_AGE_MS > 0U,
+              "command snapshot age limit must be nonzero");
+// Consecutive twai_transmit() failures before the link is invalidated (zeroing
+// BOTH motors). PROVISIONAL: EZkontrol self-shuts after 5 missed life frames
+// (250 ms), so this must fire first. See docs/M2_FOLLOWUP_ITEMS.md item 1.
+constexpr unsigned MOTOR_TX_FAIL_LIMIT = 3U;
+static_assert(MOTOR_TX_FAIL_LIMIT * MOTOR_COMMAND_PERIOD_MS < 250U,
+              "VCU must cut before the controller's own 250 ms life timeout");
 constexpr float CLUSTER_COMMAND_STALE_MS = 200.0f;
 constexpr unsigned CAN_RX_QUEUE_LENGTH = 32U;
 constexpr float PHASE_CURRENT_HARD_CUTOFF_A = 1000.0f;

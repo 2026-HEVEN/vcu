@@ -111,6 +111,7 @@ namespace {
     };
     TimeSyncPulseState time_sync_state{};
     TimeSyncPulseOutput time_sync_output{};
+    uint32_t motor_command_seq = 0U;   // starts at 1; seq 0 = nothing published
 }
 
 static void throttle_update() {
@@ -343,6 +344,21 @@ static void drive_supervisor_update() {
     state.paddock_sensor_blocked = out.paddock_sensor_blocked;
     state.paddock_current_limited = out.paddock_current_limited;
     state.drive_slew_limited = out.drive_slew_limited;
+
+    // Publish this tick's decision as one unit. safety_task runs BEFORE this
+    // task, so torque_allowed() here is this tick's verdict, not the previous.
+    MotorCommandSnapshot command_snapshot;
+    command_snapshot.seq = ++motor_command_seq;
+    command_snapshot.published_ms = millis();
+    command_snapshot.left_a = out.left_a;
+    command_snapshot.right_a = out.right_a;
+    command_snapshot.gear = state.gear;
+    command_snapshot.safety_allow = torque_allowed();
+    command_snapshot.throttle_signal_valid = state.throttle_signal_valid;
+    command_snapshot.propulsion_direction_armed =
+        state.propulsion_direction_armed;
+    can_bus::publish_motor_command(command_snapshot);
+
     can_bus::note_command();
 }
 static void can_rx_update()  { can_bus::poll_rx(); }
@@ -367,8 +383,11 @@ Task g_tasks[] = {
     { longitudinal_update,     10, 0 },
     { torque_vectoring_update, 10, 0 },
     { time_sync_pulse_update,  10, 0 },
-    { drive_supervisor_update, 10, 0 },
+    // safety BEFORE drive_supervisor: the command snapshot is published at the
+    // end of drive_supervisor_update and must carry this tick's safety verdict,
+    // not the previous tick's. Do not reorder these two.
     { safety_task,             10, 0 },
+    { drive_supervisor_update, 10, 0 },
     { vehicle_speed_can_tx_update, 50, 0 }, // 20 Hz VCU -> Cluster/TMA-1 single speed telemetry
     { log_can_tx_update,       10, 0 },   // 100 Hz VCU -> Monolith 고속 로깅 (Prio 7)
     { clamp_stats_can_tx_update, 1000, 0 }, // 1 Hz Amp 포화 통계 (Prio 7)
