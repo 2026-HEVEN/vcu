@@ -196,11 +196,29 @@ void encode_vcu_log_tv_load(float fz_l_n, float fz_r_n,
 
 void encode_vcu_log_clamp(uint32_t high_count, uint32_t low_count,
                           float high_peak_a, float low_peak_a, uint8_t out[8]) {
-    // uint32 -> uint16 포화. 감싸돌면 로그의 증분이 음수가 되어 분석이 깨진다.
     const uint16_t hi = high_count > 65535u ? (uint16_t)65535u : (uint16_t)high_count;
     const uint16_t lo = low_count  > 65535u ? (uint16_t)65535u : (uint16_t)low_count;
     put_u16le(out + 0, hi);
     put_u16le(out + 2, lo);
     put_i16le(out + 4, telemetry_to_i16(high_peak_a, 10.0f));
     put_i16le(out + 6, telemetry_to_i16(low_peak_a, 10.0f));
+}
+
+// 에너지미터 RECORD(0x1CF5FFC1) 디코드 — cluster dev 확정: signed int16 LE.
+//   byte0-1 HV전압 0.1V, byte2-3 HV전류 0.1A, byte4-5 LV전압 0.01V, byte6-7 온도 0.01°C.
+//   (전류 byte2-3은 FSK-EEM log_record_t 레이아웃 기준 — 게이트웨이 펌웨어로 최종 확인 권장.)
+//   부호 있는 디코드라 회생 전류가 음수로 보존된다(unsigned 오독으로 인한 거대값 방지).
+//   범위(plausibility) 검사는 core 설정에 의존하므로 can_bus 쪽에서 수행한다.
+EnergyMeterStatus decode_energy_meter_status(const uint8_t data[8]) {
+    const auto s16 = [](const uint8_t *p) -> int16_t {
+        const uint32_t raw = (uint32_t)p[0] | ((uint32_t)p[1] << 8);
+        return (int16_t)(raw >= 0x8000 ? (int32_t)raw - 65536 : (int32_t)raw);
+    };
+    EnergyMeterStatus out;
+    out.bus_voltage_v = (float)s16(data + 0) * 0.1f;
+    out.bus_current_a = (float)s16(data + 2) * 0.1f;                 // 회생 −
+    out.total_power_w = out.bus_voltage_v * out.bus_current_a;       // 부호 보존
+    out.valid = std::isfinite(out.bus_voltage_v) &&
+                std::isfinite(out.bus_current_a);
+    return out;
 }

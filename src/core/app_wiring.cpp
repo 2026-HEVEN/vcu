@@ -100,6 +100,7 @@ namespace {
         realcar_cal::bringup::CONTROLLER_CUTOFF_C,
         realcar_cal::bringup::MOTOR_DERATE_START_C,
         realcar_cal::bringup::MOTOR_CUTOFF_C,
+        realcar_cal::bringup::ENABLE_ENERGY_METER_LIMIT,
     };
     const TimeSyncPulseParams TIME_SYNC_PARAMS {
         realcar_cal::bringup::ENABLE_TIME_SYNC_PULSE,
@@ -325,6 +326,7 @@ static void drive_supervisor_update() {
         propulsion_requested, realcar_cal::confirmed::CONTROL_PERIOD_S,
         state.vehicle_speed_mps, state.paddock_speed_mps,
         state.pack_data_valid, state.pack_current_a,
+        state.energy_meter.valid, state.energy_meter.total_power_w
     };
     const DriveSupervisorOutput out =
         drive_supervisor_compute(in, DRIVE_SUPERVISOR_PARAMS,

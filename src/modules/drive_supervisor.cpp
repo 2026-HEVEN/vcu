@@ -244,6 +244,12 @@ DriveSupervisorOutput drive_supervisor_compute(
     out.predicted_command_power_w = estimate_input_power(out.left_a, out.right_a);
 
     float governing_power = out.measured_bus_power_w;
+    
+    if (params.enable_energy_meter_limit && in.energy_meter_valid && 
+        in.energy_meter_power_w > governing_power) {
+        governing_power = in.energy_meter_power_w;
+    }
+
     if (out.estimated_input_power_w > governing_power)
         governing_power = out.estimated_input_power_w;
     if (out.predicted_command_power_w > governing_power)
