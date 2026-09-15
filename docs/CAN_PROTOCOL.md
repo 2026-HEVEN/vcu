@@ -83,6 +83,13 @@
 | VCU → TMA-1 | 조향 텔레메트리 | `0x1804C0D0` (신규) | — | 50ms | 6 |
 | VCU → TMA-1 | IMU 텔레메트리 | `0x1805C0D0` (신규) | — | 50ms | 6 |
 | Cluster → logger | BMS 상태 요약 | `0x18F3FFC0` | — | 100ms | 6 |
+| EM-GW → logger | 에너지미터 레코드 | `0x1CF5FFC1` | — | 10ms | 7 |
+| EM-GW → logger | 에너지미터 틱/상태 | `0x1CF6FFC1` | — | 100ms | 7 |
+| **VCU → logger** | **명령/실측 전류** | **`0x1C01C0D0`** | — | **10ms** | **7** |
+| **VCU → logger** | **회전수/모선전류** | **`0x1C02C0D0`** | — | **10ms** | **7** |
+| **VCU → logger** | **TV 요 제어** | **`0x1C03C0D0`** | — | **20ms** | **7** |
+| **VCU → logger** | **TV 하중/한계** | **`0x1C04C0D0`** | — | **20ms** | **7** |
+| **VCU → logger** | **Amp 포화 통계** | **`0x1C05C0D0`** | — | **1s** | **7** |
 
 > ID에서 PS(목적지)·SA(송신)만 컨트롤러별로 바뀜. 위 표의 ID는 `PF<<16 | PS<<8 | SA`로 조립됨(+ Priority).
 
@@ -304,3 +311,102 @@ void     encode_vcu_vehicle_speed(float speed_kph, bool valid, uint8_t out[8]);
 - ID·byte·bit·scaling 계약은 양 레포와 Monolith decoder에서 동일해야 한다.
 - 수정 시: ① 이 문서 갱신 → ② 필요한 송수신 레포 갱신 → ③ Monolith decoder 갱신 → ④ 팀 공지.
 - 새 메시지 ID는 J1939 규칙(PF/PS/SA)에 맞게 할당하고 §4 표에 추가.
+
+---
+
+## 8. 고속 로깅 프레임 (VCU → Monolith)
+
+Monolith 데이터로거가 수신 프레임 **전체**를 타임스탬프와 함께 raw로 SD에
+남기므로, 로거 측 수정 없이 기록된다. 디코딩은 오프라인에서 한다
+(`tools/decode_log_frames.py`).
+
+**전부 Priority 7** — em-gateway와 같은 등급이고, 컨트롤러 Life Signal(50ms)을
+절대 지연시키지 않는다. 송신은 대기시간 0이라 버스가 붐비면 그 프레임을 버리고
+다음 틱에 다시 보낸다.
+
+`0x1806C0D0`(WSS)·`0x1807C0D0`(적용 상태)은 car_check가 이미 사용하므로 피했다.
+
+### 8.1 명령/실측 전류 `0x1C01C0D0` · 10ms (100Hz)
+
+| 바이트 | 항목 | 분해능 |
+|---|---|---|
+| 0~1 | 명령 전류 L (`can_commanded_current_L`) | int16 LE, 0.1 A/bit |
+| 2~3 | 명령 전류 R | int16 LE, 0.1 A/bit |
+| 4~5 | 실측 상전류 L (`controller_fb1_L.phase_current_a`) | int16 LE, 0.1 A/bit |
+| 6~7 | 실측 상전류 R | int16 LE, 0.1 A/bit |
+
+명령 대비 실측의 비율이 컨트롤러가 명령을 그대로 흘리는지 보여준다. 비율이
+일정한 상수면 단(挡)별 상전류 비율 스케일링, 속도에 따라 변하면 저속 회생
+테이퍼 또는 Target Speed 상한 문제다.
+
+### 8.2 회전수/모선전류 `0x1C02C0D0` · 10ms (100Hz)
+
+| 바이트 | 항목 | 분해능 |
+|---|---|---|
+| 0~1 | 모터 회전수 L | int16 LE, 1 rpm/bit |
+| 2~3 | 모터 회전수 R | int16 LE, 1 rpm/bit |
+| 4~5 | 모선전류 L | int16 LE, 0.1 A/bit |
+| 6~7 | 모선전류 R | int16 LE, 0.1 A/bit |
+
+### 8.3 TV 요 제어 `0x1C03C0D0` · 20ms (50Hz, 짝수 틱)
+
+| 바이트 | 항목 | 분해능 |
+|---|---|---|
+| 0~1 | 목표 yaw rate | int16 LE, 0.01 deg/s |
+| 2~3 | 요 모멘트 Mz | int16 LE, 0.01 N·m |
+| 4~5 | TV 출력 L (`requested_torque_L`) | int16 LE, 0.1 A |
+| 6~7 | TV 출력 R | int16 LE, 0.1 A |
+
+`requested_torque`는 TV 출력이고 8.1의 `can_commanded_current`는
+`drive_supervisor`를 거친 값이다. **둘의 차이가 파워·상승률·열 제한이 깎은
+양**이며, 지금까지 관측할 방법이 없던 값이다.
+
+### 8.4 TV 하중/한계 `0x1C04C0D0` · 20ms (50Hz, 홀수 틱)
+
+| 바이트 | 항목 | 분해능 |
+|---|---|---|
+| 0~1 | 후륜 수직하중 L | int16 LE, 1 N/bit |
+| 2~3 | 후륜 수직하중 R | int16 LE, 1 N/bit |
+| 4 | 트랙션 상한 L | uint8, 4 A/bit (0~1020 A) |
+| 5 | 트랙션 상한 R | uint8, 4 A/bit |
+| 6 | 게이트 비트 | bit0 active, bit1 driver_switch, bit2 gains, bit3 imu_valid, bit4 speed_valid, bit5 speed_above_min |
+| 7 | Life | 0~255 |
+
+트랙션 상한은 진단용이라 4 A/bit로 충분하며, 그 덕에 게이트 사유 비트 자리를
+확보했다.
+
+### 8.5 Amp 포화 통계 `0x1C05C0D0` · 1s
+
+| 바이트 | 항목 | 분해능 |
+|---|---|---|
+| 0~1 | 상한 도달 횟수 (누적) | uint16, 65535에서 포화 |
+| 2~3 | 하한 도달 횟수 (누적) | uint16, 65535에서 포화 |
+| 4~5 | 상한 초과분 중 최대 raw | int16 LE, 0.1 A/bit |
+| 6~7 | 하한 미만분 중 최소 raw | int16 LE, 0.1 A/bit |
+
+`Clamped<-500,500>`(`Amp`)이 명령을 자를 때마다 누적된다. 카운터가 누적값이라
+**로그의 행 간 증분이 그 1초 구간의 포화 횟수**가 되어 시간 정보가 복원된다.
+`high_peak`도 누적 최대이므로 계단 모양으로 올라가며, 갱신 시각이 "가장 심하게
+요구한 순간"을 가리킨다.
+
+주행 중에는 시리얼 `CLAMP` 명령을 칠 수 없으므로 이 프레임이 유일한 관측
+수단이다. 호출 위치(`file:line:function`)는 8바이트에 들어가지 않아 시리얼
+명령에만 남는다. `Percent`/`Unit`/`Rpm`/`Pct0to100`도 같은 통계를 갖지만 실제로
+포화가 문제되는 것은 `Amp`라 CAN에는 싣지 않는다.
+
+카운터는 uint32에서 uint16으로 좁히며 **감싸돌지 않고 포화**시킨다. 감싸돌면
+로그 증분이 음수가 되어 분석이 깨진다.
+
+### 8.6 버스 대역
+
+250 kbps, 확장 ID 8바이트 프레임 기준(최악 스터핑 152 bit).
+
+| 구성 | 프레임 | worst |
+|---|---|---|
+| 기존 (VCU·컨트롤러·클러스터) | 300 fps | 18.2% |
+| + em-gateway | 410 fps | 24.9% |
+| + 로깅 4프레임 | 710 fps | 43.2% |
+| **+ 포화 통계 1Hz** | **711 fps** | **43.3%** |
+
+50Hz 두 프레임을 격틱으로 엇갈려 같은 틱 버스트를 5프레임(3.04 ms)이 아닌
+4프레임(2.43 ms)으로 낮췄다. 10ms 틱 대비 24%이므로 Life Signal 여유가 충분하다.

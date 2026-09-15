@@ -19,6 +19,12 @@ namespace can_bus {
     void send_vehicle_speed(); // VCU -> Cluster/TMA-1 single speed telemetry
     void send_cluster_status(); // VCU -> Cluster gear/brake/HV state
     void send_sensor_telemetry(); // VCU -> TMA-1 steering + IMU telemetry
+    // 10ms 주기 호출. drive/motor는 매 틱(100Hz), TV 두 프레임은 격틱으로
+    // 엇갈려 50Hz로 나간다 - 같은 틱에 4개가 몰리는 버스트를 피한다.
+    void send_log_frames();
+    // 1Hz. Amp 포화 통계 — 주행 중에는 시리얼 CLAMP 명령을 칠 수 없으므로
+    // 이 경로가 유일한 관측 수단이다.
+    void send_clamp_stats();
     bool handshaked();      // controller handshake completed
     bool deadman_ok();      // a fresh control command arrived within timeout
     void note_command();    // call when a new control command is produced

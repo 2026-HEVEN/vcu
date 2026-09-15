@@ -11,7 +11,7 @@ void test_clamps_overrange(void) { TEST_ASSERT_EQUAL_FLOAT(100.0f, (float)thrott
 
 // 중간 입력은 0~100% 사이의 부분값 + 단조 증가
 void test_partial_in_middle(void) {
-    float mid = throttle_compute({2000});
+    const float mid = (float)throttle_compute({2000});
     TEST_ASSERT_TRUE(mid > 0.0f && mid < 100.0f);
 }
 void test_monotonic(void) {

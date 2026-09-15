@@ -330,6 +330,67 @@ void start_life_task() {
 }
 
 
+void send_log_frames() {
+    static uint8_t tick = 0;
+    static uint8_t log_life = 0;
+    uint8_t data[8];
+    // 대기시간 0. 로깅이 제어 스케줄러를 막아서는 안 된다 - 버스가 붐비면
+    // 그 프레임은 버리고 다음 틱에 다시 보낸다(100Hz라 손실이 무해하다).
+    const auto send = [&](uint32_t id) {
+        if (!transmit_ext(id, data, 0)) ++state.sensor_telemetry_tx_drops;
+    };
+
+    // 100Hz - 명령 전류와 실제 상전류. 이 둘의 비율이 컨트롤러가 명령을
+    // 그대로 흘리는지 보여준다.
+    encode_vcu_log_drive(state.can_commanded_current_L,
+                         state.can_commanded_current_R,
+                         state.controller_fb1_L.phase_current_a,
+                         state.controller_fb1_R.phase_current_a, data);
+    send(CAN_ID_VCU_LOG_DRIVE);
+
+    // 100Hz - 회전수와 모선전류
+    encode_vcu_log_motor((int)state.controller_fb1_L.motor_speed_rpm,
+                         (int)state.controller_fb1_R.motor_speed_rpm,
+                         state.controller_fb1_L.bus_current_a,
+                         state.controller_fb1_R.bus_current_a, data);
+    send(CAN_ID_VCU_LOG_MOTOR);
+
+    if ((tick & 1u) == 0u) {
+        // 50Hz(짝수 틱) - 요 제어 경로. requested_torque는 TV 출력이고
+        // can_commanded_current는 drive_supervisor를 거친 값이라, 둘의 차이가
+        // 파워/상승률/열 제한이 깎은 양이다.
+        encode_vcu_log_tv_yaw(state.desired_yaw_rate, state.yaw_moment,
+                              (float)state.requested_torque_L,
+                              (float)state.requested_torque_R, data);
+        send(CAN_ID_VCU_LOG_TV_YAW);
+    } else {
+        // 50Hz(홀수 틱) - 하중과 트랙션 한계, 게이트 사유
+        const TVGate &g = state.tv_gate;
+        const uint8_t gate_bits =
+            (uint8_t)((g.active ? 0x01u : 0u) |
+                      (g.driver_switch_on ? 0x02u : 0u) |
+                      (g.gains_enabled ? 0x04u : 0u) |
+                      (g.imu_valid ? 0x08u : 0u) |
+                      (g.speed_valid ? 0x10u : 0u) |
+                      (g.speed_above_min ? 0x20u : 0u));
+        encode_vcu_log_tv_load(state.fz_L, state.fz_R,
+                               state.max_torque_L, state.max_torque_R,
+                               gate_bits, log_life++, data);
+        send(CAN_ID_VCU_LOG_TV_LOAD);
+    }
+    ++tick;
+}
+
+void send_clamp_stats() {
+    const ClampStats s = Amp::clamp_stats();
+    uint8_t data[8];
+    encode_vcu_log_clamp(s.high_count, s.low_count,
+                         s.high_worst.raw, s.low_worst.raw, data);
+    // 여기서도 대기시간 0. 진단이 제어를 막아서는 안 된다.
+    if (!transmit_ext(CAN_ID_VCU_LOG_CLAMP, data, 0))
+        ++state.sensor_telemetry_tx_drops;
+}
+
 void send_vehicle_speed() {
     uint8_t data[8];
     const float speed_kph = state.vehicle_speed_mps * 3.6f;
@@ -376,15 +437,15 @@ void send_sensor_telemetry() {
         !state.component_test_normal_inhibit && state.propulsion_direction_armed &&
         state.controller_feedback_fresh && !state.controller_fault_latched &&
         (state.gear == Gear::Drive || state.gear == Gear::Reverse);
-    const bool gains = std::fabs(TV_PARAMS.kp)>1.0e-6f ||
-        std::fabs(TV_PARAMS.ki)>1.0e-6f || std::fabs(TV_PARAMS.kd)>1.0e-6f;
+    // 차단 사유를 여기서 재계산하지 않는다. 판정은 tv_gate_evaluate()가 이미
+    // 했고, app_wiring이 state.tv_gate에 넣어둔 그 결과만 그대로 보고한다.
+    const TVGate &tv_gate = state.tv_gate;
     const CarCheckStatusInput in {
         state.tv_enable_requested, state.regen_auto_requested,
         state.paddock_requested, state.paddock_active, state.cluster_cmd_alive,
-        state.tv_pipeline_active, gains, state.imu_valid,
-        state.vehicle_speed_valid,
-        std::isfinite(state.vehicle_speed_mps) &&
-            std::fabs(state.vehicle_speed_mps)>=TV_PARAMS.tv_min_speed_mps,
+        state.tv_pipeline_active, tv_gate.gains_enabled, tv_gate.imu_valid,
+        tv_gate.speed_valid,
+        tv_gate.speed_above_min,
         output_allowed, state.component_test_active || state.time_sync_active,
         realcar_cal::bringup::REGEN_HARDWARE_VALIDATED,
         realcar_cal::bringup::BRAKE_SENSOR_INSTALLED, state.pack_data_valid,

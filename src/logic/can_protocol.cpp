@@ -4,6 +4,7 @@
 //  Application work happens only in src/modules/.
 // ============================================================
 #include "can_protocol.h"
+#include <cmath>
 
 uint16_t torque_to_raw(float amps) {
     return (uint16_t)((amps + 3200.0f) * 10.0f + 0.5f);
@@ -128,6 +129,9 @@ void encode_vcu_vehicle_speed(float speed_kph, bool valid, uint8_t out[8]) {
 }
 
 int16_t telemetry_to_i16(float value, float scale) {
+    // NaN은 아래 두 비교를 모두 통과해 정의되지 않은 캐스트로 빠진다.
+    // TV 내부 신호가 NaN이 될 수 있으므로 0으로 떨어뜨린다.
+    if (!std::isfinite(value) || !std::isfinite(scale)) return 0;
     const float raw = value * scale;
     if (raw > 32767.0f) return 32767;
     if (raw < -32768.0f) return -32768;
@@ -145,4 +149,58 @@ void encode_vcu_imu(float yaw_rate_dps, float accel_x_g, float accel_y_g,
     put_i16le(out + 0, telemetry_to_i16(yaw_rate_dps, 100.0f));
     put_i16le(out + 2, telemetry_to_i16(accel_x_g, 100.0f));
     put_i16le(out + 4, telemetry_to_i16(accel_y_g, 100.0f));
+}
+
+namespace {
+uint8_t to_u8_scaled(float value, float per_bit) {
+    if (!std::isfinite(value) || value <= 0.0f || per_bit <= 0.0f) return 0;
+    const float raw = value / per_bit + 0.5f;
+    return raw >= 255.0f ? (uint8_t)255 : (uint8_t)raw;
+}
+}
+
+void encode_vcu_log_drive(float cmd_l_a, float cmd_r_a,
+                          float iph_l_a, float iph_r_a, uint8_t out[8]) {
+    put_i16le(out + 0, telemetry_to_i16(cmd_l_a, 10.0f));
+    put_i16le(out + 2, telemetry_to_i16(cmd_r_a, 10.0f));
+    put_i16le(out + 4, telemetry_to_i16(iph_l_a, 10.0f));
+    put_i16le(out + 6, telemetry_to_i16(iph_r_a, 10.0f));
+}
+
+void encode_vcu_log_motor(int rpm_l, int rpm_r,
+                          float ibus_l_a, float ibus_r_a, uint8_t out[8]) {
+    put_i16le(out + 0, telemetry_to_i16((float)rpm_l, 1.0f));
+    put_i16le(out + 2, telemetry_to_i16((float)rpm_r, 1.0f));
+    put_i16le(out + 4, telemetry_to_i16(ibus_l_a, 10.0f));
+    put_i16le(out + 6, telemetry_to_i16(ibus_r_a, 10.0f));
+}
+
+void encode_vcu_log_tv_yaw(float desired_yaw_dps, float yaw_moment_nm,
+                           float req_l_a, float req_r_a, uint8_t out[8]) {
+    put_i16le(out + 0, telemetry_to_i16(desired_yaw_dps, 100.0f));
+    put_i16le(out + 2, telemetry_to_i16(yaw_moment_nm, 100.0f));
+    put_i16le(out + 4, telemetry_to_i16(req_l_a, 10.0f));
+    put_i16le(out + 6, telemetry_to_i16(req_r_a, 10.0f));
+}
+
+void encode_vcu_log_tv_load(float fz_l_n, float fz_r_n,
+                            float max_l_a, float max_r_a,
+                            uint8_t gate_bits, uint8_t life, uint8_t out[8]) {
+    put_i16le(out + 0, telemetry_to_i16(fz_l_n, 1.0f));
+    put_i16le(out + 2, telemetry_to_i16(fz_r_n, 1.0f));
+    out[4] = to_u8_scaled(max_l_a, 4.0f);
+    out[5] = to_u8_scaled(max_r_a, 4.0f);
+    out[6] = gate_bits;
+    out[7] = life;
+}
+
+void encode_vcu_log_clamp(uint32_t high_count, uint32_t low_count,
+                          float high_peak_a, float low_peak_a, uint8_t out[8]) {
+    // uint32 -> uint16 포화. 감싸돌면 로그의 증분이 음수가 되어 분석이 깨진다.
+    const uint16_t hi = high_count > 65535u ? (uint16_t)65535u : (uint16_t)high_count;
+    const uint16_t lo = low_count  > 65535u ? (uint16_t)65535u : (uint16_t)low_count;
+    put_u16le(out + 0, hi);
+    put_u16le(out + 2, lo);
+    put_i16le(out + 4, telemetry_to_i16(high_peak_a, 10.0f));
+    put_i16le(out + 6, telemetry_to_i16(low_peak_a, 10.0f));
 }

@@ -213,7 +213,7 @@ static void paddock_update() {
 }
 static void longitudinal_update() {
     state.total_torque = longitudinal_compute({
-        state.throttle_pct, state.brake_pct, state.pack_soc, drive_mode,
+        (float)state.throttle_pct, (float)state.brake_pct, state.pack_soc, drive_mode,
         state.regen_auto_requested &&
             realcar_cal::bringup::REGEN_HARDWARE_VALIDATED });
     state.longitudinal_regen_demand = state.total_torque < 0.0f;
@@ -236,22 +236,28 @@ static void longitudinal_update() {
     }
 }
 static void torque_vectoring_update() {
+    // 게이트 조건을 여기서 미리 접지 않는다. 원본 값과 유효성 플래그를 그대로
+    // 넘기고, 판정은 tv_gate_evaluate()가 단독으로 한다.
     const TVInput tv_in{
-        state.total_torque, state.yaw_rate, state.steering_angle,
-        // 전륜 신호를 못 믿으면 차속 0 → reference stage의 저속 컷오프에 걸려 TV가 꺼진다.
-        state.vehicle_speed_valid ? state.vehicle_speed_mps : 0.0f,
-        state.accel_x, state.accel_y, TV_DT_S,
-        state.tv_enable_requested && state.imu_valid
+        Ampere{state.total_torque}, DegPerSec{state.yaw_rate},
+        state.steering_angle,
+        Mps{state.vehicle_speed_mps},
+        GForce{state.accel_x}, GForce{state.accel_y}, Seconds{TV_DT_S},
+        state.tv_enable_requested, state.vehicle_speed_valid, state.imu_valid
     };
     TVOutput o = tv_compute(tv_in, tv_yaw_state);
-    state.tv_pipeline_active = o.control_active;
+    state.tv_gate = o.gate;
+    state.tv_pipeline_active = o.gate.active;
     state.requested_torque_L = o.torque_L;
     state.requested_torque_R = o.torque_R;
     // 중간신호 관측용 복사 (debug_monitor / Cluster에서 튜닝에 사용)
-    state.desired_yaw_rate = o.desired_yaw_rate;
-    state.yaw_moment       = o.yaw_moment;
-    state.fz_L = o.fz_L; state.fz_R = o.fz_R;
-    state.max_torque_L = o.max_torque_L; state.max_torque_R = o.max_torque_R;
+    // state는 텔레메트리/CAN 인코딩용이라 생 float로 유지한다. 여기가 파이프라인
+    // 밖으로 나가는 경계다.
+    state.desired_yaw_rate = (float)o.desired_yaw_rate;
+    state.yaw_moment       = (float)o.yaw_moment;
+    state.fz_L = (float)o.fz_L; state.fz_R = (float)o.fz_R;
+    state.max_torque_L = (float)o.max_torque_L;
+    state.max_torque_R = (float)o.max_torque_R;
 }
 static void time_sync_pulse_update() {
     const bool throttle_released =
@@ -324,8 +330,10 @@ static void drive_supervisor_update() {
     const DriveSupervisorOutput out =
         drive_supervisor_compute(in, DRIVE_SUPERVISOR_PARAMS,
                                  drive_supervisor_state);
-    state.torque_L = out.left_a;
-    state.torque_R = out.right_a;
+    // drive_supervisor는 생 float[A]로 계산한다. 여기가 그 값이 모터 명령
+    // 차원으로 확정되는 경계다 -- Amp(...)로 의도를 명시한다.
+    state.torque_L = Amp{out.left_a};
+    state.torque_R = Amp{out.right_a};
     state.measured_bus_power_w = out.measured_bus_power_w;
     state.estimated_input_power_w = out.estimated_input_power_w;
     state.predicted_command_power_w = out.predicted_command_power_w;
@@ -355,6 +363,8 @@ static void drive_supervisor_update() {
 }
 static void can_rx_update()  { can_bus::poll_rx(); }
 static void vehicle_speed_can_tx_update() { can_bus::send_vehicle_speed(); }
+static void log_can_tx_update() { can_bus::send_log_frames(); }
+static void clamp_stats_can_tx_update() { can_bus::send_clamp_stats(); }
 static void cluster_status_can_tx_update() { can_bus::send_cluster_status(); }
 static void sensor_telemetry_can_tx_update() { can_bus::send_sensor_telemetry(); }
 static void safety_task()    { safety_update(); }
@@ -379,6 +389,8 @@ Task g_tasks[] = {
     { safety_task,             10, 0 },
     { drive_supervisor_update, 10, 0 },
     { vehicle_speed_can_tx_update, 50, 0 }, // 20 Hz VCU -> Cluster/TMA-1 single speed telemetry
+    { log_can_tx_update,       10, 0 },   // 100 Hz VCU -> Monolith 고속 로깅 (Prio 7)
+    { clamp_stats_can_tx_update, 1000, 0 }, // 1 Hz Amp 포화 통계 (Prio 7)
     { cluster_status_can_tx_update, 50, 0 }, // 20 Hz gear/brake/HV display status
     { sensor_telemetry_can_tx_update, car_check::PERIOD_MS, 0 }, // steering/IMU/WSS/control diagnostics
     { debug_update,            50, 0 },   // 20 Hz compact test log; 1 Hz idle summary

@@ -39,6 +39,30 @@ MOTOR_R 10 300
 MOTOR_BOTH 10 300
 ```
 
+### 포화 진단
+
+```text
+CLAMP           # 도메인 타입별 포화 통계 출력
+CLAMP_RESET     # 통계 초기화 (시험 구간을 나눌 때)
+```
+
+`Amp`, `Percent`, `Pct0to100`, `Unit`, `Rpm` 각각에 대해 상한/하한에 몇 번
+걸렸는지, 잘리기 전 raw 값이 얼마였는지, 어느 소스 위치에서 잘렸는지를
+출력한다. 호출 위치는 `__builtin_FILE/LINE/FUNCTION`으로 잡으므로 별도
+계측 코드가 필요 없다.
+
+```text
+[CLAMP] Amp       high=37 low=0
+          worst high raw=812.40 @ src/core/app_wiring.cpp:330 drive_supervisor_update()
+          last       raw=523.10 @ src/core/app_wiring.cpp:330 drive_supervisor_update()
+[CLAMP] Percent   clean
+```
+
+`Amp`의 `high_count`가 올라간다는 것은 명령 전류가 `DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A`
+(현재 500 A)에 걸렸다는 뜻이다. worst raw가 실제로 요구된 값이므로 파워 제한과
+상승률 제한 튜닝의 근거가 된다. 기록은 클램프가 실제로 일어날 때만 남고
+제어 루프 안에서 직렬 출력을 하지 않는다.
+
 수락 시 `[MOTOR_TEST] accepted`, 거절 시 원인이 출력된다. 별도 소프트웨어 즉시
 정지 명령은 두지 않았다. 모든 명령은 최대 3초 안에 자동 종료되며 실제 즉시 정지는
 차량의 물리 스위치를 사용한다.
