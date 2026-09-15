@@ -16,6 +16,21 @@
 #include "modules/car_check_status.h"
 #include "modules/tv/tv_config.h"
 
+// [LOCKED] Bit layout of EZkontrol control frames follows
+// EZkontrol-CANBUS-MCU-to-VCU.pdf and the reference 2026/Can_driver/CAN_DRIVER.ino.
+
+// NOTE (deadman scope): note_command() is currently called every scheduler
+// pass from app_wiring (torque_vectoring_update), so deadman_ok() effectively
+// means "loop()/scheduler is still alive within 200ms", NOT "a fresh, valid
+// command source exists". This is acceptable for the skeleton (it catches a
+// hung scheduler). When CAN RX/handshake + throttle plausibility are
+// implemented, gate note_command() on a genuinely valid command instead.
+//
+// NOTE (concurrency): state.torque_L/R (float) are written by loop()/scheduler
+// and read here on the core-1 life task. Relies on 32-bit aligned float access
+// being word-atomic on ESP32; a one-cycle-stale value is benign and torque is
+// force-zeroed when not allowed. g_life is only touched inside life_task.
+
 namespace {
     constexpr uint32_t DEADMAN_MS = 200;
     constexpr int DRIVE_TARGET_SPEED_RPM = 4000;
@@ -80,6 +95,8 @@ namespace {
     }
 
     void send_torque(uint32_t id, float amps, bool running) {
+        // Confirmed on the vehicle: propulsion uses +4000 rpm while regen
+        // uses 0 rpm. Byte4 must be 0x01 or EZkontrol remains HALTED.
         const int target_rpm = !running ? 0
             : (state.gear == Gear::Reverse ? -DRIVE_TARGET_SPEED_RPM
                 : (amps < 0.0f ? REGEN_TARGET_SPEED_RPM
@@ -149,6 +166,9 @@ namespace {
             bool run_l = normal_allow;
             bool run_r = normal_allow;
 
+            // Branch-only component test path. While a test is active it has
+            // exclusive ownership of both command outputs: the unselected
+            // motor is explicitly HALTED and normal throttle cannot mix in.
             if (state.component_test_active) {
                 normal_allow = false;
                 l = 0.0f;
@@ -208,6 +228,9 @@ namespace {
                 }
             }
 
+            // Reconnection is automatic even with a held pedal, but the
+            // recovered demand is applied to both motors through the same
+            // zero-to-one ramp to avoid a sudden torque step or imbalance.
             if (normal_allow && g_reconnect_ramp_active) {
                 const uint32_t elapsed_ms = now - g_reconnect_ramp_start_ms;
                 const uint32_t ramp_ms =
@@ -223,6 +246,8 @@ namespace {
                 }
             }
 
+            // Do not place normal command frames on a controller ID before
+            // that controller has completed its 0x55/0xAA handshake.
             state.can_commanded_current_L = l;
             state.can_commanded_current_R = r;
             state.can_commanded_running_L = run_l;
@@ -230,7 +255,7 @@ namespace {
             if (g_handshaked_L) send_torque(CAN_ID_TORQUE_L, l, run_l);
             if (g_handshaked_R) send_torque(CAN_ID_TORQUE_R, r, run_r);
             g_life++;
-            vTaskDelayUntil(&next, period);
+            vTaskDelayUntil(&next, period);   // configured exact cadence
         }
     }
 }
@@ -243,7 +268,7 @@ void begin() {
         static_cast<gpio_num_t>(board_pins::CAN_RX),
         TWAI_MODE_NORMAL);
     g.rx_queue_len = realcar_cal::bringup::CAN_RX_QUEUE_LENGTH;
-    g.tx_queue_len = 16; 
+    g.tx_queue_len = 16; // six display frames + two motor frames can coincide
     twai_timing_config_t  t = TWAI_TIMING_CONFIG_250KBITS();
     twai_filter_config_t  f = TWAI_FILTER_CONFIG_ACCEPT_ALL();
     twai_driver_install(&g, &t, &f);
@@ -251,6 +276,7 @@ void begin() {
 }
 
 void start_life_task() {
+    // High priority, pinned to core 1, away from the loop()/scheduler.
     xTaskCreatePinnedToCore(life_task, "can_life", 4096, nullptr, 20, nullptr, 1);
 }
 
@@ -258,16 +284,21 @@ void send_log_frames() {
     static uint8_t tick = 0;
     static uint8_t log_life = 0;
     uint8_t data[8];
+    // 대기시간 0. 로깅이 제어 스케줄러를 막아서는 안 된다 - 버스가 붐비면
+    // 그 프레임은 버리고 다음 틱에 다시 보낸다(100Hz라 손실이 무해하다).
     const auto send = [&](uint32_t id) {
         if (!transmit_ext(id, data, 0)) ++state.sensor_telemetry_tx_drops;
     };
 
+    // 100Hz - 명령 전류와 실제 상전류. 이 둘의 비율이 컨트롤러가 명령을
+    // 그대로 흘리는지 보여준다.
     encode_vcu_log_drive(state.can_commanded_current_L,
                          state.can_commanded_current_R,
                          state.controller_fb1_L.phase_current_a,
                          state.controller_fb1_R.phase_current_a, data);
     send(CAN_ID_VCU_LOG_DRIVE);
 
+    // 100Hz - 회전수와 모선전류
     encode_vcu_log_motor((int)state.controller_fb1_L.motor_speed_rpm,
                          (int)state.controller_fb1_R.motor_speed_rpm,
                          state.controller_fb1_L.bus_current_a,
@@ -275,11 +306,15 @@ void send_log_frames() {
     send(CAN_ID_VCU_LOG_MOTOR);
 
     if ((tick & 1u) == 0u) {
+        // 50Hz(짝수 틱) - 요 제어 경로. requested_torque는 TV 출력이고
+        // can_commanded_current는 drive_supervisor를 거친 값이라, 둘의 차이가
+        // 파워/상승률/열 제한이 깎은 양이다.
         encode_vcu_log_tv_yaw(state.desired_yaw_rate, state.yaw_moment,
                               (float)state.requested_torque_L,
                               (float)state.requested_torque_R, data);
         send(CAN_ID_VCU_LOG_TV_YAW);
     } else {
+        // 50Hz(홀수 틱) - 하중과 트랙션 한계, 게이트 사유
         const TVGate &g = state.tv_gate;
         const uint8_t gate_bits =
             (uint8_t)((g.active ? 0x01u : 0u) |
@@ -301,6 +336,7 @@ void send_clamp_stats() {
     uint8_t data[8];
     encode_vcu_log_clamp(s.high_count, s.low_count,
                          s.high_worst.raw, s.low_worst.raw, data);
+    // 여기서도 대기시간 0. 진단이 제어를 막아서는 안 된다.
     if (!transmit_ext(CAN_ID_VCU_LOG_CLAMP, data, 0))
         ++state.sensor_telemetry_tx_drops;
 }
@@ -317,6 +353,8 @@ void send_cluster_status() {
     const bool hv_active = state.controller_feedback_fresh &&
         (state.controller_fb1_L.bus_voltage_v > 20.0f ||
          state.controller_fb1_R.bus_voltage_v > 20.0f);
+    // SOC remains invalid because the current BLE-forwarded BMS frame is
+    // diagnostic/display-only and its source parser is not authoritative.
     const uint8_t throttle_pct = static_cast<uint8_t>(
         (float)state.throttle_pct + 0.5f);
     encode_vcu_cluster_status(static_cast<uint8_t>(state.gear),
@@ -332,6 +370,7 @@ void send_sensor_telemetry() {
     static uint8_t life = 0;
     uint8_t data[8];
     const auto send = [&](uint32_t id) {
+        // Display data must not add four 5 ms waits to the control scheduler.
         if (!transmit_ext(id, data, 0)) ++state.sensor_telemetry_tx_drops;
     };
     state.steering_telemetry.life = life;
@@ -348,6 +387,8 @@ void send_sensor_telemetry() {
         !state.component_test_normal_inhibit && state.propulsion_direction_armed &&
         state.controller_feedback_fresh && !state.controller_fault_latched &&
         (state.gear == Gear::Drive || state.gear == Gear::Reverse);
+    // 차단 사유를 여기서 재계산하지 않는다. 판정은 tv_gate_evaluate()가 이미
+    // 했고, app_wiring이 state.tv_gate에 넣어둔 그 결과만 그대로 보고한다.
     const TVGate &tv_gate = state.tv_gate;
     const CarCheckStatusInput in {
         state.tv_enable_requested, state.regen_auto_requested,
@@ -369,6 +410,13 @@ void send_sensor_telemetry() {
 }
 
 void poll_rx() {
+    // EZkontrol handshake (docs/CAN_PROTOCOL.md §6): each controller sends its
+    // feedback-Part-I ID (CAN_ID_FB1_L/R) with all 8 data bytes = 0x55 at
+    // startup (50ms/20Hz) until the VCU replies on the matching torque-command
+    // ID (CAN_ID_TORQUE_L/R) with all 8 data bytes = 0xAA. That reply frame
+    // carries no real torque; the life_task's configured-period torque frames
+    // take over once running. A 0x55-pattern frame is a handshake probe, not real
+    // feedback, so it must be intercepted before feedback parsing.
     static const uint8_t HANDSHAKE_PATTERN[8] = {0x55,0x55,0x55,0x55,0x55,0x55,0x55,0x55};
     twai_status_info_t before_drain{};
     if (twai_get_status_info(&before_drain) == ESP_OK &&
@@ -376,7 +424,6 @@ void poll_rx() {
         state.can_rx_queue_peak = before_drain.msgs_to_rx;
     }
     twai_message_t m;
-    const uint32_t now_ms = millis();
     while (twai_receive(&m, 0) == ESP_OK) {
         if (!m.extd) continue;
         const bool from_l = (m.identifier == CAN_ID_FB1_L);
@@ -385,12 +432,15 @@ void poll_rx() {
         // 에너지 미터 데이터 수신
         if (m.data_length_code == 8 && m.identifier == CAN_ID_ENERGY_METER) {
             state.energy_meter = decode_energy_meter_status(m.data);
-            state.energy_meter_last_rx_ms = now_ms;
+            state.energy_meter_last_rx_ms = millis();
             continue;
         }
 
         if ((from_l || from_r) && m.data_length_code == 8 &&
             memcmp(m.data, HANDSHAKE_PATTERN, 8) == 0) {
+            // A new probe while already handshaked means the controller reset
+            // or timed out. Inhibit propulsion before acknowledging it so a
+            // held pedal cannot resume torque immediately after recovery.
             if ((from_l && g_handshaked_L) || (from_r && g_handshaked_R)) {
                 invalidate_controller_link(from_l, "new handshake probe");
             }
@@ -423,6 +473,8 @@ void poll_rx() {
 
         if (m.identifier == CAN_ID_CLUSTER_CMD && m.data_length_code == 8) {
             ClusterCommandRequest cmd = decode_cluster_command(m.data);
+            // Cluster UI/PCB calls this switch "TC", but the agreed project
+            // meaning is the torque-vectoring enable request.
             state.tv_enable_requested = cmd.tv_enabled;
             state.regen_auto_requested = cmd.regen_auto_enabled;
             state.paddock_requested = cmd.paddock_request;
@@ -474,7 +526,6 @@ void poll_rx() {
             continue;
         }
     }
-    
     const uint32_t now = millis();
     const auto fresh = [now](uint32_t timestamp, uint32_t max_age_ms) {
         return timestamp != 0 && (now - timestamp) <= max_age_ms;
@@ -491,6 +542,15 @@ void poll_rx() {
         state.controller_feedback_fresh_L &&
         state.controller_feedback_fresh_R;
 
+    // After a real link loss, some controller/firmware combinations resume
+    // normal Part I/II feedback without returning to the documented 0x55
+    // startup probe.  In that case the VCU used to remain stuck at hs=0 even
+    // though both fresh feedback frames proved that the controller-side CAN
+    // session was alive.  Accept that evidence only for a link which was
+    // previously handshaked and then explicitly invalidated; initial startup
+    // still requires the normal 0x55/0xAA exchange.  The global reconnect
+    // inhibit remains set until both sides are ready, after which the existing
+    // one-second torque ramp performs the controlled recovery.
     if (!g_handshaked_L && g_feedback_recovery_expected_L &&
         state.controller_feedback_fresh_L) {
         g_handshaked_L = true;
@@ -510,6 +570,10 @@ void poll_rx() {
             "[CAN] controller R restored from fresh Part I/II feedback");
     }
 
+    // The 250 ms freshness check above removes torque immediately. If either
+    // required feedback part is still absent at the longer timeout, stop that
+    // side's normal command frames. The controller can then enter its
+    // documented timeout path and issue a fresh 0x55 handshake probe.
     const uint32_t rehandshake_timeout_ms =
         realcar_cal::bringup::CONTROLLER_REHANDSHAKE_TIMEOUT_MS;
     if (g_handshaked_L &&
@@ -534,6 +598,9 @@ void poll_rx() {
         state.can_rx_queued_count = can_status.msgs_to_rx;
         state.can_state = static_cast<uint8_t>(can_status.state);
 
+        // ESP-IDF returns TWAI to STOPPED after bus-off recovery, so restart
+        // it explicitly. Protocol handshakes are invalidated first to prevent
+        // stale torque commands from being emitted as the peripheral returns.
         if (can_status.state == TWAI_STATE_BUS_OFF &&
             !g_bus_recovery_pending) {
             invalidate_all_controller_links("TWAI bus-off");
@@ -570,8 +637,8 @@ void poll_rx() {
     }
     if (!fresh(state.bms_last_rx_ms, 5000U)) state.pack_data_valid = false;
     
-    // 에너지 미터 타임아웃 검사 (500ms 동안 수신 안되면 무효 처리)
-    if (!fresh(state.energy_meter_last_rx_ms, 500U)) {
+    const uint32_t energy_meter_stale_ms = realcar_cal::bringup::ENERGY_METER_STALE_MS;
+    if (!fresh(state.energy_meter_last_rx_ms, energy_meter_stale_ms)) {
         state.energy_meter.valid = false;
     }
     
