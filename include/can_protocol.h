@@ -20,9 +20,10 @@ constexpr uint8_t SA_CONTROLLER_L = 0xEF;
 constexpr uint8_t SA_CONTROLLER_R = 0xF0;
 constexpr uint8_t SA_ENERGY_METER = 0x17;
 
-// --- Torque command IDs (29-bit extended) ---
+// --- CAN IDs ---
 constexpr uint32_t CAN_ID_TORQUE_L = 0x0C01EFD0;
 constexpr uint32_t CAN_ID_TORQUE_R = 0x0C01F0D0;
+constexpr uint32_t CAN_ID_ENERGY_METER = 0x180117D0; // 에너지 미터 CAN ID (DBC에 맞게 수정 필요)
 
 // --- Torque scaling: raw = (amps + 3200) * 10 ---
 uint16_t torque_to_raw(float amps);
@@ -112,9 +113,17 @@ struct ClusterBmsStatus {
     uint8_t life = 0;
 };
 
+struct EnergyMeterStatus {
+    float bus_voltage_v = 0.0f;
+    float bus_current_a = 0.0f;
+    float total_power_w = 0.0f;
+    bool valid = false;
+};
+
 ControllerFeedbackPart1 decode_controller_feedback_part1(const uint8_t data[8]);
 ControllerFeedbackPart2 decode_controller_feedback_part2(const uint8_t data[8]);
 ClusterBmsStatus decode_cluster_bms_status(const uint8_t data[8]);
+EnergyMeterStatus decode_energy_meter_status(const uint8_t data[8]);
 
 // VCU -> Cluster status: byte0 gear (0=N,1=R,2=D,3=P), byte1 bit0 brake,
 // bit1 HV active, bit2 SOC valid, bit3 throttle valid, bit4 Paddock active,
