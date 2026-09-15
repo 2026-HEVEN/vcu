@@ -226,6 +226,26 @@ void test_log_drive_clamps_out_of_range(void) {
     TEST_ASSERT_EQUAL_INT16(-32768, i16(d + 2));
 }
 
+void test_encode_log_clamp(void) {
+    uint8_t d[8];
+    // 카운터는 누적값이다. 1Hz로 보내면 로그에서 증분이 그 1초 구간의
+    // 포화 횟수가 되어 시간 정보가 복원된다.
+    encode_vcu_log_clamp(37u, 2u, 812.4f, -540.0f, d);
+    TEST_ASSERT_EQUAL_UINT16(37, (uint16_t)(d[0] | (d[1] << 8)));
+    TEST_ASSERT_EQUAL_UINT16(2,  (uint16_t)(d[2] | (d[3] << 8)));
+    TEST_ASSERT_EQUAL_INT16(8124, i16(d + 4));   // 0.1 A/bit
+    TEST_ASSERT_EQUAL_INT16(-5400, i16(d + 6));
+}
+
+void test_log_clamp_saturates_counters(void) {
+    // uint32 카운터를 uint16으로 좁히므로 65535에서 멈춰야 한다.
+    // 감싸돌면 증분이 음수가 되어 로그 분석이 깨진다.
+    uint8_t d[8];
+    encode_vcu_log_clamp(70000u, 99999u, 0.0f, 0.0f, d);
+    TEST_ASSERT_EQUAL_UINT16(65535, (uint16_t)(d[0] | (d[1] << 8)));
+    TEST_ASSERT_EQUAL_UINT16(65535, (uint16_t)(d[2] | (d[3] << 8)));
+}
+
 void setUp(void) {}
 void tearDown(void) {}
 int main(int, char **) {
@@ -255,5 +275,7 @@ int main(int, char **) {
     RUN_TEST(test_encode_log_tv_load);
     RUN_TEST(test_log_encoders_are_nan_safe);
     RUN_TEST(test_log_drive_clamps_out_of_range);
+    RUN_TEST(test_encode_log_clamp);
+    RUN_TEST(test_log_clamp_saturates_counters);
     return UNITY_END();
 }

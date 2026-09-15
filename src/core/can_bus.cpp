@@ -332,6 +332,16 @@ void send_log_frames() {
     ++tick;
 }
 
+void send_clamp_stats() {
+    const ClampStats s = Amp::clamp_stats();
+    uint8_t data[8];
+    encode_vcu_log_clamp(s.high_count, s.low_count,
+                         s.high_worst.raw, s.low_worst.raw, data);
+    // 여기서도 대기시간 0. 진단이 제어를 막아서는 안 된다.
+    if (!transmit_ext(CAN_ID_VCU_LOG_CLAMP, data, 0))
+        ++state.sensor_telemetry_tx_drops;
+}
+
 void send_vehicle_speed() {
     uint8_t data[8];
     const float speed_kph = state.vehicle_speed_mps * 3.6f;

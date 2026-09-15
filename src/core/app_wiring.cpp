@@ -348,6 +348,7 @@ static void drive_supervisor_update() {
 static void can_rx_update()  { can_bus::poll_rx(); }
 static void vehicle_speed_can_tx_update() { can_bus::send_vehicle_speed(); }
 static void log_can_tx_update() { can_bus::send_log_frames(); }
+static void clamp_stats_can_tx_update() { can_bus::send_clamp_stats(); }
 static void cluster_status_can_tx_update() { can_bus::send_cluster_status(); }
 static void sensor_telemetry_can_tx_update() { can_bus::send_sensor_telemetry(); }
 static void safety_task()    { safety_update(); }
@@ -370,6 +371,7 @@ Task g_tasks[] = {
     { safety_task,             10, 0 },
     { vehicle_speed_can_tx_update, 50, 0 }, // 20 Hz VCU -> Cluster/TMA-1 single speed telemetry
     { log_can_tx_update,       10, 0 },   // 100 Hz VCU -> Monolith 고속 로깅 (Prio 7)
+    { clamp_stats_can_tx_update, 1000, 0 }, // 1 Hz Amp 포화 통계 (Prio 7)
     { cluster_status_can_tx_update, 50, 0 }, // 20 Hz gear/brake/HV display status
     { sensor_telemetry_can_tx_update, car_check::PERIOD_MS, 0 }, // steering/IMU/WSS/control diagnostics
     { debug_update,            50, 0 },   // 20 Hz compact test log; 1 Hz idle summary

@@ -14,8 +14,10 @@ import argparse, csv, json, struct, sys
 from pathlib import Path
 
 DRIVE, MOTOR, TV_YAW, TV_LOAD = 0x1C01C0D0, 0x1C02C0D0, 0x1C03C0D0, 0x1C04C0D0
+CLAMP = 0x1C05C0D0
 
 def i16(b, o): return struct.unpack_from('<h', b, o)[0]
+def u16(b, o): return struct.unpack_from('<H', b, o)[0]
 
 def decode(can_id, d):
     """프레임 하나를 {필드: 물리값} 으로."""
@@ -34,11 +36,16 @@ def decode(can_id, d):
                 'max_L': d[4]*4, 'max_R': d[5]*4,
                 'tv_active': g & 1, 'g_switch': (g>>1)&1, 'g_gains': (g>>2)&1,
                 'g_imu': (g>>3)&1, 'g_spd_valid': (g>>4)&1, 'g_spd_min': (g>>5)&1}
+    if can_id == CLAMP:
+        # 누적 카운터. 행 간 증분이 그 구간의 포화 횟수다.
+        return {'amp_hi_cnt': u16(d,0), 'amp_lo_cnt': u16(d,2),
+                'amp_hi_peak': i16(d,4)/10, 'amp_lo_peak': i16(d,6)/10}
     return None
 
 FIELDS = ['t_ms','cmd_L','cmd_R','iph_L','iph_R','rpm_L','rpm_R','ibus_L','ibus_R',
           'desired_yaw','Mz','req_L','req_R','fz_L','fz_R','max_L','max_R',
-          'tv_active','g_switch','g_gains','g_imu','g_spd_valid','g_spd_min']
+          'tv_active','g_switch','g_gains','g_imu','g_spd_valid','g_spd_min',
+          'amp_hi_cnt','amp_lo_cnt','amp_hi_peak','amp_lo_peak']
 
 def read_records(path):
     """(t_ms, can_id, bytes) 스트림. 입력 포맷이 다르면 여기만 고친다."""
@@ -78,6 +85,15 @@ def main():
         w = csv.DictWriter(fp, fieldnames=FIELDS, extrasaction='ignore')
         w.writeheader(); w.writerows(rows)
     print(f'프레임 {n}개 → 행 {len(rows)}개 → {a.out}')
+
+    # Amp 포화가 실제로 일어났는지
+    hi = [r.get('amp_hi_cnt') for r in rows if r.get('amp_hi_cnt') is not None]
+    if hi and max(hi) > 0:
+        pk = max(r.get('amp_hi_peak', 0) for r in rows)
+        print(f'\n[!] Amp 상한 포화 {max(hi)}회, 최대 요구 {pk:.1f} A '
+              f'(상한 {500:.0f} A). 명령이 잘리고 있다.')
+    elif hi:
+        print('\nAmp 포화 없음 — 명령이 도메인 상한에 걸리지 않았다.')
 
     # 바로 쓸 수 있는 요약: 명령 대비 실측 비율을 rpm 구간별로
     print('\nrpm 구간별 실측/명령 상전류 비율 (|명령| >= 5 A 인 표본만)')

@@ -65,6 +65,7 @@ constexpr uint32_t CAN_ID_VCU_LOG_DRIVE   = 0x1C01C0D0; // 10ms 명령/실측 �
 constexpr uint32_t CAN_ID_VCU_LOG_MOTOR   = 0x1C02C0D0; // 10ms 회전수/모선전류
 constexpr uint32_t CAN_ID_VCU_LOG_TV_YAW  = 0x1C03C0D0; // 20ms TV 요 제어
 constexpr uint32_t CAN_ID_VCU_LOG_TV_LOAD = 0x1C04C0D0; // 20ms TV 하중/한계
+constexpr uint32_t CAN_ID_VCU_LOG_CLAMP   = 0x1C05C0D0; // 1s Amp 포화 통계
 
 // Cluster -> logger BMS summary. VCU may observe this for diagnostics only;
 // the BLE path is not an authoritative safety input.
@@ -144,6 +145,11 @@ void encode_vcu_log_tv_yaw(float desired_yaw_dps, float yaw_moment_nm,
 void encode_vcu_log_tv_load(float fz_l_n, float fz_r_n,
                             float max_l_a, float max_r_a,
                             uint8_t gate_bits, uint8_t life, uint8_t out[8]);
+// Amp 포화 통계. 카운터는 누적값이라 1Hz 로그의 증분이 그 구간의 포화 횟수가
+// 된다. 호출 위치(file:line)는 8바이트에 안 들어가므로 시리얼 CLAMP 명령에만
+// 남는다.
+void encode_vcu_log_clamp(uint32_t high_count, uint32_t low_count,
+                          float high_peak_a, float low_peak_a, uint8_t out[8]);
 int16_t telemetry_to_i16(float value, float scale);
 // Legacy numeric-only helpers retained for compatibility/tests. Runtime Car Check
 // uses car_check::encode_* so validity and life bytes are always present.
