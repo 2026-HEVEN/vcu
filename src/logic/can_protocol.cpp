@@ -196,11 +196,20 @@ void encode_vcu_log_tv_load(float fz_l_n, float fz_r_n,
 
 void encode_vcu_log_clamp(uint32_t high_count, uint32_t low_count,
                           float high_peak_a, float low_peak_a, uint8_t out[8]) {
-    // uint32 -> uint16 포화. 감싸돌면 로그의 증분이 음수가 되어 분석이 깨진다.
     const uint16_t hi = high_count > 65535u ? (uint16_t)65535u : (uint16_t)high_count;
     const uint16_t lo = low_count  > 65535u ? (uint16_t)65535u : (uint16_t)low_count;
     put_u16le(out + 0, hi);
     put_u16le(out + 2, lo);
     put_i16le(out + 4, telemetry_to_i16(high_peak_a, 10.0f));
     put_i16le(out + 6, telemetry_to_i16(low_peak_a, 10.0f));
+}
+
+// 에너지 미터 데이터 디코딩 함수 (DBC 문서에 맞춰 바이트 스케일/오프셋 수정 필수)
+EnergyMeterStatus decode_energy_meter_status(const uint8_t data[8]) {
+    EnergyMeterStatus out;
+    out.bus_voltage_v = (float)get_u16le(data + 0) * 0.1f;
+    out.bus_current_a = (float)get_u16le(data + 2) * 0.1f - 3200.0f;
+    out.total_power_w = out.bus_voltage_v * out.bus_current_a;
+    out.valid = true;
+    return out;
 }
