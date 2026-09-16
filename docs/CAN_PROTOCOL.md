@@ -58,6 +58,7 @@
 | 노드 | 주소 |
 |------|------|
 | METER | 23 (0x17) |
+| EM Gateway | 193 (0xC1) |
 | VCU | 208 (0xD0) |
 | MCU1~4 | 239~242 (0xEF~0xF2) |
 | BMS1~4 | 243~246 (0xF3~0xF6) |
@@ -79,6 +80,8 @@
 | MCU → METER | 계기 메시지 II | `0x180217EF` | `0x180217F0` | 100ms | 6 |
 | Cluster → VCU | 커맨드 (TC 표기의 TV enable/Regen Auto/Debug/Paddock) | `0x1801D0C0` (신규) | — | ~20ms | 8 |
 | VCU → Cluster | 기어/브레이크/HV/스로틀 상태 | `0x1801C0D0` (신규) | — | 50ms | 6 |
+| EM Gateway → 전체 | Energy Meter RECORD | `0x1CF5FFC1` | — | 10ms | 7 |
+| EM Gateway → 전체 | Energy Meter SYNC (예약) | `0x1CF6FFC1` | — | — | 7 |
 | VCU → Cluster/TMA-1 | 단일 차량속도 | `0x1803C0D0` (신규) | — | 50ms | 6 |
 | VCU → TMA-1 | 조향 텔레메트리 | `0x1804C0D0` (신규) | — | 50ms | 6 |
 | VCU → TMA-1 | IMU 텔레메트리 | `0x1805C0D0` (신규) | — | 50ms | 6 |

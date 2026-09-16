@@ -104,6 +104,42 @@ ClusterBmsStatus decode_cluster_bms_status(const uint8_t data[8]) {
     return out;
 }
 
+bool decode_energy_meter_record(uint32_t identifier, bool extended, bool rtr,
+                                uint8_t dlc, const uint8_t data[8],
+                                EnergyMeterStatus &out) {
+    if (identifier != CAN_ID_EM_RECORD || !extended || rtr || dlc != 8 ||
+        data == nullptr) {
+        return false;
+    }
+
+    const auto get_i16le = [](const uint8_t *p) -> int16_t {
+        const uint32_t raw = get_u16le(p);
+        return (int16_t)(raw >= 0x8000U
+            ? (int32_t)raw - 65536 : (int32_t)raw);
+    };
+    EnergyMeterStatus decoded;
+    decoded.hv_voltage_v = (float)get_i16le(data + 0) * 0.1f;
+    decoded.hv_current_a = (float)get_i16le(data + 2) * 0.1f;
+    decoded.lv_voltage_v = (float)get_i16le(data + 4) * 0.01f;
+    decoded.cpu_temperature_c = (float)get_i16le(data + 6) * 0.01f;
+    decoded.signed_power_w = decoded.hv_voltage_v * decoded.hv_current_a;
+    out = decoded;
+    return true;
+}
+
+bool energy_meter_record_fresh(bool seen, uint32_t last_rx_ms,
+                               uint32_t now_ms, uint32_t max_age_ms) {
+    return seen && (uint32_t)(now_ms - last_rx_ms) <= max_age_ms;
+}
+
+bool energy_meter_control_usable(bool fresh,
+                                 const EnergyMeterStatus &status) {
+    return fresh && std::isfinite(status.hv_voltage_v) &&
+           std::isfinite(status.hv_current_a) &&
+           std::isfinite(status.signed_power_w) &&
+           status.hv_voltage_v >= 0.0f;
+}
+
 void encode_vcu_cluster_status(uint8_t gear, bool brake, bool hv_active,
                                bool paddock_active,
                                bool soc_valid, uint8_t soc_pct,

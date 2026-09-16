@@ -52,6 +52,8 @@ void test_ids(void) {
     TEST_ASSERT_EQUAL_HEX32(0x1804C0D0, CAN_ID_VCU_STEERING);
     TEST_ASSERT_EQUAL_HEX32(0x1805C0D0, CAN_ID_VCU_IMU);
     TEST_ASSERT_EQUAL_HEX32(0x18F3FFC0, CAN_ID_CLUSTER_BMS_STATUS);
+    TEST_ASSERT_EQUAL_HEX32(0x1CF5FFC1, CAN_ID_EM_RECORD);
+    TEST_ASSERT_EQUAL_HEX32(0x1CF6FFC1, CAN_ID_EM_SYNC);
 }
 
 void test_decode_controller_feedback(void) {
@@ -110,6 +112,71 @@ void test_decode_cluster_bms_status_is_diagnostic(void) {
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 51.2f, bms.pack_voltage_v);
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.5f, bms.pack_current_a);
     TEST_ASSERT_EQUAL_INT(35, bms.temperature_c);
+}
+
+void test_decode_energy_meter_record_signed_scaling_and_power(void) {
+    // 50.0 V, -100.0 A, 13.42 V, 31.50 C.
+    const uint8_t data[8] = {
+        0xF4, 0x01, 0x18, 0xFC, 0x3E, 0x05, 0x4E, 0x0C
+    };
+    EnergyMeterStatus em;
+    TEST_ASSERT_TRUE(decode_energy_meter_record(
+        CAN_ID_EM_RECORD, true, false, 8, data, em));
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 50.0f, em.hv_voltage_v);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, -100.0f, em.hv_current_a);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 13.42f, em.lv_voltage_v);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 31.50f, em.cpu_temperature_c);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, -5000.0f, em.signed_power_w);
+}
+
+void test_decode_energy_meter_record_zero_and_signed_limits(void) {
+    const uint8_t zero[8] = {};
+    EnergyMeterStatus em;
+    TEST_ASSERT_TRUE(decode_energy_meter_record(
+        CAN_ID_EM_RECORD, true, false, 8, zero, em));
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, em.hv_voltage_v);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, em.hv_current_a);
+    TEST_ASSERT_TRUE(energy_meter_control_usable(true, em));
+
+    const uint8_t limits[8] = {
+        0x00, 0x80, 0xFF, 0x7F, 0x00, 0x80, 0xFF, 0x7F
+    };
+    TEST_ASSERT_TRUE(decode_energy_meter_record(
+        CAN_ID_EM_RECORD, true, false, 8, limits, em));
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, -3276.8f, em.hv_voltage_v);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 3276.7f, em.hv_current_a);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, -327.68f, em.lv_voltage_v);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 327.67f, em.cpu_temperature_c);
+    TEST_ASSERT_FALSE(energy_meter_control_usable(true, em));
+}
+
+void test_energy_meter_rejects_malformed_frames_without_mutating_output(void) {
+    const uint8_t data[8] = {};
+    EnergyMeterStatus em;
+    em.hv_voltage_v = 123.0f;
+    TEST_ASSERT_FALSE(decode_energy_meter_record(
+        CAN_ID_EM_SYNC, true, false, 8, data, em));
+    TEST_ASSERT_FALSE(decode_energy_meter_record(
+        CAN_ID_EM_RECORD, false, false, 8, data, em));
+    TEST_ASSERT_FALSE(decode_energy_meter_record(
+        CAN_ID_EM_RECORD, true, true, 8, data, em));
+    TEST_ASSERT_FALSE(decode_energy_meter_record(
+        CAN_ID_EM_RECORD, true, false, 7, data, em));
+    TEST_ASSERT_FALSE(decode_energy_meter_record(
+        CAN_ID_EM_RECORD, true, false, 8, nullptr, em));
+    TEST_ASSERT_EQUAL_FLOAT(123.0f, em.hv_voltage_v);
+}
+
+void test_energy_meter_freshness_handles_zero_timestamp_and_wrap(void) {
+    TEST_ASSERT_FALSE(energy_meter_record_fresh(false, 0U, 0U, 50U));
+    TEST_ASSERT_TRUE(energy_meter_record_fresh(true, 0U, 0U, 50U));
+    TEST_ASSERT_TRUE(energy_meter_record_fresh(true, 0U, 50U, 50U));
+    TEST_ASSERT_FALSE(energy_meter_record_fresh(true, 0U, 51U, 50U));
+    TEST_ASSERT_TRUE(energy_meter_record_fresh(
+        true, UINT32_MAX - 20U, 20U, 50U));
+    TEST_ASSERT_FALSE(energy_meter_record_fresh(
+        true, UINT32_MAX - 20U, 31U, 50U));
+    TEST_ASSERT_TRUE(energy_meter_record_fresh(true, 500U, 500U, 50U));
 }
 
 void test_decode_cluster_command_bits(void) {
@@ -266,6 +333,10 @@ int main(int, char **) {
     RUN_TEST(test_encode_vcu_cluster_status_clears_invalid_throttle);
     RUN_TEST(test_sensor_telemetry_encoders);
     RUN_TEST(test_decode_cluster_bms_status_is_diagnostic);
+    RUN_TEST(test_decode_energy_meter_record_signed_scaling_and_power);
+    RUN_TEST(test_decode_energy_meter_record_zero_and_signed_limits);
+    RUN_TEST(test_energy_meter_rejects_malformed_frames_without_mutating_output);
+    RUN_TEST(test_energy_meter_freshness_handles_zero_timestamp_and_wrap);
     RUN_TEST(test_vehicle_speed_kph_to_raw_clamps_and_rounds);
     RUN_TEST(test_encode_vcu_vehicle_speed);
     RUN_TEST(test_log_frame_ids_do_not_collide_with_existing);

@@ -426,7 +426,16 @@ void poll_rx() {
     }
     twai_message_t m;
     while (twai_receive(&m, 0) == ESP_OK) {
-        if (!m.extd) continue;
+        EnergyMeterStatus energy_meter;
+        if (decode_energy_meter_record(m.identifier, m.extd, m.rtr,
+                                       m.data_length_code, m.data,
+                                       energy_meter)) {
+            state.energy_meter = energy_meter;
+            state.energy_meter_last_rx_ms = millis();
+            state.energy_meter_record_seen = true;
+            continue;
+        }
+        if (!m.extd || m.rtr) continue;
         const bool from_l = (m.identifier == CAN_ID_FB1_L);
         const bool from_r = (m.identifier == CAN_ID_FB1_R);
 
@@ -630,6 +639,11 @@ void poll_rx() {
         state.paddock_requested = false;
     }
     if (!fresh(state.bms_last_rx_ms, 5000U)) state.pack_data_valid = false;
+    state.energy_meter_record_fresh = energy_meter_record_fresh(
+        state.energy_meter_record_seen, state.energy_meter_last_rx_ms, now,
+        realcar_cal::bringup::ENERGY_METER_STALE_MS);
+    state.energy_meter_control_valid = energy_meter_control_usable(
+        state.energy_meter_record_fresh, state.energy_meter);
     g_handshaked = realcar_cal::bringup::REQUIRE_BOTH_MOTOR_CONTROLLERS
         ? (g_handshaked_L && g_handshaked_R)
         : (g_handshaked_L || g_handshaked_R);

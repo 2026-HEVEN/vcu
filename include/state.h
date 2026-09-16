@@ -43,6 +43,11 @@ struct VehicleState {
     float     pack_current_a = 0.0f;
     int       pack_temperature_c = -40;
     uint32_t  bms_last_rx_ms = 0;
+    EnergyMeterStatus energy_meter;
+    bool      energy_meter_record_seen = false;
+    bool      energy_meter_record_fresh = false;
+    bool      energy_meter_control_valid = false;
+    uint32_t  energy_meter_last_rx_ms = 0;
     uint16_t  gear_raw_adc = 0;
     Gear      gear_sensed = Gear::Neutral; // diagnostic; never grants authority
     Gear      gear = Gear::Neutral;

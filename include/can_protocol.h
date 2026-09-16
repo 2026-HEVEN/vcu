@@ -19,6 +19,12 @@ constexpr uint8_t SA_CLUSTER      = 0xC0;
 constexpr uint8_t SA_CONTROLLER_L = 0xEF;
 constexpr uint8_t SA_CONTROLLER_R = 0xF0;
 constexpr uint8_t SA_ENERGY_METER = 0x17;
+constexpr uint8_t SA_EM_GW         = 0xC1;
+
+// EM Gateway broadcast frames. RECORD is sent every 10 ms. SYNC is reserved
+// for logger diagnostics and must not refresh the measurement timestamp.
+constexpr uint32_t CAN_ID_EM_RECORD = 0x1CF5FFC1;
+constexpr uint32_t CAN_ID_EM_SYNC   = 0x1CF6FFC1;
 
 // --- Torque command IDs (29-bit extended) ---
 constexpr uint32_t CAN_ID_TORQUE_L = 0x0C01EFD0;
@@ -112,9 +118,28 @@ struct ClusterBmsStatus {
     uint8_t life = 0;
 };
 
+struct EnergyMeterStatus {
+    float hv_voltage_v = 0.0f;
+    float hv_current_a = 0.0f;
+    float lv_voltage_v = 0.0f;
+    float cpu_temperature_c = 0.0f;
+    float signed_power_w = 0.0f;
+};
+
 ControllerFeedbackPart1 decode_controller_feedback_part1(const uint8_t data[8]);
 ControllerFeedbackPart2 decode_controller_feedback_part2(const uint8_t data[8]);
 ClusterBmsStatus decode_cluster_bms_status(const uint8_t data[8]);
+// Validate and decode the complete EM RECORD wire contract. Returns false for
+// any other identifier or malformed frame and leaves `out` unchanged.
+bool decode_energy_meter_record(uint32_t identifier, bool extended, bool rtr,
+                                uint8_t dlc, const uint8_t data[8],
+                                EnergyMeterStatus &out);
+// `seen` is separate from the timestamp so a valid first frame at millis()==0
+// remains distinguishable from a frame that was never received.
+bool energy_meter_record_fresh(bool seen, uint32_t last_rx_ms,
+                               uint32_t now_ms, uint32_t max_age_ms);
+bool energy_meter_control_usable(bool fresh,
+                                 const EnergyMeterStatus &status);
 
 // VCU -> Cluster status: byte0 gear (0=N,1=R,2=D,3=P), byte1 bit0 brake,
 // bit1 HV active, bit2 SOC valid, bit3 throttle valid, bit4 Paddock active,

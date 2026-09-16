@@ -323,6 +323,21 @@ void debug_update() {
                 state.predicted_command_power_w,
                 state.pack_data_valid, state.pack_voltage_v,
                 state.pack_current_a, state.pack_temperature_c);
+            const uint32_t energy_meter_age_ms = state.energy_meter_record_seen
+                ? now - state.energy_meter_last_rx_ms : 999999U;
+            Serial.printf(
+                "EM seen=%d fresh=%d usable=%d limit=%d age=%u "
+                "HV=%+.1fV I=%+.1fA P=%+.0fW LV=%+.2fV CPU=%+.2fC\n",
+                state.energy_meter_record_seen,
+                state.energy_meter_record_fresh,
+                state.energy_meter_control_valid,
+                realcar_cal::bringup::ENABLE_ENERGY_METER_LIMIT,
+                energy_meter_age_ms,
+                state.energy_meter.hv_voltage_v,
+                state.energy_meter.hv_current_a,
+                state.energy_meter.signed_power_w,
+                state.energy_meter.lv_voltage_v,
+                state.energy_meter.cpu_temperature_c);
             Serial.printf("CAR_CHECK txDrop=%u steerValid=%d imuValid=%d/%d wssValid=%d/%d/%d/%d\n",
                 state.sensor_telemetry_tx_drops, state.steering_telemetry.valid,
                 state.imu_telemetry.yaw_valid, state.imu_telemetry.accel_valid,

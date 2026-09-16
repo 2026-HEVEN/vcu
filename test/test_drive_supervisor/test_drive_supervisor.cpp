@@ -5,7 +5,7 @@ static DriveSupervisorParams params() {
     return {500.0f, 0.5f, 8000.0f, 0.92f, 0.1266f,
             500.0f, 50.0f, 22.2222f,
             8000.0f, 200.0f, 150.0f, -30.0f, true,
-            75.0f, 85.0f, 100.0f, 120.0f};
+            75.0f, 85.0f, 100.0f, 120.0f, false};
 }
 
 static DriveSupervisorState supervisor_state{};
@@ -122,6 +122,69 @@ void test_zero_power_limit_disables_power_limiting(void) {
     TEST_ASSERT_FALSE(out.power_limited);
     TEST_ASSERT_EQUAL_FLOAT(300.0f, out.left_a);
     TEST_ASSERT_EQUAL_FLOAT(300.0f, out.right_a);
+}
+
+void test_energy_meter_limit_is_observation_only_when_disabled(void) {
+    DriveSupervisorInput in = nominal();
+    in.requested_left_a = 100.0f;
+    in.requested_right_a = 100.0f;
+    in.energy_meter_valid = true;
+    in.energy_meter_power_w = 16000.0f;
+    DriveSupervisorParams p = params();
+    p.drive_current_rise_time_s = 0.0f;
+    auto out = compute(in, p);
+    TEST_ASSERT_FALSE(out.power_limited);
+    TEST_ASSERT_EQUAL_FLOAT(100.0f, out.left_a);
+    TEST_ASSERT_EQUAL_FLOAT(100.0f, out.right_a);
+}
+
+void test_energy_meter_limit_scales_both_motors_when_enabled(void) {
+    DriveSupervisorInput in = nominal();
+    in.requested_left_a = 100.0f;
+    in.requested_right_a = 100.0f;
+    in.energy_meter_valid = true;
+    in.energy_meter_power_w = 16000.0f;
+    DriveSupervisorParams p = params();
+    p.drive_current_rise_time_s = 0.0f;
+    p.enable_energy_meter_limit = true;
+    auto out = compute(in, p);
+    TEST_ASSERT_TRUE(out.power_limited);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 50.0f, out.left_a);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 50.0f, out.right_a);
+}
+
+void test_energy_meter_limit_ignores_invalid_and_negative_power(void) {
+    DriveSupervisorInput in = nominal();
+    in.energy_meter_power_w = 16000.0f;
+    DriveSupervisorParams p = params();
+    p.drive_current_rise_time_s = 0.0f;
+    p.enable_energy_meter_limit = true;
+    auto out = compute(in, p);
+    TEST_ASSERT_FALSE(out.power_limited);
+
+    in.energy_meter_valid = true;
+    in.energy_meter_power_w = -16000.0f;
+    out = compute(in, p);
+    TEST_ASSERT_FALSE(out.power_limited);
+}
+
+void test_existing_power_estimate_still_governs_over_energy_meter(void) {
+    DriveSupervisorInput in = nominal();
+    in.requested_left_a = 500.0f;
+    in.requested_right_a = 500.0f;
+    in.phase_current_left_a = 500.0f;
+    in.phase_current_right_a = 500.0f;
+    in.motor_rpm_left = 2500;
+    in.motor_rpm_right = 2500;
+    in.energy_meter_valid = true;
+    in.energy_meter_power_w = 9000.0f;
+    DriveSupervisorParams p = params();
+    p.drive_current_rise_time_s = 0.0f;
+    p.enable_energy_meter_limit = true;
+    auto out = compute(in, p);
+    TEST_ASSERT_TRUE(out.power_limited);
+    TEST_ASSERT_TRUE(out.estimated_input_power_w > in.energy_meter_power_w);
+    TEST_ASSERT_TRUE(out.left_a < 300.0f);
 }
 
 void test_paddock_current_limit_decreases_linearly_with_speed(void) {
@@ -304,6 +367,10 @@ int main(int, char **) {
     RUN_TEST(test_power_limit_uses_actual_phase_current_not_500_a_target);
     RUN_TEST(test_slew_limited_command_prediction_caps_before_feedback_arrives);
     RUN_TEST(test_zero_power_limit_disables_power_limiting);
+    RUN_TEST(test_energy_meter_limit_is_observation_only_when_disabled);
+    RUN_TEST(test_energy_meter_limit_scales_both_motors_when_enabled);
+    RUN_TEST(test_energy_meter_limit_ignores_invalid_and_negative_power);
+    RUN_TEST(test_existing_power_estimate_still_governs_over_energy_meter);
     RUN_TEST(test_paddock_current_limit_decreases_linearly_with_speed);
     RUN_TEST(test_paddock_propulsion_rises_to_500_a_in_half_second);
     RUN_TEST(test_normal_propulsion_rises_to_500_a_in_half_second);

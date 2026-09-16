@@ -63,6 +63,10 @@ constexpr int COMPONENT_TEST_START_MAX_MOTOR_RPM = 50;
 // Energy Meter remains authoritative when validating the model.
 constexpr bool ENABLE_DRIVE_POWER_LIMIT = true;
 constexpr float DRIVE_POWER_SOFT_LIMIT_W = 8000.0f;
+// Observation mode by default. After validating EM voltage/current/sign on the
+// installed vehicle, change only this flag to true and rebuild/upload.
+constexpr bool ENABLE_ENERGY_METER_LIMIT = false;
+constexpr unsigned ENERGY_METER_STALE_MS = 50U;
 constexpr float DRIVETRAIN_EFFICIENCY = 0.92f;
 constexpr float CONTROLLER_FEEDBACK_STALE_MS = 250.0f;
 // Motor-controller command/life frame cadence. Set 10 ms for 100 Hz or 50 ms
