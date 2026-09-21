@@ -18,6 +18,7 @@ struct DriveSupervisorParams {
     float controller_cutoff_c;
     float motor_derate_start_c;
     float motor_cutoff_c;
+    bool enable_energy_meter_limit;
 };
 
 struct DriveSupervisorInput {
@@ -44,6 +45,8 @@ struct DriveSupervisorInput {
     float paddock_speed_mps;
     bool pack_data_valid;
     float pack_current_a;
+    bool energy_meter_valid;
+    float energy_meter_power_w;
 };
 
 struct DriveSupervisorOutput {
@@ -61,6 +64,7 @@ struct DriveSupervisorOutput {
     bool paddock_sensor_blocked = false;
     bool paddock_current_limited = false;
     bool drive_slew_limited = false;
+    bool energy_meter_blocked = false;
 };
 
 struct DriveSupervisorState {

@@ -426,6 +426,8 @@ void poll_rx() {
     }
     twai_message_t m;
     while (twai_receive(&m, 0) == ESP_OK) {
+        if (state.energy_meter.receive(m.identifier, m.extd, m.rtr,
+                                       m.data_length_code, m.data, millis())) continue;
         if (!m.extd) continue;
         const bool from_l = (m.identifier == CAN_ID_FB1_L);
         const bool from_r = (m.identifier == CAN_ID_FB1_R);

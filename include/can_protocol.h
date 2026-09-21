@@ -5,6 +5,7 @@
 // ============================================================
 #pragma once
 #include <cstdint>
+#include "energy_meter.h"
 #include "car_check_protocol.h"
 // Wire-level IDs and byte layouts are shared with the Cluster repo. VCU-only
 // decoders/encoders below need not be copied, but any on-bus contract change

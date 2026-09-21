@@ -260,6 +260,14 @@ void debug_update() {
         if (last_summary_ms == 0U || now - last_summary_ms >= 1000U) {
             last_summary_ms = now;
             const imu_driver::Diagnostics imu_diag = imu_driver::diagnostics();
+            const auto &em = state.energy_meter;
+            Serial.printf("EM seen=%d fresh=%d age=%lu rx=%lu reject=%lu HV=%.1fV I=%+.1fA P=%+.1fW LV=%.2fV CPU=%.2fC limit=%d blocked=%d\n",
+                em.seen, em.fresh(now, realcar_cal::bringup::ENERGY_METER_STALE_MS),
+                (unsigned long)(em.seen ? now - em.last_rx_ms : 0xFFFFFFFFu),
+                (unsigned long)em.rx_count, (unsigned long)em.rejected_count,
+                em.record.hv_voltage_v, em.record.current_a, em.record.power_w,
+                em.record.lv_voltage_v, em.record.cpu_temperature_c,
+                realcar_cal::bringup::ENABLE_ENERGY_METER_LIMIT, state.energy_meter_blocked);
             Serial.printf(
                 "STAT arm=%d dm=%d hs=%d/%d fb=%d/%d fault=%d gear=%u/%u raw=%u thr=%d/%d/%.1f imu=%d sync=%d/%d test=%d/%u\n"
                 "MCU V=%.1f/%.1f Ibus=%+.1f/%+.1f Iph=%+.1f/%+.1f rpm=%d/%d tempC=%d/%d,%d/%d err=%02X%02X%02X/%02X%02X%02X\n"

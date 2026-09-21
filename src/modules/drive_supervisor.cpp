@@ -82,6 +82,15 @@ DriveSupervisorOutput drive_supervisor_compute(
     }
 
     float thermal_scale = 1.0f;
+    if (params.enable_energy_meter_limit &&
+        (!in.energy_meter_valid || !std::isfinite(in.energy_meter_power_w))) {
+        // Never silently increase propulsion authority on loss of the meter.
+        // Reverse drive is negative too: propulsion_requested distinguishes it.
+        scale_drive(out.left_a, 0.0f, in.propulsion_requested);
+        scale_drive(out.right_a, 0.0f, in.propulsion_requested);
+        reset_rise_limit(state);
+        out.energy_meter_blocked = true;
+    }
     const float thermal_candidates[] = {
         temperature_scale(in.controller_temp_left_c,
                           params.controller_derate_start_c,
@@ -244,6 +253,10 @@ DriveSupervisorOutput drive_supervisor_compute(
     out.predicted_command_power_w = estimate_input_power(out.left_a, out.right_a);
 
     float governing_power = out.measured_bus_power_w;
+    if (params.enable_energy_meter_limit && in.energy_meter_valid &&
+        std::isfinite(in.energy_meter_power_w)) {
+        governing_power = std::fmax(governing_power, positive(in.energy_meter_power_w));
+    }
     if (out.estimated_input_power_w > governing_power)
         governing_power = out.estimated_input_power_w;
     if (out.predicted_command_power_w > governing_power)
@@ -272,5 +285,6 @@ DriveSupervisorOutput drive_supervisor_compute(
 
     out.applied_scale =
         thermal_scale * paddock_scale * power_scale * slew_scale;
+    if (out.energy_meter_blocked && in.propulsion_requested) out.applied_scale = 0.0f;
     return out;
 }

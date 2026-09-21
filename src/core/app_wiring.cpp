@@ -100,6 +100,7 @@ namespace {
         realcar_cal::bringup::CONTROLLER_CUTOFF_C,
         realcar_cal::bringup::MOTOR_DERATE_START_C,
         realcar_cal::bringup::MOTOR_CUTOFF_C,
+        realcar_cal::bringup::ENABLE_ENERGY_METER_LIMIT,
     };
     const TimeSyncPulseParams TIME_SYNC_PARAMS {
         realcar_cal::bringup::ENABLE_TIME_SYNC_PULSE,
@@ -306,7 +307,9 @@ static void drive_supervisor_update() {
     const bool propulsion_requested =
         !time_sync_output.override_active &&
         state.propulsion_direction_armed && state.throttle_signal_valid &&
-        (float)state.throttle_pct > realcar_cal::bringup::THROTTLE_ARM_MAX_PCT &&
+        // Even a sub-1% reverse-drive request must be classified as propulsion
+        // for EM loss blocking and signed power scaling. Arm threshold is separate.
+        (float)state.throttle_pct > 0.0f &&
         !state.brake_active;
     const DriveSupervisorInput in {
         requested_left_a, requested_right_a,
@@ -325,6 +328,8 @@ static void drive_supervisor_update() {
         propulsion_requested, realcar_cal::confirmed::CONTROL_PERIOD_S,
         state.vehicle_speed_mps, state.paddock_speed_mps,
         state.pack_data_valid, state.pack_current_a,
+        state.energy_meter.fresh(millis(), realcar_cal::bringup::ENERGY_METER_STALE_MS),
+        state.energy_meter.record.power_w,
     };
     const DriveSupervisorOutput out =
         drive_supervisor_compute(in, DRIVE_SUPERVISOR_PARAMS,
@@ -339,6 +344,7 @@ static void drive_supervisor_update() {
     state.paddock_current_limit_a = out.paddock_current_limit_a;
     state.drive_limit_scale = out.applied_scale;
     state.power_limited = out.power_limited;
+    state.energy_meter_blocked = out.energy_meter_blocked;
     state.thermal_limited = out.thermal_limited;
     state.paddock_sensor_blocked = out.paddock_sensor_blocked;
     state.paddock_current_limited = out.paddock_current_limited;

@@ -308,6 +308,10 @@ void     encode_vcu_vehicle_speed(float speed_kph, bool valid, uint8_t out[8]);
 
 ## 9. 변경 관리
 
+EM Gateway RECORD 수신과 전력 제어 계약은 [ENERGY_METER.md](ENERGY_METER.md)를 따른다.
+Cluster dev와 같은 `0x1CF5FFC1` / signed int16 LE 형식을 사용하며,
+기존 EZkontrol METER(0x17) 경로와는 별개다.
+
 - ID·byte·bit·scaling 계약은 양 레포와 Monolith decoder에서 동일해야 한다.
 - 수정 시: ① 이 문서 갱신 → ② 필요한 송수신 레포 갱신 → ③ Monolith decoder 갱신 → ④ 팀 공지.
 - 새 메시지 ID는 J1939 규칙(PF/PS/SA)에 맞게 할당하고 §4 표에 추가.
