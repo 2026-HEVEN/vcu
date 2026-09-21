@@ -4,6 +4,7 @@
 //  Application work happens only in src/modules/.
 // ============================================================
 #include "safety_logic.h"
+#include "modules/motor_direction.h"
 #include <cmath>
 
 bool motor_snapshot_fresh(const MotorCommandSnapshot &snapshot,
@@ -55,11 +56,6 @@ SafetyState safety_step(SafetyState cur, const SafetyInputs &in) {
 namespace {
 float clamp01(float v) { return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v); }
 
-// 회생 여부가 좌우 다를 수 있어 측별로 계산한다. gear는 단일 값이므로 방향은 같다.
-int target_rpm_for(Gear gear, float amps) {
-    if (gear == Gear::Reverse) return -DRIVE_TARGET_SPEED_RPM;
-    return amps < 0.0f ? REGEN_TARGET_SPEED_RPM : DRIVE_TARGET_SPEED_RPM;
-}
 }  // namespace
 
 MotorFrameCommand motor_command_resolve(const MotorCommandSnapshot &snapshot,
@@ -81,10 +77,18 @@ MotorFrameCommand motor_command_resolve(const MotorCommandSnapshot &snapshot,
 
     const float ramp = std::isfinite(gates.reconnect_ramp_scale)
         ? clamp01(gates.reconnect_ramp_scale) : 0.0f;
-    out.left_a  = snapshot.left_a  * ramp;
-    out.right_a = snapshot.right_a * ramp;
-    out.run_L = out.run_R = true;
-    out.target_rpm_L = target_rpm_for(snapshot.gear, out.left_a);
-    out.target_rpm_R = target_rpm_for(snapshot.gear, out.right_a);
+    // dev의 D 회생/R 구동 부호 규칙을 재사용한다. 공유 state는 다시 읽지 않는다.
+    const auto left = motor_direction_command(snapshot.left_a * ramp,
+        snapshot.gear, true, snapshot.brake_active,
+        snapshot.regen_allowed, snapshot.forward_rotation);
+    const auto right = motor_direction_command(snapshot.right_a * ramp,
+        snapshot.gear, true, snapshot.brake_active,
+        snapshot.regen_allowed, snapshot.forward_rotation);
+    out.left_a = left.current_a;
+    out.right_a = right.current_a;
+    out.run_L = left.running;
+    out.run_R = right.running;
+    out.target_rpm_L = left.target_rpm;
+    out.target_rpm_R = right.target_rpm;
     return out;
 }

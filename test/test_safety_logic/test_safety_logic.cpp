@@ -79,6 +79,7 @@ void test_mc_drive_commands_both_motors_forward(void) {
 void test_mc_reverse_commands_both_motors_backward(void) {
     MotorCommandSnapshot s = mc_snapshot();
     s.gear = Gear::Reverse;
+    s.left_a = s.right_a = -100.0f;
     const MotorFrameCommand cmd = mc_resolve(s, mc_gates());
     TEST_ASSERT_TRUE(cmd.normal_allow);
     TEST_ASSERT_EQUAL_INT(-4000, cmd.target_rpm_L);
@@ -89,10 +90,52 @@ void test_mc_regen_in_drive_targets_zero_rpm(void) {
     MotorCommandSnapshot s = mc_snapshot();
     s.left_a = -20.0f;
     s.right_a = -20.0f;
+    s.brake_active = s.regen_allowed = s.forward_rotation = true;
     const MotorFrameCommand cmd = mc_resolve(s, mc_gates());
     TEST_ASSERT_TRUE(cmd.normal_allow);
+    TEST_ASSERT_EQUAL_FLOAT(-20.0f, cmd.left_a);
+    TEST_ASSERT_EQUAL_FLOAT(-20.0f, cmd.right_a);
     TEST_ASSERT_EQUAL_INT(0, cmd.target_rpm_L);
     TEST_ASSERT_EQUAL_INT(0, cmd.target_rpm_R);
+}
+
+void test_mc_regen_conditions_travel_with_snapshot(void) {
+    MotorCommandSnapshot s = mc_snapshot();
+    s.left_a = -10.0f; s.right_a = -15.0f;
+    s.brake_active = s.regen_allowed = s.forward_rotation = true;
+    for (int missing = 0; missing < 3; ++missing) {
+        auto blocked = s;
+        if (missing == 0) blocked.brake_active = false;
+        if (missing == 1) blocked.regen_allowed = false;
+        if (missing == 2) blocked.forward_rotation = false;
+        const auto cmd = mc_resolve(blocked, mc_gates());
+        TEST_ASSERT_EQUAL_FLOAT(0.0f, cmd.left_a);
+        TEST_ASSERT_EQUAL_FLOAT(0.0f, cmd.right_a);
+        TEST_ASSERT_EQUAL_INT(0, cmd.target_rpm_L);
+        TEST_ASSERT_EQUAL_INT(0, cmd.target_rpm_R);
+    }
+    // Replacing a snapshot changes current AND its interpretation together.
+    s.gear = Gear::Reverse;
+    s.brake_active = true;
+    s.regen_allowed = s.forward_rotation = false;
+    const auto reverse = mc_resolve(s, mc_gates());
+    TEST_ASSERT_EQUAL_FLOAT(-10.0f, reverse.left_a);
+    TEST_ASSERT_EQUAL_INT(-4000, reverse.target_rpm_L);
+    TEST_ASSERT_EQUAL_INT(-4000, reverse.target_rpm_R);
+    s.left_a = s.right_a = 10.0f; // Reverse regen is not supported.
+    const auto invalid_reverse = mc_resolve(s, mc_gates());
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, invalid_reverse.left_a);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, invalid_reverse.right_a);
+}
+
+void test_mc_brake_does_not_block_positive_throttle_drive(void) {
+    auto s = mc_snapshot();
+    s.brake_active = true;
+    s.regen_allowed = false;
+    const auto cmd = mc_resolve(s, mc_gates());
+    TEST_ASSERT_EQUAL_FLOAT(100.0f, cmd.left_a);
+    TEST_ASSERT_EQUAL_FLOAT(100.0f, cmd.right_a);
+    TEST_ASSERT_EQUAL_INT(4000, cmd.target_rpm_L);
 }
 
 void test_mc_safety_halt_blocks_both(void) {
@@ -139,6 +182,8 @@ void test_mc_asymmetric_current_never_splits_direction(void) {
     TEST_ASSERT_EQUAL_INT(4000, cmd.target_rpm_L);
 
     s.gear = Gear::Reverse;
+    s.left_a = -300.0f;
+    s.right_a = -5.0f;
     cmd = mc_resolve(s, mc_gates());
     TEST_ASSERT_EQUAL_INT(cmd.target_rpm_L, cmd.target_rpm_R);
     TEST_ASSERT_EQUAL_INT(-4000, cmd.target_rpm_L);
@@ -269,6 +314,8 @@ int main(int, char **) {
     RUN_TEST(test_mc_drive_commands_both_motors_forward);
     RUN_TEST(test_mc_reverse_commands_both_motors_backward);
     RUN_TEST(test_mc_regen_in_drive_targets_zero_rpm);
+    RUN_TEST(test_mc_regen_conditions_travel_with_snapshot);
+    RUN_TEST(test_mc_brake_does_not_block_positive_throttle_drive);
     RUN_TEST(test_mc_safety_halt_blocks_both);
     RUN_TEST(test_mc_non_propulsion_gear_blocks_both);
     RUN_TEST(test_mc_stale_snapshot_blocks_both);

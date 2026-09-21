@@ -13,6 +13,7 @@
 #include "safety_logic.h"   // torque_allowed()
 #include "core/board_pins.h"
 #include "modules/realcar_calibration.h"
+#include "modules/motor_direction.h"
 #include "modules/car_check_status.h"
 #include "modules/tv/tv_config.h"
 

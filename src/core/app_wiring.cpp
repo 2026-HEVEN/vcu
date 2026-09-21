@@ -14,6 +14,7 @@
 #include "safety_logic.h"
 #include "modules/throttle.h"
 #include "modules/brake.h"
+#include "modules/motor_direction.h"
 #include "modules/steering.h"
 #include "modules/imu.h"
 #include "modules/wheel_speed.h"
@@ -212,10 +213,15 @@ static void paddock_update() {
     }
 }
 static void longitudinal_update() {
+    static RegenReleaseState release_state{};
+    const bool released_for_regen = regen_release_update(
+        (float)state.throttle_pct, state.throttle_signal_valid, release_state);
     state.total_torque = longitudinal_compute({
         (float)state.throttle_pct, (float)state.brake_pct, state.pack_soc, drive_mode,
-        state.regen_auto_requested &&
-            realcar_cal::bringup::REGEN_HARDWARE_VALIDATED });
+        released_for_regen && state.regen_auto_requested &&
+            realcar_cal::bringup::REGEN_HARDWARE_VALIDATED &&
+            realcar_cal::bringup::BRAKE_SENSOR_INSTALLED &&
+            state.gear == Gear::Drive && state.pack_data_valid });
     state.longitudinal_regen_demand = state.total_torque < 0.0f;
     const bool throttle_released =
         (float)state.throttle_pct <= realcar_cal::bringup::THROTTLE_ARM_MAX_PCT;
@@ -229,11 +235,8 @@ static void longitudinal_update() {
         realcar_cal::bringup::GEAR_DIRECTION_ARM_SAMPLES,
         direction_interlock_state);
     state.propulsion_direction_armed = direction.propulsion_enabled;
-    if (!direction.propulsion_enabled) {
-        state.total_torque = 0.0f;
-    } else {
-        state.total_torque = direction.command_sign * abs((float)state.total_torque);
-    }
+    state.total_torque = directional_current(
+        state.total_torque, state.gear, direction.propulsion_enabled);
 }
 static void torque_vectoring_update() {
     // 게이트 조건을 여기서 미리 접지 않는다. 원본 값과 유효성 플래그를 그대로
@@ -307,8 +310,7 @@ static void drive_supervisor_update() {
     const bool propulsion_requested =
         !time_sync_output.override_active &&
         state.propulsion_direction_armed && state.throttle_signal_valid &&
-        (float)state.throttle_pct > realcar_cal::bringup::THROTTLE_ARM_MAX_PCT &&
-        !state.brake_active;
+        (float)state.throttle_pct > 0.0f;
     const DriveSupervisorInput in {
         requested_left_a, requested_right_a,
         state.controller_feedback_fresh,
@@ -358,6 +360,15 @@ static void drive_supervisor_update() {
     command_snapshot.throttle_signal_valid = state.throttle_signal_valid;
     command_snapshot.propulsion_direction_armed =
         state.propulsion_direction_armed;
+    command_snapshot.brake_active = state.brake_active;
+    command_snapshot.regen_allowed = realcar_cal::bringup::REGEN_HARDWARE_VALIDATED &&
+        realcar_cal::bringup::BRAKE_SENSOR_INSTALLED &&
+        state.regen_auto_requested && state.pack_data_valid &&
+        state.throttle_signal_valid && (float)state.throttle_pct == 0.0f;
+    command_snapshot.forward_rotation = state.controller_feedback_fresh_L &&
+        state.controller_feedback_fresh_R &&
+        state.controller_fb1_L.motor_speed_rpm > 0 &&
+        state.controller_fb1_R.motor_speed_rpm > 0;
     can_bus::publish_motor_command(command_snapshot);
 
     can_bus::note_command();

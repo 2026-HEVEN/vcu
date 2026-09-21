@@ -1,6 +1,17 @@
 // [FILL-IN] Edit this file. Implement the *_compute() function below.
 #include "modules/longitudinal.h"
 #include "modules/realcar_calibration.h"
+#include <cmath>
+
+bool regen_release_update(float throttle_pct, bool valid, RegenReleaseState &state) {
+    constexpr unsigned RELEASE_SAMPLES = 10;
+    if (!valid || !std::isfinite(throttle_pct) || throttle_pct != 0.0f) {
+        state.zero_samples = 0;
+        return false;
+    }
+    if (state.zero_samples < RELEASE_SAMPLES) ++state.zero_samples;
+    return state.zero_samples >= RELEASE_SAMPLES;
+}
 
 float longitudinal_compute(const LongInput &in) {
     // This module outputs the SUM of the two motor phase-current demands.
@@ -36,18 +47,13 @@ float longitudinal_compute(const LongInput &in) {
     }
     regen_max_a *= regen_multiplier;
 
-    // 3. 최종 토크(전류) 계산
-    float drive = (in.throttle_pct / 100.0f) * drive_max_a;
-    float regen = in.regen_auto_enabled
-        ? (in.brake_pct / 100.0f) * regen_max_a
-        : 0.0f;
-
-    // 4. 안전 로직: Brake Override (양발 운전 급발진 방지)
-    // [권장 피드백 반영] 센서 노이즈나 발을 살짝 올려둔 상태(데드존)를 무시하기 위해 5% 초과일 때만 구동 차단
-    if (in.brake_pct > BRAKE_DEADZONE) {
-        drive = 0.0f; 
-    }
-
-    // 5. 최종 반환: 구동 전류(+)와 회생제동 전류(-)의 합
-    return drive - regen;
+    // Explicit policy: positive throttle wins even with the brake pressed.
+    // Do not subtract regen from propulsion or apply a brake-throttle override.
+    if (!std::isfinite(in.throttle_pct) || in.throttle_pct < 0.0f) return 0.0f;
+    if (in.throttle_pct > 0.0f)
+        return std::fmin(in.throttle_pct, 100.0f) / 100.0f * drive_max_a;
+    if (!in.regen_auto_enabled || !std::isfinite(in.brake_pct) ||
+        in.brake_pct <= BRAKE_DEADZONE || !std::isfinite(in.pack_soc) ||
+        in.pack_soc < 0.0f || in.pack_soc > 1.0f) return 0.0f;
+    return -std::fmin(in.brake_pct, 100.0f) / 100.0f * regen_max_a;
 }
