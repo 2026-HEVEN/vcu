@@ -12,3 +12,8 @@ struct LongInput {
 };
 
 float longitudinal_compute(const LongInput &in);   // + = drive, - = regen
+
+struct RegenReleaseState { unsigned zero_samples = 0; };
+// Called every 10 ms: re-enable after 100 ms continuously at calibrated 0%.
+// Any positive/invalid throttle immediately cancels release qualification.
+bool regen_release_update(float throttle_pct, bool valid, RegenReleaseState &state);

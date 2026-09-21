@@ -13,6 +13,7 @@
 #include "safety_logic.h"   // torque_allowed()
 #include "core/board_pins.h"
 #include "modules/realcar_calibration.h"
+#include "modules/motor_direction.h"
 #include "modules/car_check_status.h"
 #include "modules/tv/tv_config.h"
 
@@ -33,8 +34,6 @@
 
 namespace {
     constexpr uint32_t DEADMAN_MS = 200;
-    constexpr int DRIVE_TARGET_SPEED_RPM = 4000;
-    constexpr int REGEN_TARGET_SPEED_RPM = 0;
     volatile uint32_t  g_last_cmd_ms = 0;
     volatile bool      g_handshaked  = false;
     volatile bool      g_handshaked_L = false;
@@ -94,15 +93,10 @@ namespace {
         return twai_transmit(&m, wait_ticks) == ESP_OK;
     }
 
-    void send_torque(uint32_t id, float amps, bool running) {
-        // Confirmed on the vehicle: propulsion uses +4000 rpm while regen
-        // uses 0 rpm. Byte4 must be 0x01 or EZkontrol remains HALTED.
-        const int target_rpm = !running ? 0
-            : (state.gear == Gear::Reverse ? -DRIVE_TARGET_SPEED_RPM
-                : (amps < 0.0f ? REGEN_TARGET_SPEED_RPM
-                               : DRIVE_TARGET_SPEED_RPM));
+    void send_torque(uint32_t id, const MotorDirectionCommand &command) {
         uint8_t data[8];
-        encode_motor_control(amps, target_rpm, running, g_life, data);
+        encode_motor_control(command.current_a, command.target_rpm,
+                             command.running, g_life, data);
 
         twai_message_t m = {};
         m.identifier = id; m.extd = 1; m.data_length_code = 8;
@@ -248,12 +242,28 @@ namespace {
 
             // Do not place normal command frames on a controller ID before
             // that controller has completed its 0x55/0xAA handshake.
-            state.can_commanded_current_L = l;
-            state.can_commanded_current_R = r;
-            state.can_commanded_running_L = run_l;
-            state.can_commanded_running_R = run_r;
-            if (g_handshaked_L) send_torque(CAN_ID_TORQUE_L, l, run_l);
-            if (g_handshaked_R) send_torque(CAN_ID_TORQUE_R, r, run_r);
+            // Resolve gear once for both frames. Full cross-core command
+            // atomicity is a separate change (M2 snapshot PR).
+            const Gear command_gear = state.gear;
+            const bool brake_active = state.brake_active;
+            const bool regen_allowed = realcar_cal::bringup::REGEN_HARDWARE_VALIDATED &&
+                realcar_cal::bringup::BRAKE_SENSOR_INSTALLED &&
+                state.regen_auto_requested && state.pack_data_valid &&
+                state.throttle_signal_valid && (float)state.throttle_pct == 0.0f;
+            const bool forward_rotation = state.controller_feedback_fresh_L &&
+                state.controller_feedback_fresh_R &&
+                state.controller_fb1_L.motor_speed_rpm > 0 &&
+                state.controller_fb1_R.motor_speed_rpm > 0;
+            const auto left_command = motor_direction_command(
+                l, command_gear, run_l, brake_active, regen_allowed, forward_rotation);
+            const auto right_command = motor_direction_command(
+                r, command_gear, run_r, brake_active, regen_allowed, forward_rotation);
+            state.can_commanded_current_L = left_command.current_a;
+            state.can_commanded_current_R = right_command.current_a;
+            state.can_commanded_running_L = left_command.running;
+            state.can_commanded_running_R = right_command.running;
+            if (g_handshaked_L) send_torque(CAN_ID_TORQUE_L, left_command);
+            if (g_handshaked_R) send_torque(CAN_ID_TORQUE_R, right_command);
             g_life++;
             vTaskDelayUntil(&next, period);   // configured exact cadence
         }

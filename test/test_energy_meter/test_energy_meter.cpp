@@ -2,6 +2,8 @@
 #include <cmath>
 #include "energy_meter.h"
 #include "modules/drive_supervisor.h"
+#include "modules/longitudinal.h"
+#include "modules/motor_direction.h"
 
 void setUp() {}
 void tearDown() {}
@@ -110,6 +112,26 @@ void test_charge_is_not_discharge_and_model_guards_remain() {
     i.energy_meter_valid=false;
     TEST_ASSERT_EQUAL_FLOAT(-10,drive_supervisor_compute(i,p,s).left_a);
 }
+void test_dev_brake_throttle_policy_keeps_em_gate_in_both_gears() {
+    const float throttle = 0.5f; // Below arm threshold, but still propulsion.
+    const float total = longitudinal_compute({throttle,100.0f,0.5f,
+        DriveMode::Normal,true});
+    TEST_ASSERT_TRUE(total > 0.0f);
+    const Gear gears[] = {Gear::Drive, Gear::Reverse};
+    for (Gear gear : gears) {
+        auto p=params(); auto i=input(); DriveSupervisorState s{};
+        i.propulsion_requested = throttle > 0.0f;
+        i.requested_left_a=i.requested_right_a=directional_current(total,gear,true)*0.5f;
+        i.energy_meter_valid=false;
+        const auto blocked=drive_supervisor_compute(i,p,s);
+        TEST_ASSERT_EQUAL_FLOAT(0,blocked.left_a);
+        TEST_ASSERT_EQUAL_FLOAT(0,blocked.right_a);
+        i.energy_meter_valid=true; i.energy_meter_power_w=0;
+        const auto allowed=drive_supervisor_compute(i,p,s);
+        TEST_ASSERT_EQUAL_FLOAT(i.requested_left_a,allowed.left_a);
+        TEST_ASSERT_EQUAL_FLOAT(i.requested_right_a,allowed.right_a);
+    }
+}
 int main(int,char**) {
     UNITY_BEGIN();
     RUN_TEST(test_cluster_signed_layout);
@@ -118,5 +140,6 @@ int main(int,char**) {
     RUN_TEST(test_meter_governs_and_observe_only_does_not);
     RUN_TEST(test_missing_meter_blocks_forward_and_reverse_and_recovers_with_ramp);
     RUN_TEST(test_charge_is_not_discharge_and_model_guards_remain);
+    RUN_TEST(test_dev_brake_throttle_policy_keeps_em_gate_in_both_gears);
     return UNITY_END();
 }
