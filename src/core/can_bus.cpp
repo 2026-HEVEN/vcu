@@ -46,11 +46,12 @@ namespace {
     bool                g_bus_recovery_pending = false;
     uint8_t            g_life = 0;
     uint8_t            g_status_life = 0;
-    unsigned           g_tx_fail[2] = {0U, 0U};   // [0]=L, [1]=R, life_task only
+    MotorTxDiagnostics g_tx_work{}; // life task owns counters and history
 
     // The only command data shared between the cores.
     portMUX_TYPE         g_cmd_mux = portMUX_INITIALIZER_UNLOCKED;
     MotorCommandSnapshot g_cmd_snapshot{};   // guarded by g_cmd_mux
+    MotorTxDiagnostics g_tx_diagnostics{};   // also guarded by g_cmd_mux
 
     // Never transmit inside the critical section: twai_transmit() blocks.
     MotorCommandSnapshot copy_motor_command() {
@@ -120,12 +121,10 @@ namespace {
 
     // A frame we could not even queue is not a command. Repeated failure goes
     // to the existing link-loss policy: both motors 0 A, reconnect ramp back.
-    void note_tx_result(bool left, bool tx_ok, unsigned &telemetry) {
-        unsigned &fails = g_tx_fail[left ? 0 : 1];
-        fails = tx_ok ? 0U : fails + 1U;
-        telemetry = fails;
-        if (fails >= realcar_cal::bringup::MOTOR_TX_FAIL_LIMIT) {
-            fails = 0U;
+    void note_tx_result(bool left, const MotorTxSideDiagnostics &side, unsigned &telemetry) {
+        telemetry = side.consecutive_failures;
+        if (side.result == MotorTxResult::Failed &&
+            side.consecutive_failures == realcar_cal::bringup::MOTOR_TX_FAIL_LIMIT) {
             invalidate_controller_link(left, "tx failed");
         }
     }
@@ -173,15 +172,22 @@ namespace {
                     state.component_test_release_ticks = 0U;
                 }
             }
-            // One consistent view of core 0's tick; nothing below re-reads it.
+            // 1) 좌우 전류·기어·구동 허용 상태를 한 묶음으로 복사한다.
+            //    이번 송신에서는 이 복사본만 사용한다.
             const MotorCommandSnapshot snap = copy_motor_command();
-            const uint32_t snapshot_age_ms = now - snap.published_ms;
+            const uint32_t command_heartbeat_ms = g_last_cmd_ms;
+            // 2) 명령을 받은 다음 시계를 읽고, 명령이 얼마나 오래됐는지 계산한다.
+            //    루프 시작의 now를 쓰지 말 것: 그 이후 새 명령이 게시될 수 있다.
+            //    예: 옛 now=1000, 게시=1001이면 unsigned 차이는 4294967295가 된다.
+            const uint32_t checked_at_ms = millis();
+            const uint32_t snapshot_age_ms = checked_at_ms - snap.published_ms;
+            // 3) 제어 루프와 명령의 유효기간을 검사한 뒤 송신값을 결정한다.
             MotorCommandGates gates;
-            gates.scheduler_alive = scheduler_alive;
+            gates.scheduler_alive = checked_at_ms - command_heartbeat_ms < DEADMAN_MS;
             gates.reconnect_inhibit = g_reconnect_inhibit;
             gates.component_test_inhibit = state.component_test_normal_inhibit;
-            gates.snapshot_fresh = snap.seq != 0U && snapshot_age_ms <=
-                realcar_cal::bringup::MOTOR_COMMAND_SNAPSHOT_MAX_AGE_MS;
+            gates.snapshot_fresh = motor_snapshot_fresh(snap, checked_at_ms,
+                realcar_cal::bringup::MOTOR_COMMAND_SNAPSHOT_MAX_AGE_MS);
             gates.reconnect_ramp_scale = 1.0f;   // ramp applied after the test branch
             const MotorFrameCommand resolved = motor_command_resolve(snap, gates);
 
@@ -288,13 +294,29 @@ namespace {
             state.motor_command_seq = snap.seq;
 
             // Queue both frames back to back, no work in between.
-            const bool tx_ok_L = !g_handshaked_L ||
-                send_torque(CAN_ID_TORQUE_L, l, rpm_l, run_l, g_life);
-            const bool tx_ok_R = !g_handshaked_R ||
-                send_torque(CAN_ID_TORQUE_R, r, rpm_r, run_r, g_life);
-
-            note_tx_result(true,  tx_ok_L, state.can_tx_fail_count_L);
-            note_tx_result(false, tx_ok_R, state.can_tx_fail_count_R);
+            const auto tx_l = !g_handshaked_L ? MotorTxResult::Skipped :
+                (send_torque(CAN_ID_TORQUE_L, l, rpm_l, run_l, g_life)
+                    ? MotorTxResult::Queued : MotorTxResult::Failed);
+            const auto tx_r = !g_handshaked_R ? MotorTxResult::Skipped :
+                (send_torque(CAN_ID_TORQUE_R, r, rpm_r, run_r, g_life)
+                    ? MotorTxResult::Queued : MotorTxResult::Failed);
+            const uint32_t tx_done_ms = millis();
+            motor_tx_record(g_tx_work.left, tx_l, l, rpm_l, run_l, snap.seq, tx_done_ms);
+            motor_tx_record(g_tx_work.right, tx_r, r, rpm_r, run_r, snap.seq, tx_done_ms);
+            g_tx_work.seq = snap.seq;
+            g_tx_work.requested.left_a = l; g_tx_work.requested.right_a = r;
+            g_tx_work.requested.target_rpm_L = rpm_l; g_tx_work.requested.target_rpm_R = rpm_r;
+            g_tx_work.requested.run_L = run_l; g_tx_work.requested.run_R = run_r;
+            g_tx_work.requested.normal_allow = normal_allow;
+            g_tx_work.snapshot_age_ms = snapshot_age_ms;
+            g_tx_work.snapshot_fresh = gates.snapshot_fresh;
+            if (!gates.snapshot_fresh && g_tx_work.stale_total != UINT32_MAX)
+                ++g_tx_work.stale_total;
+            portENTER_CRITICAL(&g_cmd_mux);
+            g_tx_diagnostics = g_tx_work;
+            portEXIT_CRITICAL(&g_cmd_mux);
+            note_tx_result(true, g_tx_work.left, state.can_tx_fail_count_L);
+            note_tx_result(false, g_tx_work.right, state.can_tx_fail_count_R);
 
             g_life++;   // after both sends: the pair shares one life value
             vTaskDelayUntil(&next, period);   // configured exact cadence
@@ -324,8 +346,17 @@ void publish_motor_command(const MotorCommandSnapshot &snapshot) {
     portEXIT_CRITICAL(&g_cmd_mux);
 }
 
+MotorTxDiagnostics motor_tx_diagnostics() {
+    MotorTxDiagnostics out;
+    portENTER_CRITICAL(&g_cmd_mux);
+    out = g_tx_diagnostics;
+    portEXIT_CRITICAL(&g_cmd_mux);
+    return out;
+}
+
 void start_life_task() {
-    // High priority, pinned to core 1, away from the loop()/scheduler.
+    // High priority on core 1. Arduino loop may also use core 1; do not assume
+    // different cores when reasoning about yields or scheduling latency.
     xTaskCreatePinnedToCore(life_task, "can_life", 4096, nullptr, 20, nullptr, 1);
 }
 
@@ -342,8 +373,9 @@ void send_log_frames() {
 
     // 100Hz - 명령 전류와 실제 상전류. 이 둘의 비율이 컨트롤러가 명령을
     // 그대로 흘리는지 보여준다.
-    encode_vcu_log_drive(state.can_commanded_current_L,
-                         state.can_commanded_current_R,
+    const auto tx = motor_tx_diagnostics();
+    encode_vcu_log_drive(tx.requested.left_a,
+                         tx.requested.right_a,
                          state.controller_fb1_L.phase_current_a,
                          state.controller_fb1_R.phase_current_a, data);
     send(CAN_ID_VCU_LOG_DRIVE);

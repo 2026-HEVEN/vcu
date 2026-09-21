@@ -15,6 +15,8 @@ namespace can_bus {
     // commanded from different ticks. Call once per tick, AFTER the safety
     // verdict for that tick is final. See docs/M2_COMMAND_SNAPSHOT.md.
     void publish_motor_command(const MotorCommandSnapshot &snapshot);
+    // Atomic pair, including queue outcomes. Queued is NOT controller receipt.
+    MotorTxDiagnostics motor_tx_diagnostics();
     void poll_rx();         // drain RX queue into `state` (call from a scheduler task)
     void send_vehicle_speed(); // VCU -> Cluster/TMA-1 single speed telemetry
     void send_cluster_status(); // VCU -> Cluster gear/brake/HV state

@@ -92,15 +92,15 @@ struct VehicleState {
     Amp       requested_torque_R;
     Amp       torque_L;              // motor phase-current command [A]
     Amp       torque_R;
-    float     can_commanded_current_L = 0.0f; // actual life-task frame value
+    float     can_commanded_current_L = 0.0f; // requested frame, NOT queue/receipt proof
     float     can_commanded_current_R = 0.0f;
     bool      can_commanded_running_L = false;
     bool      can_commanded_running_R = false;
-    // Consecutive twai_transmit() failures; nonzero means the frame above is a
-    // request, not a confirmed send.
+    // Legacy consecutive-failure mirror. See can_bus::motor_tx_diagnostics()
+    // for atomic attempt/queue status and cumulative failures. These are not ACKs.
     unsigned  can_tx_fail_count_L = 0U;
     unsigned  can_tx_fail_count_R = 0U;
-    uint32_t  motor_command_seq = 0U;  // snapshot id the life task last sent
+    uint32_t  motor_command_seq = 0U;  // snapshot id last resolved (may be skipped/failed)
     float     measured_bus_power_w = 0.0f;
     float     estimated_input_power_w = 0.0f;
     float     predicted_command_power_w = 0.0f;

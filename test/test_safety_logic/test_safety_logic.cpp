@@ -199,6 +199,65 @@ void test_mc_ramp_scale_is_clamped_and_nan_safe(void) {
 
 
 void setUp(void) {}
+void test_snapshot_freshness_boundaries_and_rollover() {
+    auto s=mc_snapshot();
+    s.published_ms=1001;
+    // Before-copy timestamp reproduces the reviewed false stale; use the later time.
+    TEST_ASSERT_FALSE(motor_snapshot_fresh(s,1000,100));
+    TEST_ASSERT_TRUE(motor_snapshot_fresh(s,1001,100));
+    TEST_ASSERT_TRUE(motor_snapshot_fresh(s,1101,100));
+    TEST_ASSERT_FALSE(motor_snapshot_fresh(s,1102,100));
+    s.published_ms=0xFFFFFFF0u;
+    TEST_ASSERT_TRUE(motor_snapshot_fresh(s,0x54u,100));
+    TEST_ASSERT_FALSE(motor_snapshot_fresh(s,0x55u,100));
+    s.seq=0;
+    TEST_ASSERT_FALSE(motor_snapshot_fresh(s,0x54u,100));
+}
+
+void test_tx_failure_preserves_last_queued_command() {
+    MotorTxSideDiagnostics d;
+    motor_tx_record(d,MotorTxResult::Queued,100,4000,true,7,1000);
+    motor_tx_record(d,MotorTxResult::Failed,0,0,false,8,1050);
+    TEST_ASSERT_EQUAL_FLOAT(100,d.last_queued_a);
+    TEST_ASSERT_TRUE(d.last_queued_running);
+    TEST_ASSERT_EQUAL_UINT32(7,d.last_queued_seq);
+    TEST_ASSERT_EQUAL_UINT32(1000,d.last_queued_ms);
+    TEST_ASSERT_EQUAL_UINT32(1,d.failed_total);
+    TEST_ASSERT_EQUAL_UINT(1,d.consecutive_failures);
+    motor_tx_record(d,MotorTxResult::Failed,0,0,false,9,1100);
+    motor_tx_record(d,MotorTxResult::Failed,0,0,false,10,1150);
+    TEST_ASSERT_EQUAL_UINT(3,d.consecutive_failures);
+    motor_tx_record(d,MotorTxResult::Queued,0,0,false,11,1200);
+    TEST_ASSERT_EQUAL_UINT(0,d.consecutive_failures);
+    TEST_ASSERT_EQUAL_UINT32(3,d.failed_total); // never lost on success
+    TEST_ASSERT_EQUAL_FLOAT(0,d.last_queued_a);
+    TEST_ASSERT_FALSE(d.last_queued_running);
+}
+
+void test_skipped_is_not_success_and_counters_saturate() {
+    MotorTxSideDiagnostics d;
+    motor_tx_record(d,MotorTxResult::Skipped,100,4000,true,1,0);
+    TEST_ASSERT_FALSE(d.queued_valid);
+    TEST_ASSERT_EQUAL_UINT32(0,d.failed_total);
+    d.failed_total=UINT32_MAX; d.consecutive_failures=UINT32_MAX;
+    motor_tx_record(d,MotorTxResult::Failed,100,4000,true,2,1);
+    TEST_ASSERT_EQUAL_UINT32(UINT32_MAX,d.failed_total);
+    TEST_ASSERT_EQUAL_UINT32(UINT32_MAX,d.consecutive_failures);
+    motor_tx_record(d,MotorTxResult::Skipped,100,4000,true,3,2);
+    TEST_ASSERT_FALSE(d.queued_valid);
+    TEST_ASSERT_EQUAL_UINT(0,d.consecutive_failures);
+    TEST_ASSERT_EQUAL_UINT32(UINT32_MAX,d.failed_total);
+}
+
+void test_tx_pair_outcomes_are_independent() {
+    MotorTxDiagnostics d;
+    motor_tx_record(d.left,MotorTxResult::Queued,100,4000,true,4,10);
+    motor_tx_record(d.right,MotorTxResult::Failed,100,4000,true,4,10);
+    TEST_ASSERT_TRUE(d.left.queued_valid);
+    TEST_ASSERT_FALSE(d.right.queued_valid);
+    TEST_ASSERT_EQUAL_UINT32(0,d.left.failed_total);
+    TEST_ASSERT_EQUAL_UINT32(1,d.right.failed_total);
+}
 void tearDown(void) {}
 int main(int, char **) {
     UNITY_BEGIN();
@@ -220,5 +279,9 @@ int main(int, char **) {
     RUN_TEST(test_mc_invalid_throttle_signal_blocks_both);
     RUN_TEST(test_mc_core1_gates_block_both);
     RUN_TEST(test_mc_ramp_scale_is_clamped_and_nan_safe);
+    RUN_TEST(test_snapshot_freshness_boundaries_and_rollover);
+    RUN_TEST(test_tx_failure_preserves_last_queued_command);
+    RUN_TEST(test_skipped_is_not_success_and_counters_saturate);
+    RUN_TEST(test_tx_pair_outcomes_are_independent);
     return UNITY_END();
 }

@@ -66,3 +66,29 @@ struct MotorFrameCommand {
 // 불허면 좌우 모두 0 A / run=false / 0 rpm. 한쪽만 차단하는 경로는 없다.
 MotorFrameCommand motor_command_resolve(const MotorCommandSnapshot &snapshot,
                                         const MotorCommandGates &gates);
+
+// 명령을 복사한 다음 읽은 시각을 전달한다. 미게시 또는 유효기간 초과면 false.
+bool motor_snapshot_fresh(const MotorCommandSnapshot &snapshot,
+                          uint32_t checked_at_ms, uint32_t max_age_ms);
+enum class MotorTxResult : uint8_t { Skipped, Queued, Failed };
+struct MotorTxSideDiagnostics {
+    MotorTxResult result = MotorTxResult::Skipped;
+    uint32_t failed_total = 0;
+    unsigned consecutive_failures = 0;
+    bool queued_valid = false;
+    float last_queued_a = 0;
+    int last_queued_rpm = 0;
+    bool last_queued_running = false;
+    uint32_t last_queued_seq = 0;
+    uint32_t last_queued_ms = 0;
+};
+struct MotorTxDiagnostics {
+    MotorFrameCommand requested{};
+    uint32_t seq = 0;
+    uint32_t snapshot_age_ms = 0;
+    bool snapshot_fresh = false;
+    uint32_t stale_total = 0;
+    MotorTxSideDiagnostics left{}, right{};
+};
+void motor_tx_record(MotorTxSideDiagnostics &out, MotorTxResult result,
+                     float amps, int rpm, bool running, uint32_t seq, uint32_t now);

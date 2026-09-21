@@ -6,6 +6,36 @@
 #include "safety_logic.h"
 #include <cmath>
 
+bool motor_snapshot_fresh(const MotorCommandSnapshot &snapshot,
+                          uint32_t checked_at_ms, uint32_t max_age_ms) {
+    // seq=0은 아직 제어 루프가 명령을 게시하지 않은 초기 상태다.
+    if (snapshot.seq == 0U) return false;
+
+    // 명령 나이 = 검사 시각 - 명령 게시 시각.
+    // uint32_t 뺄셈은 millis()가 최댓값에서 0으로 돌아가는 경우도 처리한다.
+    const uint32_t command_age_ms = checked_at_ms - snapshot.published_ms;
+    return command_age_ms <= max_age_ms;
+}
+
+void motor_tx_record(MotorTxSideDiagnostics &out, MotorTxResult result,
+                     float amps, int rpm, bool running, uint32_t seq, uint32_t now) {
+    out.result = result;
+    if (result == MotorTxResult::Failed) {
+        if (out.failed_total != UINT32_MAX) ++out.failed_total;
+        if (out.consecutive_failures != UINT32_MAX) ++out.consecutive_failures;
+    } else {
+        out.consecutive_failures = 0;
+    }
+    if (result == MotorTxResult::Queued) {
+        out.queued_valid = true;
+        out.last_queued_a = amps;
+        out.last_queued_rpm = rpm;
+        out.last_queued_running = running;
+        out.last_queued_seq = seq;
+        out.last_queued_ms = now;
+    }
+}
+
 SafetyState safety_step(SafetyState cur, const SafetyInputs &in) {
     // Any loss of the shutdown loop or deadman -> immediate Halt (hard rule).
     if (!in.shutdown_ok || !in.throttle_valid) return SafetyState::Halt;

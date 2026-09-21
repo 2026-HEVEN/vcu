@@ -260,6 +260,21 @@ void debug_update() {
         if (last_summary_ms == 0U || now - last_summary_ms >= 1000U) {
             last_summary_ms = now;
             const imu_driver::Diagnostics imu_diag = imu_driver::diagnostics();
+            const auto tx = can_bus::motor_tx_diagnostics();
+            const uint32_t tx_now = millis(); // after the diagnostic copy
+            // result: 0=not attempted, 1=queued, 2=queue failed. No ACK claim.
+            Serial.printf("MOTOR_TX seq=%lu snapAge=%lu fresh=%d staleTicks=%lu req=%+.1f/%+.1f result=%u/%u failTotal=%lu/%lu failRun=%u/%u queuedValid=%d/%d queuedA=%+.1f/%+.1f queuedSeq=%lu/%lu queuedAge=%lu/%lu\n",
+                (unsigned long)tx.seq, (unsigned long)tx.snapshot_age_ms,
+                tx.snapshot_fresh, (unsigned long)tx.stale_total,
+                tx.requested.left_a, tx.requested.right_a,
+                (unsigned)tx.left.result, (unsigned)tx.right.result,
+                (unsigned long)tx.left.failed_total, (unsigned long)tx.right.failed_total,
+                tx.left.consecutive_failures, tx.right.consecutive_failures,
+                tx.left.queued_valid, tx.right.queued_valid,
+                tx.left.last_queued_a, tx.right.last_queued_a,
+                (unsigned long)tx.left.last_queued_seq, (unsigned long)tx.right.last_queued_seq,
+                (unsigned long)(tx.left.queued_valid ? tx_now-tx.left.last_queued_ms : UINT32_MAX),
+                (unsigned long)(tx.right.queued_valid ? tx_now-tx.right.last_queued_ms : UINT32_MAX));
             Serial.printf(
                 "STAT arm=%d dm=%d hs=%d/%d fb=%d/%d fault=%d gear=%u/%u raw=%u thr=%d/%d/%.1f imu=%d sync=%d/%d test=%d/%u\n"
                 "MCU V=%.1f/%.1f Ibus=%+.1f/%+.1f Iph=%+.1f/%+.1f rpm=%d/%d tempC=%d/%d,%d/%d err=%02X%02X%02X/%02X%02X%02X\n"

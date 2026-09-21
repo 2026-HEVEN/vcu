@@ -348,7 +348,8 @@ static void drive_supervisor_update() {
     // Publish this tick's decision as one unit. safety_task runs BEFORE this
     // task, so torque_allowed() here is this tick's verdict, not the previous.
     MotorCommandSnapshot command_snapshot;
-    command_snapshot.seq = ++motor_command_seq;
+    if (++motor_command_seq == 0U) ++motor_command_seq; // zero is unpublished
+    command_snapshot.seq = motor_command_seq;
     command_snapshot.published_ms = millis();
     command_snapshot.left_a = out.left_a;
     command_snapshot.right_a = out.right_a;
