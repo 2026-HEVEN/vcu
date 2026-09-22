@@ -18,7 +18,7 @@ namespace realcar_cal {
 // Set these back to production requirements as hardware is installed.
 namespace bringup {
 constexpr bool BRAKE_SENSOR_INSTALLED = false;
-// The completed harness connects the gear selector to GPIO27. Stable Drive
+// PCB V3 connects the gear selector to GPIO32. Stable Drive
 // and Reverse classifications can grant propulsion after the stopped,
 // released-throttle direction interlock; Neutral/invalid readings halt it.
 constexpr bool GEAR_SELECTOR_INSTALLED = true;

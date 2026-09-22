@@ -150,7 +150,7 @@ C++17 g++ 또는 clang++ 필요. --cxx로 경로 지정 가능. 실제 VCU encod
 2026-09-08 검증: VCU native 171/171, Cluster native 81/81, 실제 송수신 cross-test 2149 벡터 통과. VCU/Cluster ESP32 빌드 성공. Cluster는 한글 경로의 linker map 오류로 해당 실행에만 PLATFORMIO_BUILD_DIR을 임시 영문 경로로 지정해 검증했다. 공용 platformio.ini에 새 개인 경로를 넣지 않았다. 기존 framebuffer.cpp 들여쓰기 경고는 이번 통신 수정 범위 밖이다.
 
 ## 계기팀과 다음 담당자의 남은 작업
-- Car Check 사분면·상세 화면·GPIO13 HOME 연결(별도 HMI 작업).
+- Car Check 사분면·상세 화면·PCB V3 GPIO19 HOME 연결(별도 HMI 작업).
 - 실제 조향 부호·IMU 장착 축 확인 후 확정 보정값 공유.
 - WSS 제어용 롤오버 및 모터 명령 스냅샷 개선은 별도 이슈로 유지.
 - 회생 부호·BMS charge acceptance 검증 전 회생 기능은 계속 OFF.

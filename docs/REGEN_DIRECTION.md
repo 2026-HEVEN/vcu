@@ -39,7 +39,7 @@ D 회생 명령을 허용한다. 하나라도 정지/역회전/미수신이면 �
 - `BRAKE_SENSOR_INSTALLED=false`, `REGEN_HARDWARE_VALIDATED=false` 유지.
 - 회생 계산/송신 모두 pack_data_valid를 요구한다. 이것만으로 BMS 충전 허용전류,
   셀 과전압, 온도 제한까지 검증된 것은 아니다.
-- GPIO33 HIGH=밟음인 3.3V 호환 디지털 신호 확인이 필요하다.
+- PCB V3 GPIO35 ADC에서 브레이크 OFF/ON 분압 raw를 실측해 active 임계와 극성을 확인해야 한다.
 - 기존 회생 상한은 일반 모드 합계 20A, 효율 모드 합계 30A이다.
   TV OFF 기준 각각 모터당 10A/15A이며 이번 작업에서 올리지 않았다.
 - 좌우 크로스코어 명령 스냅샷 PR은 별도다. 이번 변경은 전체 공유상태의 원자성을

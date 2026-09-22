@@ -5,7 +5,7 @@
 // ============================================================
 #pragma once
 #include "modules/steering.h"   // for SteerRaw
-// [LOCKED] Harness v5 slide potentiometer on GPIO25 (12-bit ADC).
+// [LOCKED] PCB V3 slide potentiometer on GPIO36 (12-bit ADC).
 // Samples are scaled to the existing 14-bit SteerRaw interface.
 
 namespace steering_encoder_driver {

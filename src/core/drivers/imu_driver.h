@@ -6,7 +6,7 @@
 #pragma once
 #include <cstdint>
 #include "modules/imu.h"   // for ImuRaw
-// [LOCKED] Xsens MTi-320 over UART2 (VCU RX=GPIO22, TX=GPIO21), Xbus/MTData2.
+// [LOCKED] Xsens MTi-320 over UART2 (PCB V3 RX=GPIO21, TX=GPIO19), Xbus/MTData2.
 
 namespace imu_driver {
     struct Diagnostics {
