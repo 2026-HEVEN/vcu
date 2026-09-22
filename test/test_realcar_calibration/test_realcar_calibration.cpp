@@ -52,8 +52,12 @@ void test_bringup_drive_phase_current_ceiling_is_500_a_per_motor() {
     TEST_ASSERT_TRUE(
         realcar_cal::bringup::DRIVE_PHASE_CURRENT_EFF_PER_MOTOR_A <=
         realcar_cal::bringup::DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A);
+    TEST_ASSERT_TRUE(realcar_cal::bringup::PCB_V3_SERIAL_BENCH_MODE);
     TEST_ASSERT_EQUAL_FLOAT(
-        150.0f, realcar_cal::bringup::COMPONENT_TEST_CURRENT_MAX_PER_MOTOR_A);
+        10.0f, realcar_cal::bringup::COMPONENT_TEST_CURRENT_MAX_PER_MOTOR_A);
+    TEST_ASSERT_EQUAL_UINT(
+        300U, realcar_cal::bringup::COMPONENT_TEST_DURATION_MAX_MS);
+    TEST_ASSERT_FALSE(realcar_cal::bringup::ENABLE_TIME_SYNC_PULSE);
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.5f,
         realcar_cal::bringup::DRIVE_CURRENT_RISE_TIME_S);
 }

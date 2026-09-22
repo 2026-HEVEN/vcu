@@ -30,12 +30,12 @@ void request_motor_test(bool left, bool right, float current_a,
                         unsigned duration_ms) {
     if (!std::isfinite(current_a) || current_a <= 0.0f ||
         current_a > realcar_cal::bringup::COMPONENT_TEST_CURRENT_MAX_PER_MOTOR_A) {
-        reject_motor_test("current must be >0 and <=150 A per motor");
+        reject_motor_test("current must be >0 and <=10 A per motor");
         return;
     }
     if (duration_ms < realcar_cal::bringup::COMPONENT_TEST_DURATION_MIN_MS ||
         duration_ms > realcar_cal::bringup::COMPONENT_TEST_DURATION_MAX_MS) {
-        reject_motor_test("duration must be 100..3000 ms");
+        reject_motor_test("duration must be 100..300 ms");
         return;
     }
     if (state.component_test_active || state.time_sync_armed ||
@@ -43,13 +43,15 @@ void request_motor_test(bool left, bool right, float current_a,
         reject_motor_test("another timed test is active or armed");
         return;
     }
-    if ((float)state.throttle_pct >
-            realcar_cal::bringup::THROTTLE_ARM_MAX_PCT ||
-        state.brake_active || state.gear != Gear::Drive) {
+    if (!realcar_cal::bringup::PCB_V3_SERIAL_BENCH_MODE &&
+        ((float)state.throttle_pct >
+             realcar_cal::bringup::THROTTLE_ARM_MAX_PCT ||
+         state.brake_active || state.gear != Gear::Drive)) {
         reject_motor_test("release throttle/brake and keep bring-up gear in D");
         return;
     }
-    if (!state.throttle_signal_valid) {
+    if (!realcar_cal::bringup::PCB_V3_SERIAL_BENCH_MODE &&
+        !state.throttle_signal_valid) {
         reject_motor_test("throttle signal raw is below the valid floor");
         return;
     }
@@ -57,23 +59,25 @@ void request_motor_test(bool left, bool right, float current_a,
         reject_motor_test("controller fault latch is set; power-cycle after diagnosis");
         return;
     }
-    if (!component_test_safety_allowed()) {
+    if (!realcar_cal::bringup::PCB_V3_SERIAL_BENCH_MODE &&
+        !component_test_safety_allowed()) {
         reject_motor_test("safety state is HALT; power-cycle after diagnosis");
         return;
     }
-    if ((left && (!state.controller_handshaked_L ||
-                  !state.controller_feedback_fresh_L ||
-                  state.controller_fb2_L.any_fault() ||
-                  state.controller_fb2_L.speed_mode ||
-                  std::abs(state.controller_fb1_L.motor_speed_rpm) >
-                      realcar_cal::bringup::COMPONENT_TEST_START_MAX_MOTOR_RPM)) ||
-        (right && (!state.controller_handshaked_R ||
-                   !state.controller_feedback_fresh_R ||
-                   state.controller_fb2_R.any_fault() ||
-                   state.controller_fb2_R.speed_mode ||
-                   std::abs(state.controller_fb1_R.motor_speed_rpm) >
-                       realcar_cal::bringup::COMPONENT_TEST_START_MAX_MOTOR_RPM))) {
-        reject_motor_test("selected controller is not ready/fresh/fault-free/stopped");
+    const bool left_ready = state.controller_handshaked_L &&
+        state.controller_feedback_fresh_L &&
+        !state.controller_fb2_L.any_fault() &&
+        !state.controller_fb2_L.speed_mode &&
+        std::abs(state.controller_fb1_L.motor_speed_rpm) <=
+            realcar_cal::bringup::COMPONENT_TEST_START_MAX_MOTOR_RPM;
+    const bool right_ready = state.controller_handshaked_R &&
+        state.controller_feedback_fresh_R &&
+        !state.controller_fb2_R.any_fault() &&
+        !state.controller_fb2_R.speed_mode &&
+        std::abs(state.controller_fb1_R.motor_speed_rpm) <=
+            realcar_cal::bringup::COMPONENT_TEST_START_MAX_MOTOR_RPM;
+    if (!left_ready || !right_ready) {
+        reject_motor_test("both controllers must be handshaked/fresh/fault-free/stopped");
         return;
     }
 
@@ -201,6 +205,13 @@ bool debug_consume_time_sync_cancel_request() {
 void debug_update() {
     poll_serial_commands();
 #if DEBUG_MONITOR
+    static bool bench_banner_printed = false;
+    if (!bench_banner_printed && realcar_cal::bringup::PCB_V3_SERIAL_BENCH_MODE) {
+        bench_banner_printed = true;
+        Serial.println("[BENCH] PCB V3 serial-only mode: normal throttle drive DISABLED");
+        Serial.println("[BENCH] require HS=1/1 FB=1/1; max 10 A per motor, 100..300 ms");
+        Serial.println("[BENCH] commands: MOTOR_L 10 300 | MOTOR_R 10 300 | MOTOR_BOTH 10 300");
+    }
     static uint32_t last_summary_ms = 0U;
     static bool was_fast_log_active = false;
     const uint32_t now = millis();
@@ -217,7 +228,8 @@ void debug_update() {
         if (!was_fast_log_active) {
             Serial.println(
                 "FAST_CSV,t_ms,mode,sel_l,sel_r,cmd_l,cmd_r,out_l,out_r,"
-                "ibus_l,ibus_r,iph_l,iph_r,rpm_l,rpm_r,wss_rl,wss_rr,"
+                "ibus_l,ibus_r,iph_l,iph_r,rpm_l,rpm_r,"
+                "wss_fl,wss_fr,wss_rl,wss_rr,pulse_fl,pulse_fr,pulse_rl,pulse_rr,"
                 "fb_l,fb_r,fault,rxq,rxmiss,buserr");
         }
         const bool motor_test = state.component_test_active;
@@ -228,7 +240,8 @@ void debug_update() {
             ? (state.component_test_right ? state.component_test_current_a : 0.0f)
             : state.time_sync_command_a;
         Serial.printf(
-            "FAST_CSV,%u,%s,%d,%d,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%d,%d,%.0f,%.0f,%d,%d,%d,%u,%u,%u\n",
+            "FAST_CSV,%u,%s,%d,%d,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,"
+            "%d,%d,%.0f,%.0f,%.0f,%.0f,%u,%u,%u,%u,%d,%d,%d,%u,%u,%u\n",
             now, motor_test ? "MOTOR" : "SYNC",
             motor_test ? state.component_test_left : 1,
             motor_test ? state.component_test_right : 1,
@@ -240,8 +253,14 @@ void debug_update() {
             state.controller_fb1_R.phase_current_a,
             state.controller_fb1_L.motor_speed_rpm,
             state.controller_fb1_R.motor_speed_rpm,
+            (float)state.wheel_speed[WHEEL_FL],
+            (float)state.wheel_speed[WHEEL_FR],
             (float)state.wheel_speed[WHEEL_RL],
             (float)state.wheel_speed[WHEEL_RR],
+            state.wheel_pulse_total[WHEEL_FL],
+            state.wheel_pulse_total[WHEEL_FR],
+            state.wheel_pulse_total[WHEEL_RL],
+            state.wheel_pulse_total[WHEEL_RR],
             state.controller_feedback_fresh_L,
             state.controller_feedback_fresh_R,
             state.controller_fault_latched,

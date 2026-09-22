@@ -149,7 +149,8 @@ namespace {
             }
             const bool propulsion_gear =
                 state.gear == Gear::Drive || state.gear == Gear::Reverse;
-            bool normal_allow = torque_allowed() && scheduler_alive &&
+            bool normal_allow = !realcar_cal::bringup::PCB_V3_SERIAL_BENCH_MODE &&
+                                torque_allowed() && scheduler_alive &&
                                 state.throttle_signal_valid &&
                                 !g_reconnect_inhibit &&
                                 !state.component_test_normal_inhibit &&
@@ -176,14 +177,25 @@ namespace {
                     state.component_test_active = false;
                     ++state.component_test_completed_count;
                 } else {
-                    const bool common_ok = scheduler_alive &&
-                        component_test_safety_allowed() &&
-                        state.throttle_signal_valid &&
+                    const bool operator_inputs_ok =
+                        realcar_cal::bringup::PCB_V3_SERIAL_BENCH_MODE ||
+                        (component_test_safety_allowed() &&
+                         state.throttle_signal_valid &&
+                         (float)state.throttle_pct <=
+                             realcar_cal::bringup::THROTTLE_ARM_MAX_PCT &&
+                         !state.brake_active && state.gear == Gear::Drive);
+                    const bool common_ok = scheduler_alive && operator_inputs_ok &&
                         !state.controller_fault_latched &&
-                        (float)state.throttle_pct <=
-                            realcar_cal::bringup::THROTTLE_ARM_MAX_PCT &&
-                        !state.brake_active && state.gear == Gear::Drive;
-                    const bool left_ok = !state.component_test_left ||
+                        g_handshaked_L && g_handshaked_R &&
+                        state.controller_feedback_fresh_L &&
+                        state.controller_feedback_fresh_R;
+                    const bool require_left_ready =
+                        realcar_cal::bringup::PCB_V3_SERIAL_BENCH_MODE ||
+                        state.component_test_left;
+                    const bool require_right_ready =
+                        realcar_cal::bringup::PCB_V3_SERIAL_BENCH_MODE ||
+                        state.component_test_right;
+                    const bool left_ok = !require_left_ready ||
                         (g_handshaked_L && state.controller_feedback_fresh_L &&
                          !state.controller_fb2_L.any_fault() &&
                          state.controller_fb2_L.controller_temp_c <
@@ -193,7 +205,7 @@ namespace {
                          !state.controller_fb2_L.speed_mode &&
                          std::fabs(state.controller_fb1_L.phase_current_a) <
                             realcar_cal::bringup::PHASE_CURRENT_HARD_CUTOFF_A);
-                    const bool right_ok = !state.component_test_right ||
+                    const bool right_ok = !require_right_ready ||
                         (g_handshaked_R && state.controller_feedback_fresh_R &&
                          !state.controller_fb2_R.any_fault() &&
                          state.controller_fb2_R.controller_temp_c <
@@ -244,7 +256,10 @@ namespace {
             // that controller has completed its 0x55/0xAA handshake.
             // Resolve gear once for both frames. Full cross-core command
             // atomicity is a separate change (M2 snapshot PR).
-            const Gear command_gear = state.gear;
+            const Gear command_gear =
+                (state.component_test_active &&
+                 realcar_cal::bringup::PCB_V3_SERIAL_BENCH_MODE)
+                    ? Gear::Drive : state.gear;
             const bool brake_active = state.brake_active;
             const bool regen_allowed = realcar_cal::bringup::REGEN_HARDWARE_VALIDATED &&
                 realcar_cal::bringup::BRAKE_SENSOR_INSTALLED &&

@@ -17,6 +17,9 @@ namespace realcar_cal {
 // Temporary bring-up profile for the current dual-motor vehicle.
 // Set these back to production requirements as hardware is installed.
 namespace bringup {
+// Dedicated PCB V3 bench firmware. Normal throttle/gear propulsion is forced
+// OFF; only bounded MOTOR_L/R/BOTH serial pulses may command torque.
+constexpr bool PCB_V3_SERIAL_BENCH_MODE = true;
 constexpr bool BRAKE_SENSOR_INSTALLED = false;
 // PCB V3 connects the gear selector to GPIO32. Stable Drive
 // and Reverse classifications can grant propulsion after the stopped,
@@ -50,14 +53,17 @@ constexpr float DRIVE_PHASE_CURRENT_EFF_PER_MOTOR_A = 100.0f;
 // Only rising propulsion magnitude is limited; release and protection cuts
 // remain immediate.
 constexpr float DRIVE_CURRENT_RISE_TIME_S = 0.5f;
-// Bench-only serial motor pulse used by bringup/component-test. A pulse is
-// accepted only with released throttle, fresh CAN feedback, no controller
-// fault and a nearly stopped selected motor. The CAN life task re-checks the
-// runtime gates at MOTOR_COMMAND_PERIOD_MS and always expires at the deadline.
-constexpr float COMPONENT_TEST_CURRENT_MAX_PER_MOTOR_A = 150.0f;
+// PCB V3 CAN/motor bring-up pulse. Both controllers must be handshaked, fresh,
+// fault-free and stopped. Sensor inputs are deliberately not required because
+// the vehicle harness is incomplete. Keep this branch at 10 A / 300 ms.
+constexpr float COMPONENT_TEST_CURRENT_MAX_PER_MOTOR_A = 10.0f;
 constexpr unsigned COMPONENT_TEST_DURATION_MIN_MS = 100U;
-constexpr unsigned COMPONENT_TEST_DURATION_MAX_MS = 3000U;
+constexpr unsigned COMPONENT_TEST_DURATION_MAX_MS = 300U;
 constexpr int COMPONENT_TEST_START_MAX_MOTOR_RPM = 50;
+static_assert(COMPONENT_TEST_CURRENT_MAX_PER_MOTOR_A <= 10.0f,
+              "PCB V3 bench current must stay at or below 10 A");
+static_assert(COMPONENT_TEST_DURATION_MAX_MS <= 300U,
+              "PCB V3 bench pulse must stay at or below 300 ms");
 // Enabled after the 2026-09 road test reached about 13 kW. This 8 kW command
 // ceiling leaves margin below the 10 kW Energy Meter boundary. The official
 // Energy Meter remains authoritative when validating the model.
@@ -95,7 +101,7 @@ constexpr float PHASE_CURRENT_HARD_CUTOFF_A = 1000.0f;
 // is required, and the runtime safety conditions are checked every 10 ms.
 // The initial 20 A per motor is provisional; calibrate on stands/rollers so
 // the HV bus-current pulse is visible without an unsafe wheel acceleration.
-constexpr bool ENABLE_TIME_SYNC_PULSE = true;
+constexpr bool ENABLE_TIME_SYNC_PULSE = false;
 constexpr float TIME_SYNC_PHASE_CURRENT_PER_MOTOR_A = 20.0f;
 constexpr float TIME_SYNC_PULSE_ON_S = 0.5f;
 constexpr float TIME_SYNC_PULSE_OFF_S = 0.5f;
