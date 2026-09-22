@@ -9,7 +9,7 @@
 
 // [LOCKED] ESP-IDF legacy PCNT driver. Counts rising edges on the pulse input.
 // ESP32에는 PCNT 유닛이 8개 있으므로 4채널은 유닛 0~3에 1:1로 배정한다.
-// PCNT는 GPIO 매트릭스를 거치므로 input-only 핀(34/35/36/39)도 문제없다.
+// PCNT는 GPIO 매트릭스를 통해 PCB V3 WSS 핀(18/17/16/4)을 입력으로 사용한다.
 namespace {
     constexpr pcnt_unit_t UNITS[WHEEL_COUNT] = {
         PCNT_UNIT_0, PCNT_UNIT_1, PCNT_UNIT_2, PCNT_UNIT_3

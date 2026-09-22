@@ -74,6 +74,16 @@ Paddock 모드는 별도 8 kW/버스전류/팩전류/속도별 상전류 제한�
 4. Energy Meter 장착 후 VCU·컨트롤러·EM 로그 시간정렬.
 5. 그 뒤에만 전력 제한을 활성화하고, 마지막에 TV/회생을 각각 별도 활성화.
 
+## PCB V3 핀 확인
+
+- 단일 핀 기준은 `src/core/board_pins.h`다.
+- CAN RX/TX = D23/D22, throttle ADC = D34, brake ON/OFF ADC = D35, gear ADC = D32
+- WSS FL/FR/RL/RR = D18/D17/D16/D4
+- steering ADC = D36, brake pressure ADC = D39, LV voltage ADC = D33
+- IMU RX/TX = D21/D19
+- 브레이크 ON/OFF는 12 V 분압값을 ADC로 읽는다. OFF/ON raw 실측 전에는
+  `BRAKE_SENSOR_INSTALLED=false`를 유지한다.
+
 ## 빌드 확인
 
 ```powershell

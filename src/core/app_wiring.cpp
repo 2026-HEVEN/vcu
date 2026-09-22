@@ -37,9 +37,9 @@ VehicleState state;
 
 // --- per-module calibration (tune to the car) ---
 namespace {
-    // --- GPIO 배정: 제작 완료 PCB / 하네스 v5 / origin/GPIO-fixed 기준 ---
+    // --- GPIO 배정: PCB V3 (Notion 기준일 2026-09-17) ---
     //     실제 핀 번호는 core/board_pins.h 한 곳에서 관리한다.
-    // WSS 4채널 — 전부 input-only 핀. LM393 오픈컬렉터라 외부 3.3V 풀업 필수.
+    // WSS 4채널 — LM393 비교기 출력. PCB의 신호조절 회로를 거친다.
     constexpr int PIN_WSS[WHEEL_COUNT] = {
         board_pins::WSS_FL,
         board_pins::WSS_FR,
@@ -123,11 +123,11 @@ static void throttle_update() {
         ? throttle_compute({ state.throttle_raw_adc }) : Percent(0.0f);
 }
 static void brake_update() {
-    // Current bring-up vehicle has no brake sensor. Never read the floating
-    // PCB input: a random HIGH would otherwise request regen. Re-enable this
-    // path in realcar_calibration.h after the sensor polarity is verified.
+    // PCB V3 routes the 12 V brake ON/OFF signal through a divider to an ADC1
+    // input. Keep the path disabled until the installed high/low raw values are
+    // verified; brake_compute converts the 12-bit ADC value to 0..100%.
     const int raw = realcar_cal::bringup::BRAKE_SENSOR_INSTALLED
-        ? (digitalRead(board_pins::BRAKE_DIGITAL) == HIGH ? 4095 : 0)
+        ? analogRead(board_pins::BRAKE_ONOFF_ADC)
         : 0;
     BrakeOutput o = brake_compute({ raw });
     state.brake_pct = o.pct; state.brake_active = o.active;
@@ -417,7 +417,7 @@ void modules_init() {
     analogReadResolution(12);
     pinMode(board_pins::THROTTLE_ADC, INPUT);
     if (realcar_cal::bringup::BRAKE_SENSOR_INSTALLED) {
-        pinMode(board_pins::BRAKE_DIGITAL, INPUT);
+        pinMode(board_pins::BRAKE_ONOFF_ADC, INPUT);
     }
     pinMode(board_pins::GEAR_ADC, INPUT);  // gear-ladder 모듈용 예약 입력
     for (int ch = 0; ch < WHEEL_COUNT; ++ch) wss_driver::begin(ch, PIN_WSS[ch]);

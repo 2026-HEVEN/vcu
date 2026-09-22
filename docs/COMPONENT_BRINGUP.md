@@ -78,7 +78,7 @@ CLAMP_RESET     # 통계 초기화 (시험 구간을 나눌 때)
 - `MCU Ibus/Iph/rpm`: 좌·우 컨트롤러 실측값
 - `FAST_CSV`의 `cmd_l/r`, `out_l/r`: 요청값과 실제 CAN life-task 송신값
 - `gear`: 실제 제어에 사용하는 기어. 이 브랜치에서는 D(2) 고정
-- `sensed/raw`: 임시 ADC 구간으로 판정한 기어와 실제 GPIO27 ADC
+- `sensed/raw`: 임시 ADC 구간으로 판정한 기어와 실제 PCB V3 GPIO32 ADC
 - `IMU=ok|STALE`: MTi-320 데이터 freshness
 - `WSS`, `pulses`: 네 바퀴 RPM과 부팅 이후 누적 상승엣지. 한 바퀴당 48 증가 예상
 
