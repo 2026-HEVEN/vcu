@@ -30,7 +30,7 @@ void request_motor_test(bool left, bool right, float current_a,
                         unsigned duration_ms) {
     if (!std::isfinite(current_a) || current_a <= 0.0f ||
         current_a > realcar_cal::bringup::COMPONENT_TEST_CURRENT_MAX_PER_MOTOR_A) {
-        reject_motor_test("current must be >0 and <=10 A per motor");
+        reject_motor_test("current must be >0 and <=50 A per motor");
         return;
     }
     if (duration_ms < realcar_cal::bringup::COMPONENT_TEST_DURATION_MIN_MS ||
@@ -209,8 +209,8 @@ void debug_update() {
     if (!bench_banner_printed && realcar_cal::bringup::PCB_V3_SERIAL_BENCH_MODE) {
         bench_banner_printed = true;
         Serial.println("[BENCH] PCB V3 serial-only mode: normal throttle drive DISABLED");
-        Serial.println("[BENCH] require HS=1/1 FB=1/1; max 10 A per motor, 100..300 ms");
-        Serial.println("[BENCH] commands: MOTOR_L 10 300 | MOTOR_R 10 300 | MOTOR_BOTH 10 300");
+        Serial.println("[BENCH] require HS=1/1 FB=1/1; max 50 A per motor, 100..300 ms");
+        Serial.println("[BENCH] commands: MOTOR_L 50 300 | MOTOR_R 50 300 | MOTOR_BOTH 50 300");
     }
     static uint32_t last_summary_ms = 0U;
     static bool was_fast_log_active = false;

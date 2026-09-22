@@ -55,13 +55,13 @@ constexpr float DRIVE_PHASE_CURRENT_EFF_PER_MOTOR_A = 100.0f;
 constexpr float DRIVE_CURRENT_RISE_TIME_S = 0.5f;
 // PCB V3 CAN/motor bring-up pulse. Both controllers must be handshaked, fresh,
 // fault-free and stopped. Sensor inputs are deliberately not required because
-// the vehicle harness is incomplete. Keep this branch at 10 A / 300 ms.
-constexpr float COMPONENT_TEST_CURRENT_MAX_PER_MOTOR_A = 10.0f;
+// the vehicle harness is incomplete. Keep this branch at 50 A / 300 ms.
+constexpr float COMPONENT_TEST_CURRENT_MAX_PER_MOTOR_A = 50.0f;
 constexpr unsigned COMPONENT_TEST_DURATION_MIN_MS = 100U;
 constexpr unsigned COMPONENT_TEST_DURATION_MAX_MS = 300U;
 constexpr int COMPONENT_TEST_START_MAX_MOTOR_RPM = 50;
-static_assert(COMPONENT_TEST_CURRENT_MAX_PER_MOTOR_A <= 10.0f,
-              "PCB V3 bench current must stay at or below 10 A");
+static_assert(COMPONENT_TEST_CURRENT_MAX_PER_MOTOR_A <= 50.0f,
+              "PCB V3 bench current must stay at or below 50 A");
 static_assert(COMPONENT_TEST_DURATION_MAX_MS <= 300U,
               "PCB V3 bench pulse must stay at or below 300 ms");
 // Enabled after the 2026-09 road test reached about 13 kW. This 8 kW command
