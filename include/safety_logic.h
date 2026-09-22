@@ -43,7 +43,7 @@ struct MotorCommandSnapshot {
     bool     propulsion_direction_armed = false;
     bool     brake_active = false;
     bool     regen_allowed = false; // 설치/검증/요청/BMS 유효 + 유효 스로틀 0%
-    bool     forward_rotation = false; // 양쪽 fresh 피드백, 두 RPM 모두 양수
+    bool     forward_rotation = false; // 양쪽 fresh, 실차 전진 극성 L>+50/R<-50
 };
 
 // CAN life 태스크(core 1) 소유. 코어 경계를 넘지 않으므로 경쟁이 없다.

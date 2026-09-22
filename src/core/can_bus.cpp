@@ -13,6 +13,7 @@
 #include "safety_logic.h"   // torque_allowed()
 #include "core/board_pins.h"
 #include "modules/realcar_calibration.h"
+#include "modules/fixed_config.h"
 #include "modules/motor_direction.h"
 #include "modules/car_check_status.h"
 #include "modules/tv/tv_config.h"
@@ -125,25 +126,25 @@ namespace {
     void note_tx_result(bool left, const MotorTxSideDiagnostics &side, unsigned &telemetry) {
         telemetry = side.consecutive_failures;
         if (side.result == MotorTxResult::Failed &&
-            side.consecutive_failures == realcar_cal::bringup::MOTOR_TX_FAIL_LIMIT) {
+            side.consecutive_failures == fixed_config::runtime::MOTOR_TX_FAIL_LIMIT) {
             invalidate_controller_link(left, "tx failed");
         }
     }
 
     void life_task(void *) {
         const TickType_t period = pdMS_TO_TICKS(
-            realcar_cal::bringup::MOTOR_COMMAND_PERIOD_MS);
+            fixed_config::runtime::MOTOR_COMMAND_PERIOD_MS);
         TickType_t next = xTaskGetTickCount();
         for (;;) {
             const uint32_t now = millis();
             const bool scheduler_alive = (now - g_last_cmd_ms < DEADMAN_MS);
             if (g_reconnect_inhibit) {
                 const bool protocol_ready =
-                    realcar_cal::bringup::REQUIRE_BOTH_MOTOR_CONTROLLERS
+                    fixed_config::runtime::REQUIRE_BOTH_MOTOR_CONTROLLERS
                         ? (g_handshaked_L && g_handshaked_R)
                         : (g_handshaked_L || g_handshaked_R);
                 const bool feedback_ready =
-                    realcar_cal::bringup::REQUIRE_BOTH_MOTOR_CONTROLLERS
+                    fixed_config::runtime::REQUIRE_BOTH_MOTOR_CONTROLLERS
                         ? (state.controller_feedback_fresh_L &&
                            state.controller_feedback_fresh_R)
                         : (state.controller_feedback_fresh_L ||
@@ -160,13 +161,13 @@ namespace {
                 if (!state.component_test_active &&
                     state.throttle_signal_valid &&
                     (float)state.throttle_pct <=
-                        realcar_cal::bringup::THROTTLE_ARM_MAX_PCT) {
+                        fixed_config::runtime::THROTTLE_ARM_MAX_PCT) {
                     if (state.component_test_release_ticks <
-                        realcar_cal::bringup::COMPONENT_TEST_RELEASE_TICKS) {
+                        fixed_config::bench::COMPONENT_TEST_RELEASE_TICKS) {
                         ++state.component_test_release_ticks;
                     }
                     if (state.component_test_release_ticks >=
-                        realcar_cal::bringup::COMPONENT_TEST_RELEASE_TICKS) {
+                        fixed_config::bench::COMPONENT_TEST_RELEASE_TICKS) {
                         state.component_test_normal_inhibit = false;
                     }
                 } else {
@@ -188,7 +189,7 @@ namespace {
             gates.reconnect_inhibit = g_reconnect_inhibit;
             gates.component_test_inhibit = state.component_test_normal_inhibit;
             gates.snapshot_fresh = motor_snapshot_fresh(snap, checked_at_ms,
-                realcar_cal::bringup::MOTOR_COMMAND_SNAPSHOT_MAX_AGE_MS);
+                fixed_config::runtime::MOTOR_COMMAND_SNAPSHOT_MAX_AGE_MS);
             gates.reconnect_ramp_scale = 1.0f;   // ramp applied after the test branch
             const MotorFrameCommand resolved = motor_command_resolve(snap, gates);
 
@@ -223,7 +224,7 @@ namespace {
                         state.throttle_signal_valid &&
                         !state.controller_fault_latched &&
                         (float)state.throttle_pct <=
-                            realcar_cal::bringup::THROTTLE_ARM_MAX_PCT &&
+                            fixed_config::runtime::THROTTLE_ARM_MAX_PCT &&
                         !state.brake_active && state.gear == Gear::Drive;
                     const bool left_ok = !state.component_test_left ||
                         (g_handshaked_L && state.controller_feedback_fresh_L &&
@@ -234,7 +235,7 @@ namespace {
                             realcar_cal::bringup::MOTOR_CUTOFF_C &&
                          !state.controller_fb2_L.speed_mode &&
                          std::fabs(state.controller_fb1_L.phase_current_a) <
-                            realcar_cal::bringup::PHASE_CURRENT_HARD_CUTOFF_A);
+                            fixed_config::runtime::PHASE_CURRENT_HARD_CUTOFF_A);
                     const bool right_ok = !state.component_test_right ||
                         (g_handshaked_R && state.controller_feedback_fresh_R &&
                          !state.controller_fb2_R.any_fault() &&
@@ -244,14 +245,14 @@ namespace {
                             realcar_cal::bringup::MOTOR_CUTOFF_C &&
                          !state.controller_fb2_R.speed_mode &&
                          std::fabs(state.controller_fb1_R.phase_current_a) <
-                            realcar_cal::bringup::PHASE_CURRENT_HARD_CUTOFF_A);
+                            fixed_config::runtime::PHASE_CURRENT_HARD_CUTOFF_A);
                     if (!common_ok || !left_ok || !right_ok) {
                         state.component_test_active = false;
                         ++state.component_test_aborted_count;
                     } else {
                         const float test_a = std::fmax(0.0f, std::fmin(
                             state.component_test_current_a,
-                            realcar_cal::bringup::COMPONENT_TEST_CURRENT_MAX_PER_MOTOR_A));
+                            fixed_config::bench::COMPONENT_TEST_CURRENT_MAX_PER_MOTOR_A));
                         // common_ok above already requires Gear::Drive, and
                         // test_a is clamped non-negative: forward on both sides.
                         if (state.component_test_left) {
@@ -274,7 +275,7 @@ namespace {
             if (normal_allow && g_reconnect_ramp_active) {
                 const uint32_t elapsed_ms = now - g_reconnect_ramp_start_ms;
                 const uint32_t ramp_ms =
-                    realcar_cal::bringup::MOTOR_RECONNECT_RAMP_MS;
+                    fixed_config::runtime::MOTOR_RECONNECT_RAMP_MS;
                 if (elapsed_ms >= ramp_ms) {
                     g_reconnect_ramp_active = false;
                     Serial.println("[CAN] controller reconnect torque ramp complete");
@@ -332,7 +333,7 @@ void begin() {
         static_cast<gpio_num_t>(board_pins::CAN_TX),
         static_cast<gpio_num_t>(board_pins::CAN_RX),
         TWAI_MODE_NORMAL);
-    g.rx_queue_len = realcar_cal::bringup::CAN_RX_QUEUE_LENGTH;
+    g.rx_queue_len = fixed_config::runtime::CAN_RX_QUEUE_LENGTH;
     g.tx_queue_len = 16; // six display frames + two motor frames can coincide
     twai_timing_config_t  t = TWAI_TIMING_CONFIG_250KBITS();
     twai_filter_config_t  f = TWAI_FILTER_CONFIG_ACCEPT_ALL();
@@ -565,7 +566,7 @@ void poll_rx() {
             state.controller_fb1_L = decode_controller_feedback_part1(m.data);
             state.controller_fb1_last_ms_L = now;
             if (std::fabs(state.controller_fb1_L.phase_current_a) >
-                realcar_cal::bringup::PHASE_CURRENT_HARD_CUTOFF_A) {
+                fixed_config::runtime::PHASE_CURRENT_HARD_CUTOFF_A) {
                 state.controller_fault_latched = true;
             }
             continue;
@@ -574,7 +575,7 @@ void poll_rx() {
             state.controller_fb1_R = decode_controller_feedback_part1(m.data);
             state.controller_fb1_last_ms_R = now;
             if (std::fabs(state.controller_fb1_R.phase_current_a) >
-                realcar_cal::bringup::PHASE_CURRENT_HARD_CUTOFF_A) {
+                fixed_config::runtime::PHASE_CURRENT_HARD_CUTOFF_A) {
                 state.controller_fault_latched = true;
             }
             continue;
@@ -607,7 +608,7 @@ void poll_rx() {
         return timestamp != 0 && (now - timestamp) <= max_age_ms;
     };
     const uint32_t feedback_stale_ms =
-        (uint32_t)realcar_cal::bringup::CONTROLLER_FEEDBACK_STALE_MS;
+        (uint32_t)fixed_config::runtime::CONTROLLER_FEEDBACK_STALE_MS;
     state.controller_feedback_fresh_L =
         fresh(state.controller_fb1_last_ms_L, feedback_stale_ms) &&
         fresh(state.controller_fb2_last_ms_L, feedback_stale_ms);
@@ -651,7 +652,7 @@ void poll_rx() {
     // side's normal command frames. The controller can then enter its
     // documented timeout path and issue a fresh 0x55 handshake probe.
     const uint32_t rehandshake_timeout_ms =
-        realcar_cal::bringup::CONTROLLER_REHANDSHAKE_TIMEOUT_MS;
+        fixed_config::runtime::CONTROLLER_REHANDSHAKE_TIMEOUT_MS;
     if (g_handshaked_L &&
         (now - g_handshake_reply_ms_L) > rehandshake_timeout_ms &&
         (!fresh(state.controller_fb1_last_ms_L, rehandshake_timeout_ms) ||
@@ -703,7 +704,7 @@ void poll_rx() {
     }
 
     const uint32_t cluster_stale_ms =
-        (uint32_t)realcar_cal::bringup::CLUSTER_COMMAND_STALE_MS;
+        (uint32_t)fixed_config::runtime::CLUSTER_COMMAND_STALE_MS;
     if (!fresh(state.cluster_cmd_last_rx_ms, cluster_stale_ms)) {
         state.cluster_cmd_alive = false;
         state.tv_enable_requested = false;
@@ -712,7 +713,7 @@ void poll_rx() {
         state.paddock_requested = false;
     }
     if (!fresh(state.bms_last_rx_ms, 5000U)) state.pack_data_valid = false;
-    g_handshaked = realcar_cal::bringup::REQUIRE_BOTH_MOTOR_CONTROLLERS
+    g_handshaked = fixed_config::runtime::REQUIRE_BOTH_MOTOR_CONTROLLERS
         ? (g_handshaked_L && g_handshaked_R)
         : (g_handshaked_L || g_handshaked_R);
 }

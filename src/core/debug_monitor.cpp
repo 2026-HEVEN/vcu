@@ -10,6 +10,7 @@
 #include "state.h"
 #include "core/drivers/imu_driver.h"
 #include "modules/realcar_calibration.h"
+#include "modules/fixed_config.h"
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -29,12 +30,12 @@ void reject_motor_test(const char *reason) {
 void request_motor_test(bool left, bool right, float current_a,
                         unsigned duration_ms) {
     if (!std::isfinite(current_a) || current_a <= 0.0f ||
-        current_a > realcar_cal::bringup::COMPONENT_TEST_CURRENT_MAX_PER_MOTOR_A) {
+        current_a > fixed_config::bench::COMPONENT_TEST_CURRENT_MAX_PER_MOTOR_A) {
         reject_motor_test("current must be >0 and <=150 A per motor");
         return;
     }
-    if (duration_ms < realcar_cal::bringup::COMPONENT_TEST_DURATION_MIN_MS ||
-        duration_ms > realcar_cal::bringup::COMPONENT_TEST_DURATION_MAX_MS) {
+    if (duration_ms < fixed_config::bench::COMPONENT_TEST_DURATION_MIN_MS ||
+        duration_ms > fixed_config::bench::COMPONENT_TEST_DURATION_MAX_MS) {
         reject_motor_test("duration must be 100..3000 ms");
         return;
     }
@@ -44,7 +45,7 @@ void request_motor_test(bool left, bool right, float current_a,
         return;
     }
     if ((float)state.throttle_pct >
-            realcar_cal::bringup::THROTTLE_ARM_MAX_PCT ||
+            fixed_config::runtime::THROTTLE_ARM_MAX_PCT ||
         state.brake_active || state.gear != Gear::Drive) {
         reject_motor_test("release throttle/brake and keep bring-up gear in D");
         return;
@@ -66,13 +67,13 @@ void request_motor_test(bool left, bool right, float current_a,
                   state.controller_fb2_L.any_fault() ||
                   state.controller_fb2_L.speed_mode ||
                   std::abs(state.controller_fb1_L.motor_speed_rpm) >
-                      realcar_cal::bringup::COMPONENT_TEST_START_MAX_MOTOR_RPM)) ||
+                      fixed_config::bench::COMPONENT_TEST_START_MAX_MOTOR_RPM)) ||
         (right && (!state.controller_handshaked_R ||
                    !state.controller_feedback_fresh_R ||
                    state.controller_fb2_R.any_fault() ||
                    state.controller_fb2_R.speed_mode ||
                    std::abs(state.controller_fb1_R.motor_speed_rpm) >
-                       realcar_cal::bringup::COMPONENT_TEST_START_MAX_MOTOR_RPM))) {
+                       fixed_config::bench::COMPONENT_TEST_START_MAX_MOTOR_RPM))) {
         reject_motor_test("selected controller is not ready/fresh/fault-free/stopped");
         return;
     }

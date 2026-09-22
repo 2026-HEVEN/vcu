@@ -1,7 +1,7 @@
 #include <unity.h>
 #include "modules/gear.h"
 
-static GearCalib calib() { return {0, 500, 2500, 0}; }
+static GearCalib calib() { return {500, 2500}; }
 
 void test_contiguous_ranges(void) {
     TEST_ASSERT_TRUE(gear_classify(0, calib()) == Gear::Neutral);

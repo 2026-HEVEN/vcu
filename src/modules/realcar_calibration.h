@@ -4,9 +4,8 @@
 //  REAL-CAR CALIBRATION — 실차에서 바꿀 숫자의 단일 진입점
 // ============================================================
 //
-// 이 파일의 값은 두 그룹으로 나뉜다.
-//   confirmed   : 부품/장착 사양으로 확정. 하드웨어가 바뀔 때만 수정.
-//   provisional : CarMaker/BOM/초기 측정값. 실차 식별 결과로 갱신.
+// 이 파일에는 실차 시험 중 실제로 조정할 가능성이 있는 값만 둔다.
+// 고정 제원, CAN/태스크 타이밍, 시험 전용 설정은 fixed_config.h에 있다.
 //
 // 센서가 림 안쪽에 있어도 휠과 같은 각속도로 돈다. 센서 장착 반경은
 // 차속 환산에 사용하지 않는다. WSS는 pulses_per_wheel_rev로 회전수를 만들고,
@@ -29,17 +28,12 @@ constexpr int GEAR_DIRECTION_CHANGE_MAX_RPM = 50;
 // 0/half/full ESP32 ADC range. They are placeholders until measured.
 // Contiguous gear-ladder boundaries. The classifier interprets these as:
 // Neutral [0, REVERSE), Reverse [REVERSE, DRIVE), Drive [DRIVE, 4095].
-constexpr unsigned GEAR_NEUTRAL_ADC = 0U;
 constexpr unsigned GEAR_REVERSE_ADC = 500U;
 constexpr unsigned GEAR_DRIVE_ADC = 2500U;
-constexpr unsigned GEAR_ADC_TOLERANCE = 0U;  // reserved; no dead band
 // Brake/BMS/current polarity and charge limits are not validated yet. Keeping
 // this false makes a Cluster Regen-Auto request observable but unable to
 // produce negative phase current.
 constexpr bool REGEN_HARDWARE_VALIDATED = false;
-// Do not arm or send propulsion until both independently addressed
-// EZkontrol units have completed their 0x55/0xAA handshake.
-constexpr bool REQUIRE_BOTH_MOTOR_CONTROLLERS = true;
 // Throttle command ceiling, per motor. This is a software test limit, not a
 // competition-rule or battery-current limit. Raise/lower only here after
 // checking controller, motor, battery/BMS and energy-meter data.
@@ -50,69 +44,13 @@ constexpr float DRIVE_PHASE_CURRENT_EFF_PER_MOTOR_A = 100.0f;
 // Only rising propulsion magnitude is limited; release and protection cuts
 // remain immediate.
 constexpr float DRIVE_CURRENT_RISE_TIME_S = 0.5f;
-// Bench-only serial motor pulse used by bringup/component-test. A pulse is
-// accepted only with released throttle, fresh CAN feedback, no controller
-// fault and a nearly stopped selected motor. The CAN life task re-checks the
-// runtime gates at MOTOR_COMMAND_PERIOD_MS and always expires at the deadline.
-constexpr float COMPONENT_TEST_CURRENT_MAX_PER_MOTOR_A = 150.0f;
-constexpr unsigned COMPONENT_TEST_DURATION_MIN_MS = 100U;
-constexpr unsigned COMPONENT_TEST_DURATION_MAX_MS = 3000U;
-constexpr int COMPONENT_TEST_START_MAX_MOTOR_RPM = 50;
-// Enabled after the 2026-09 road test reached about 13 kW. This 8 kW command
-// ceiling leaves margin below the 10 kW Energy Meter boundary. The official
-// Energy Meter remains authoritative when validating the model.
-constexpr bool ENABLE_DRIVE_POWER_LIMIT = true;
+// Keep the model-based normal-drive limiter disabled until the official
+// Energy Meter path has been driven, time-aligned, and validated. The 8 kW
+// value is retained only as the next test calibration; false means no normal
+// drive power scaling is applied.
+constexpr bool ENABLE_DRIVE_POWER_LIMIT = false;
 constexpr float DRIVE_POWER_SOFT_LIMIT_W = 8000.0f;
 constexpr float DRIVETRAIN_EFFICIENCY = 0.92f;
-constexpr float CONTROLLER_FEEDBACK_STALE_MS = 250.0f;
-// Motor-controller command/life frame cadence. Set 10 ms for 100 Hz or 50 ms
-// for the vendor protocol's original nominal 20 Hz cadence.
-constexpr unsigned MOTOR_COMMAND_PERIOD_MS = 50U; //모터 캔 제어주기
-static_assert(MOTOR_COMMAND_PERIOD_MS > 0U,
-              "motor command period must be nonzero");
-// If either feedback part remains absent this long after a handshake, stop
-// that controller's normal command traffic so it can return to its 0x55
-// handshake state. This exceeds both the normal freshness gate and the
-// controller's documented 250--500 ms command/life timeout.
-constexpr unsigned CONTROLLER_REHANDSHAKE_TIMEOUT_MS = 750U;
-// After a component test, require this much released-pedal time before normal
-// throttle control can resume. The tick count follows the command period.
-constexpr unsigned COMPONENT_TEST_RELEASE_HOLD_MS = 300U;
-constexpr unsigned COMPONENT_TEST_RELEASE_TICKS =
-    (COMPONENT_TEST_RELEASE_HOLD_MS + MOTOR_COMMAND_PERIOD_MS - 1U) /
-    MOTOR_COMMAND_PERIOD_MS;
-// A controller reconnect no longer requires pedal release. Once both protocol
-// handshakes and feedback streams are healthy, restore the held driver demand
-// gradually from zero over this interval instead of applying a torque step.
-constexpr unsigned MOTOR_RECONNECT_RAMP_MS = 1000U;
-static_assert(MOTOR_RECONNECT_RAMP_MS > 0U,
-              "motor reconnect ramp must be nonzero");
-// Max age of a command snapshot the CAN life task will act on. Normal age is
-// one control tick, so this is wide margin yet tighter than the 200 ms deadman.
-constexpr unsigned MOTOR_COMMAND_SNAPSHOT_MAX_AGE_MS = 100U;
-static_assert(MOTOR_COMMAND_SNAPSHOT_MAX_AGE_MS > 0U,
-              "command snapshot age limit must be nonzero");
-// Consecutive twai_transmit() failures before the link is invalidated (zeroing
-// BOTH motors). PROVISIONAL: EZkontrol self-shuts after 5 missed life frames
-// (250 ms), so this must fire first. See docs/M2_FOLLOWUP_ITEMS.md item 1.
-constexpr unsigned MOTOR_TX_FAIL_LIMIT = 3U;
-static_assert(MOTOR_TX_FAIL_LIMIT * MOTOR_COMMAND_PERIOD_MS < 250U,
-              "VCU must cut before the controller's own 250 ms life timeout");
-constexpr float CLUSTER_COMMAND_STALE_MS = 200.0f;
-constexpr unsigned CAN_RX_QUEUE_LENGTH = 32U;
-constexpr float PHASE_CURRENT_HARD_CUTOFF_A = 1000.0f;
-// Energy Meter (100 Hz) and Monolith/controller feedback (20 Hz) time-axis
-// marker. It never runs automatically: Serial SYNC_ARM followed by SYNC_RUN
-// is required, and the runtime safety conditions are checked every 10 ms.
-// The initial 20 A per motor is provisional; calibrate on stands/rollers so
-// the HV bus-current pulse is visible without an unsafe wheel acceleration.
-constexpr bool ENABLE_TIME_SYNC_PULSE = true;
-constexpr float TIME_SYNC_PHASE_CURRENT_PER_MOTOR_A = 20.0f;
-constexpr float TIME_SYNC_PULSE_ON_S = 0.5f;
-constexpr float TIME_SYNC_PULSE_OFF_S = 0.5f;
-constexpr unsigned TIME_SYNC_PULSE_COUNT = 3U;
-constexpr float TIME_SYNC_ARM_TIMEOUT_S = 10.0f;
-constexpr float TIME_SYNC_START_SPEED_MAX_MPS = 1.0f / 3.6f;
 constexpr float CONTROLLER_DERATE_START_C = 75.0f;
 constexpr float CONTROLLER_CUTOFF_C = 85.0f;
 constexpr float MOTOR_DERATE_START_C = 100.0f;
@@ -120,7 +58,6 @@ constexpr float MOTOR_CUTOFF_C = 120.0f;
 // Provisional speed/current test envelope.  The phase-current ceiling falls
 // continuously from 500 A/motor at standstill to 50 A/motor at 80 km/h, then
 // holds 50 A/motor above that speed.  This is only active in paddock mode.
-constexpr bool PADDOCK_CURRENT_CALIBRATED = false;
 constexpr float PADDOCK_CURRENT_ZERO_SPEED_PER_MOTOR_A = 500.0f;
 constexpr float PADDOCK_CURRENT_HIGH_SPEED_PER_MOTOR_A = 50.0f;
 constexpr float PADDOCK_CURRENT_LINEAR_END_SPEED_MPS = 80.0f / 3.6f;
@@ -135,31 +72,11 @@ constexpr float PADDOCK_POWER_SOFT_LIMIT_W = 8000.0f;
 constexpr float PADDOCK_CONTROLLER_BUS_CURRENT_LIMIT_A = 200.0f;
 constexpr float PADDOCK_PACK_CURRENT_LIMIT_A = 150.0f;
 constexpr bool PADDOCK_REQUIRE_PACK_DATA = true;
-// EZkontrol uses -40 C as the missing/invalid temperature sentinel.
-constexpr float TELEMETRY_TEMPERATURE_VALID_MIN_C = -30.0f;
-// Vehicle cannot enter Drive until the released throttle has stayed below
-// this threshold for THROTTLE_ARM_CONSECUTIVE_TICKS scheduler passes.
-constexpr float THROTTLE_ARM_MAX_PCT = 1.0f;
-constexpr unsigned THROTTLE_ARM_CONSECUTIVE_TICKS = 30U;  // about 300 ms at 100 Hz
 // Raw values below this floor are treated as a disconnected/failed signal,
 // not as a released pedal. Values from 400 through the 0% point at 500 are
 // accepted as a valid released pedal while still commanding zero current.
 constexpr unsigned THROTTLE_SIGNAL_VALID_MIN_ADC = 400U;
 }  // namespace bringup
-
-namespace confirmed {
-// PCNT는 상승엣지만 센다. 48개의 N/S 교차 극에서 실측되는 상승엣지는
-// 네 바퀴 모두 휠 1회전당 24개다.
-constexpr float WSS_PULSES_PER_WHEEL_REV_FL = 24.0f;
-constexpr float WSS_PULSES_PER_WHEEL_REV_FR = 24.0f;
-constexpr float WSS_PULSES_PER_WHEEL_REV_RL = 24.0f;
-constexpr float WSS_PULSES_PER_WHEEL_REV_RR = 24.0f;
-
-constexpr float GEAR_RATIO = 3.72f;
-constexpr float MOTOR_KT_NM_PER_A = 0.1266f;
-constexpr float MOTOR_CONTINUOUS_CURRENT_MAX_A = 103.0f;
-constexpr float CONTROL_PERIOD_S = 0.01f;  // 100 Hz
-}  // namespace confirmed
 
 namespace provisional {
 // Initial Hall-throttle calibration. These values are deliberately
