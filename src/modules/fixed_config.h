@@ -32,7 +32,34 @@ constexpr unsigned MOTOR_COMMAND_PERIOD_MS = 50U;
 static_assert(MOTOR_COMMAND_PERIOD_MS > 0U,
               "motor command period must be nonzero");
 
+// Link is dropped when BOTH feedback parts are silent this long.
 constexpr unsigned CONTROLLER_REHANDSHAKE_TIMEOUT_MS = 750U;
+// Each part alone may pause (FB1 ~1 s, FB2 up to ~6 s under load, 2026-09-21
+// and 2026-09-24 captures) while the other keeps arriving. These are the
+// per-part hard limits; beyond them the link is dropped as well.
+constexpr unsigned CONTROLLER_FB1_MAX_AGE_MS = 1500U;
+constexpr unsigned CONTROLLER_FB2_MAX_AGE_MS = 7000U;
+static_assert(CONTROLLER_REHANDSHAKE_TIMEOUT_MS < CONTROLLER_FB1_MAX_AGE_MS,
+              "both-silent limit must be the tighter one");
+
+// Command phase guard (docs/CAN_PHASE_GUARD.md). EZkontrol drops feedback
+// when a command arrives ~1-2.5 ms before its FB1 slot. Phases here are
+// measured through the 5 ms RX poll, so they read 0-5 ms late: a measured
+// phase inside [SAFE_MIN, SAFE_MAX] is at least ~8 ms from the window.
+constexpr int CMD_PHASE_SAFE_MIN_MS = 12;
+constexpr int CMD_PHASE_SAFE_MAX_MS = 46;
+constexpr int CMD_PHASE_TARGET_MIN_MS = 18;
+constexpr int CMD_PHASE_TARGET_MAX_MS = 40;
+constexpr unsigned CMD_PHASE_CONFIRM_TICKS = 3U;
+static_assert(CMD_PHASE_SAFE_MIN_MS <= CMD_PHASE_TARGET_MIN_MS &&
+              CMD_PHASE_TARGET_MAX_MS <= CMD_PHASE_SAFE_MAX_MS &&
+              CMD_PHASE_SAFE_MAX_MS < (int)MOTOR_COMMAND_PERIOD_MS,
+              "phase bands must nest inside one command period");
+// Any two phases are at most period/2 apart on the circle, so the safe band
+// must be at least that wide for a common shift to always exist.
+static_assert(CMD_PHASE_SAFE_MAX_MS - CMD_PHASE_SAFE_MIN_MS >=
+              (int)MOTOR_COMMAND_PERIOD_MS / 2,
+              "safe band too narrow to fit both controllers");
 constexpr unsigned MOTOR_RECONNECT_RAMP_MS = 1000U;
 static_assert(MOTOR_RECONNECT_RAMP_MS > 0U,
               "motor reconnect ramp must be nonzero");

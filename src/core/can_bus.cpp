@@ -15,6 +15,7 @@
 #include "modules/realcar_calibration.h"
 #include "modules/fixed_config.h"
 #include "modules/motor_direction.h"
+#include "modules/can_link_policy.h"
 #include "modules/car_check_status.h"
 #include "modules/tv/tv_config.h"
 
@@ -49,6 +50,11 @@ namespace {
     uint8_t            g_life = 0;
     uint8_t            g_status_life = 0;
     MotorTxDiagnostics g_tx_work{}; // life task owns counters and history
+    // Strict freshness (FB1 AND FB2 within 250 ms), written by poll_rx.
+    // Fault re-arm and the component test read FB2 fault/temperature
+    // values, so they must not accept the relaxed torque-gating freshness.
+    volatile bool      g_feedback_both_recent_L = false;
+    volatile bool      g_feedback_both_recent_R = false;
     RearmDwell g_fault_rearm_dwell{}; // RX scheduler only
     void latch_fault(uint8_t origin) {
         if (!state.controller_fault_latched) {
@@ -73,7 +79,7 @@ namespace {
     }
     bool rearm_conditions_ok() {
         return g_handshaked_L && g_handshaked_R &&
-            state.controller_feedback_fresh_L && state.controller_feedback_fresh_R &&
+            g_feedback_both_recent_L && g_feedback_both_recent_R &&
             !state.controller_fb2_L.any_fault() && !state.controller_fb2_R.any_fault() &&
             !state.controller_fb2_L.speed_mode && !state.controller_fb2_R.speed_mode &&
             state.throttle_signal_valid && (float)state.throttle_pct == 0.0f &&
@@ -93,6 +99,7 @@ namespace {
     portMUX_TYPE         g_link_diag_mux = portMUX_INITIALIZER_UNLOCKED;
     uint32_t             g_link_drops_L = 0U; // guarded by g_link_diag_mux
     uint32_t             g_link_drops_R = 0U;
+    CmdPhaseState      g_phase_state{}; // life task only
 
     // The only command data shared between the cores.
     portMUX_TYPE         g_cmd_mux = portMUX_INITIALIZER_UNLOCKED;
@@ -278,7 +285,7 @@ namespace {
                             fixed_config::runtime::THROTTLE_ARM_MAX_PCT &&
                         !state.brake_active && state.gear == Gear::Drive;
                     const bool left_ok = !state.component_test_left ||
-                        (g_handshaked_L && state.controller_feedback_fresh_L &&
+                        (g_handshaked_L && g_feedback_both_recent_L &&
                          !state.controller_fb2_L.any_fault() &&
                          state.controller_fb2_L.controller_temp_c <
                             realcar_cal::bringup::CONTROLLER_CUTOFF_C &&
@@ -288,7 +295,7 @@ namespace {
                          std::fabs(state.controller_fb1_L.phase_current_a) <
                             fixed_config::runtime::PHASE_CURRENT_HARD_CUTOFF_A);
                     const bool right_ok = !state.component_test_right ||
-                        (g_handshaked_R && state.controller_feedback_fresh_R &&
+                        (g_handshaked_R && g_feedback_both_recent_R &&
                          !state.controller_fb2_R.any_fault() &&
                          state.controller_fb2_R.controller_temp_c <
                             realcar_cal::bringup::CONTROLLER_CUTOFF_C &&
@@ -374,7 +381,40 @@ namespace {
             note_tx_result(false, g_tx_work.right, state.can_tx_fail_count_R);
 
             g_life++;   // after both sends: the pair shares one life value
-            vTaskDelayUntil(&next, period);   // configured exact cadence
+
+            // Command phase guard (docs/CAN_PHASE_GUARD.md). EZkontrol drops
+            // its own feedback when a command lands ~1-2.5 ms before its FB1
+            // slot, and a free-running 50 ms clock drifts through that slot
+            // every few minutes. The pair stays one snapshot sent back to
+            // back; only its position inside the period moves, rarely, so
+            // that neither controller's next FB1 falls in that window.
+            {
+                const TickType_t now_tick = xTaskGetTickCount();
+                const uint32_t now_ms = millis();
+                const uint32_t send_ms = now_ms +
+                    (uint32_t)(next + period - now_tick) * portTICK_PERIOD_MS;
+                const uint32_t stale_ms =
+                    (uint32_t)fixed_config::runtime::CONTROLLER_FEEDBACK_STALE_MS;
+                const uint32_t cmd_period_ms =
+                    fixed_config::runtime::MOTOR_COMMAND_PERIOD_MS;
+                const uint32_t fb1_L = state.controller_fb1_last_ms_L;
+                const uint32_t fb1_R = state.controller_fb1_last_ms_R;
+                CmdPhaseInput ph;
+                ph.known_L = g_handshaked_L && fb1_L != 0 && now_ms - fb1_L <= stale_ms;
+                ph.known_R = g_handshaked_R && fb1_R != 0 && now_ms - fb1_R <= stale_ms;
+                ph.phase_L_ms = cmd_phase_of(fb1_L, send_ms, cmd_period_ms);
+                ph.phase_R_ms = cmd_phase_of(fb1_R, send_ms, cmd_period_ms);
+                const int32_t shift_ms = cmd_phase_step(g_phase_state, ph);
+                if (shift_ms != 0) {
+                    // Unsigned add of a negative value wraps to the intended tick.
+                    next += (TickType_t)(shift_ms / (int32_t)portTICK_PERIOD_MS);
+                    Serial.printf("[CAN] command phase shift %+ld ms (L=%ld%s R=%ld%s)\n",
+                                  (long)shift_ms,
+                                  (long)ph.phase_L_ms, ph.known_L ? "" : "?",
+                                  (long)ph.phase_R_ms, ph.known_R ? "" : "?");
+                }
+            }
+            vTaskDelayUntil(&next, period);   // configured cadence, phase-guarded
         }
     }
 }
@@ -707,14 +747,24 @@ void poll_rx() {
     const auto fresh = [now](uint32_t timestamp, uint32_t max_age_ms) {
         return timestamp != 0 && (now - timestamp) <= max_age_ms;
     };
-    const uint32_t feedback_stale_ms =
-        (uint32_t)fixed_config::runtime::CONTROLLER_FEEDBACK_STALE_MS;
-    state.controller_feedback_fresh_L =
-        fresh(state.controller_fb1_last_ms_L, feedback_stale_ms) &&
-        fresh(state.controller_fb2_last_ms_L, feedback_stale_ms);
-    state.controller_feedback_fresh_R =
-        fresh(state.controller_fb1_last_ms_R, feedback_stale_ms) &&
-        fresh(state.controller_fb2_last_ms_R, feedback_stale_ms);
+    // EZkontrol pauses FB1 and FB2 independently (FB1 ~1 s, FB2 several s)
+    // while the other part keeps flowing. One recent part keeps the side
+    // alive; each part still has its own hard age limit. Policy and limits:
+    // modules/can_link_policy + fixed_config (docs/CAN_PHASE_GUARD.md).
+    const auto feedback_ages = [now](uint32_t fb1_ms, uint32_t fb2_ms) {
+        FeedbackAges a;
+        a.fb1_seen = fb1_ms != 0; a.fb1_age_ms = now - fb1_ms;
+        a.fb2_seen = fb2_ms != 0; a.fb2_age_ms = now - fb2_ms;
+        return a;
+    };
+    const FeedbackAges ages_L = feedback_ages(state.controller_fb1_last_ms_L,
+                                              state.controller_fb2_last_ms_L);
+    const FeedbackAges ages_R = feedback_ages(state.controller_fb1_last_ms_R,
+                                              state.controller_fb2_last_ms_R);
+    state.controller_feedback_fresh_L = controller_feedback_fresh(ages_L);
+    state.controller_feedback_fresh_R = controller_feedback_fresh(ages_R);
+    g_feedback_both_recent_L = controller_feedback_both_recent(ages_L);
+    g_feedback_both_recent_R = controller_feedback_both_recent(ages_R);
     state.controller_feedback_fresh =
         state.controller_feedback_fresh_L &&
         state.controller_feedback_fresh_R;
@@ -751,22 +801,20 @@ void poll_rx() {
             "[CAN] controller R restored from fresh Part I/II feedback");
     }
 
-    // The 250 ms freshness check above removes torque immediately. If either
-    // required feedback part is still absent at the longer timeout, stop that
-    // side's normal command frames. The controller can then enter its
-    // documented timeout path and issue a fresh 0x55 handshake probe.
+    // The freshness check above removes torque immediately. When both parts
+    // are silent, or one part exceeds its hard limit, stop that side's normal
+    // command frames. The controller can then enter its documented timeout
+    // path and issue a fresh 0x55 handshake probe.
     const uint32_t rehandshake_timeout_ms =
         fixed_config::runtime::CONTROLLER_REHANDSHAKE_TIMEOUT_MS;
     if (g_handshaked_L &&
         (now - g_handshake_reply_ms_L) > rehandshake_timeout_ms &&
-        (!fresh(state.controller_fb1_last_ms_L, rehandshake_timeout_ms) ||
-         !fresh(state.controller_fb2_last_ms_L, rehandshake_timeout_ms))) {
+        controller_feedback_lost(ages_L)) {
         invalidate_controller_link(true, "feedback timeout");
     }
     if (g_handshaked_R &&
         (now - g_handshake_reply_ms_R) > rehandshake_timeout_ms &&
-        (!fresh(state.controller_fb1_last_ms_R, rehandshake_timeout_ms) ||
-         !fresh(state.controller_fb2_last_ms_R, rehandshake_timeout_ms))) {
+        controller_feedback_lost(ages_R)) {
         invalidate_controller_link(false, "feedback timeout");
     }
 
