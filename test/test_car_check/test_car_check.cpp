@@ -39,7 +39,7 @@ void test_requested_is_not_active() {
     TEST_ASSERT_FALSE(o.regen_available); TEST_ASSERT_FALSE(o.regen_active);
     TEST_ASSERT_TRUE(o.tv_block & car_check::TV_GAINS_ZERO);
     TEST_ASSERT_TRUE(o.regen_block & car_check::REGEN_NOT_VALIDATED);
-    TEST_ASSERT_TRUE(o.regen_block & car_check::REGEN_NO_BRAKE_SENSOR);
+    TEST_ASSERT_FALSE(o.regen_block & car_check::REGEN_NO_BRAKE_SENSOR);
     uint8_t d[8]; car_check::encode_control(o,d);
     TEST_ASSERT_EQUAL_UINT8(1,d[0]); TEST_ASSERT_EQUAL_UINT8(3,d[1]);
     TEST_ASSERT_EQUAL_UINT8(32,d[2]);
@@ -47,9 +47,10 @@ void test_requested_is_not_active() {
 void test_regen_observation_checks_sign_and_freshness() {
     CarCheckStatusInput i{};
     i.regen_requested=i.cluster_fresh=i.output_allowed=i.regen_validated=true;
-    i.brake_installed=i.bms_valid=i.brake_demand=i.longitudinal_regen_demand=true;
+    i.bms_valid=i.longitudinal_regen_demand=true;
     i.pack_soc=0.5f; i.direction_sign=1; i.left_a=i.right_a=-10;
     TEST_ASSERT_TRUE(car_check_status_compute(i).regen_active);
+    TEST_ASSERT_FALSE(car_check_status_compute(i).brake_installed);
     i.left_a=i.right_a=10;
     auto o=car_check_status_compute(i);
     TEST_ASSERT_FALSE(o.regen_active);

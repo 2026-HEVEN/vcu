@@ -41,6 +41,8 @@ enum TvBlock : uint8_t {
     TV_TEST_OVERRIDE=64
 };
 enum RegenBlock : uint8_t {
+    // Bits 2 and 5 are retained for wire compatibility but are unused by
+    // throttle-off regen; brake input is no longer an activation condition.
     REGEN_REQUEST_OFF=1, REGEN_NOT_VALIDATED=2, REGEN_NO_BRAKE_SENSOR=4,
     REGEN_BMS_INVALID=8, REGEN_OUTPUT_BLOCKED=16, REGEN_NO_BRAKE_DEMAND=32,
     REGEN_SOC_BLOCKED=64, REGEN_DIRECTION_MISMATCH=128

@@ -16,6 +16,9 @@
 struct VehicleState {
     // inputs
     int       throttle_raw_adc = 0; // diagnostics/calibration; 0..4095
+    uint16_t  throttle_window_min = 4095;
+    uint16_t  throttle_last_invalid_raw = 0xFFFF;
+    uint16_t  throttle_invalid_samples = 0; // saturating, since boot
     bool      throttle_signal_valid = false; // false below disconnected-signal floor
     Percent   throttle_pct;       // 0..100 (clamped both ways)
     Pct0to100 brake_pct;
@@ -62,6 +65,16 @@ struct VehicleState {
     bool      controller_feedback_fresh_R = false;
     bool      controller_feedback_fresh = false;
     bool      controller_fault_latched = false;
+    uint8_t   first_fault_bytes[6]{}; // L error1/2/3, R error1/2/3
+    uint8_t   fault_origin = 0; // bit0 L fault,1 R fault,2 L >1000A,3 R >1000A
+    uint32_t  fault_first_ms = 0;
+    bool      fault_rearm_ready = false;
+    unsigned  fault_rearm_count = 0;
+    uint16_t  first_block_reasons = 0; // first control/TX observation of latest episode
+    uint16_t  block_event_count = 0;
+    uint32_t  first_block_ms = 0;
+    uint16_t  diagnostic_block_reasons = 0;
+    uint32_t  drive_diagnostic_tx_drops = 0;
     uint32_t  can_tx_failed_count = 0;
     uint32_t  can_rx_missed_count = 0;
     uint32_t  can_bus_error_count = 0;

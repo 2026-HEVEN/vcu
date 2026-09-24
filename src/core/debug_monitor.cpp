@@ -55,7 +55,7 @@ void request_motor_test(bool left, bool right, float current_a,
         return;
     }
     if (state.controller_fault_latched) {
-        reject_motor_test("controller fault latch is set; power-cycle after diagnosis");
+        reject_motor_test("controller fault latch set; diagnose then FAULT_REARM at rest");
         return;
     }
     if (!component_test_safety_allowed()) {
@@ -133,7 +133,11 @@ void accept_serial_command() {
     float test_current_a = 0.0f;
     unsigned test_duration_ms = 0U;
     char trailing = '\0';
-    if (std::strcmp(g_serial_line, "SYNC_ARM") == 0) {
+    if (std::strcmp(g_serial_line, "FAULT_REARM") == 0) {
+        Serial.println(can_bus::rearm_controller_fault()
+            ? "[FAULT] rearmed; pedal-release arming required; history retained"
+            : "[FAULT] rejected: need latch + healthy fresh/stopped/released state for 1s; not queued");
+    } else if (std::strcmp(g_serial_line, "SYNC_ARM") == 0) {
         g_sync_arm_request = true;
         Serial.println("[SYNC] arm requested");
     } else if (std::strcmp(g_serial_line, "SYNC_RUN") == 0) {
@@ -159,7 +163,7 @@ void accept_serial_command() {
     } else if (g_serial_line_length != 0U) {
         Serial.println(
             "[CMD] use MOTOR_L|MOTOR_R|MOTOR_BOTH <A> <ms> or "
-            "SYNC_ARM|SYNC_RUN|SYNC_CANCEL or CLAMP|CLAMP_RESET");
+            "SYNC_ARM|SYNC_RUN|SYNC_CANCEL or CLAMP|CLAMP_RESET or FAULT_REARM");
     }
     g_serial_line_length = 0U;
 }
@@ -262,6 +266,9 @@ void debug_update() {
             last_summary_ms = now;
             const imu_driver::Diagnostics imu_diag = imu_driver::diagnostics();
             const auto tx = can_bus::motor_tx_diagnostics();
+            uint32_t link_drops_l = 0U;
+            uint32_t link_drops_r = 0U;
+            can_bus::link_drop_counts(link_drops_l, link_drops_r);
             const uint32_t tx_now = millis(); // after the diagnostic copy
             // result: 0=not attempted, 1=queued, 2=queue failed. No ACK claim.
             Serial.printf("MOTOR_TX seq=%lu snapAge=%lu fresh=%d staleTicks=%lu req=%+.1f/%+.1f result=%u/%u failTotal=%lu/%lu failRun=%u/%u queuedValid=%d/%d queuedA=%+.1f/%+.1f queuedSeq=%lu/%lu queuedAge=%lu/%lu\n",
@@ -277,7 +284,7 @@ void debug_update() {
                 (unsigned long)(tx.left.queued_valid ? tx_now-tx.left.last_queued_ms : UINT32_MAX),
                 (unsigned long)(tx.right.queued_valid ? tx_now-tx.right.last_queued_ms : UINT32_MAX));
             Serial.printf(
-                "STAT arm=%d dm=%d hs=%d/%d fb=%d/%d fault=%d gear=%u/%u raw=%u thr=%d/%d/%.1f imu=%d sync=%d/%d test=%d/%u\n"
+                "STAT arm=%d dm=%d hs=%d/%d fb=%d/%d fault=%d gear=%u/%u raw=%u thr=%d/%d/%.1f imu=%d sync=%d/%d test=%d/%u up_s=%lu hsDrop=%lu/%lu regenReq=%d regenDem=%d\n"
                 "MCU V=%.1f/%.1f Ibus=%+.1f/%+.1f Iph=%+.1f/%+.1f rpm=%d/%d tempC=%d/%d,%d/%d err=%02X%02X%02X/%02X%02X%02X\n"
                 "CAN state=%u age1=%u/%u age2=%u/%u q=%u peak=%u rxMiss=%u busErr=%u arbLost=%u txFail=%u | WSS=%.0f/%.0f/%.0f/%.0f pulse=%u/%u/%u/%u\n"
                 "IMU valid=%d yaw=%+.2f ax=%+.3f ay=%+.3f rxBytes=%u frames=%u csErr=%u\n",
@@ -291,6 +298,9 @@ void debug_update() {
                 (float)state.throttle_pct,
                 state.imu_valid, state.time_sync_armed, state.time_sync_active,
                 state.component_test_active, test_remaining_ms,
+                (unsigned long)(now / 1000U),
+                (unsigned long)link_drops_l, (unsigned long)link_drops_r,
+                state.regen_auto_requested, state.longitudinal_regen_demand,
                 state.controller_fb1_L.bus_voltage_v,
                 state.controller_fb1_R.bus_voltage_v,
                 state.controller_fb1_L.bus_current_a,
@@ -344,6 +354,13 @@ void debug_update() {
                 state.imu_telemetry.yaw_valid, state.imu_telemetry.accel_valid,
                 state.wheel_telemetry.valid[0], state.wheel_telemetry.valid[1],
                 state.wheel_telemetry.valid[2], state.wheel_telemetry.valid[3]);
+            Serial.printf("DRIVE_DIAG block=%04X first=%04X event=%u at=%lu rawMin=%u invalidRaw=%u invalidN=%u faultAt=%lu origin=%02X rearmReady=%d rearmN=%u logDrop=%lu\n",
+                state.diagnostic_block_reasons, state.first_block_reasons,
+                state.block_event_count, (unsigned long)state.first_block_ms,
+                state.throttle_window_min, state.throttle_last_invalid_raw,
+                state.throttle_invalid_samples, (unsigned long)state.fault_first_ms,
+                state.fault_origin, state.fault_rearm_ready, state.fault_rearm_count,
+                (unsigned long)state.drive_diagnostic_tx_drops);
         }
     }
     was_fast_log_active = fast_log_active;

@@ -8,9 +8,15 @@ float directional_current(float demand_a, Gear gear, bool direction_armed) {
     return 0.0f; // reverse braking, Neutral, Park and invalid gear
 }
 
+bool regen_forward_rotation_ok(int left_rpm, int right_rpm,
+                               bool feedback_fresh, int min_rpm) {
+    return feedback_fresh && min_rpm >= 0 &&
+        left_rpm > min_rpm && right_rpm < -min_rpm;
+}
+
 MotorDirectionCommand motor_direction_command(
-    float current_a, Gear gear, bool running, bool brake_active,
-    bool regen_allowed, bool forward_rotation) {
+    float current_a, Gear gear, bool running, bool regen_allowed,
+    bool forward_rotation) {
     if (!running || !std::isfinite(current_a) ||
         (gear != Gear::Drive && gear != Gear::Reverse)) return {0.0f, 0, false};
 
@@ -20,7 +26,7 @@ MotorDirectionCommand motor_direction_command(
         return {current_a, -4000, true};
     }
     if (current_a < 0.0f) {
-        if (!brake_active || !regen_allowed || !forward_rotation)
+        if (!regen_allowed || !forward_rotation)
             return {0.0f, 0, true};
         return {current_a, 0, true}; // verified forward regen wire command
     }

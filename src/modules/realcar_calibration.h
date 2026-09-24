@@ -16,28 +16,34 @@ namespace realcar_cal {
 // Temporary bring-up profile for the current dual-motor vehicle.
 // Set these back to production requirements as hardware is installed.
 namespace bringup {
-constexpr bool BRAKE_SENSOR_INSTALLED = false;
+constexpr bool BRAKE_SENSOR_INSTALLED = true;
 // PCB V3 connects the gear selector to GPIO32. Stable Drive
 // and Reverse classifications can grant propulsion after the stopped,
 // released-throttle direction interlock; Neutral/invalid readings halt it.
-constexpr bool GEAR_SELECTOR_INSTALLED = true;
+constexpr bool GEAR_SELECTOR_INSTALLED = false;
 constexpr unsigned GEAR_STABLE_SAMPLES = 10U;  // 100 ms at 100 Hz
 constexpr unsigned GEAR_DIRECTION_ARM_SAMPLES = 30U;  // 300 ms at 100 Hz
 constexpr int GEAR_DIRECTION_CHANGE_MAX_RPM = 50;
+// Forward motor RPM on BOTH sides required for throttle-off regen. Below this
+// speed, return to zero-current coasting rather than commanding 0 rpm torque.
+constexpr int REGEN_MIN_FORWARD_RPM = 50;
+// SUM of both motor phase-current magnitudes. TV OFF => 10 A / 15 A each.
+// Retained test strength; not increased without pack charge-current validation.
+constexpr float REGEN_TOTAL_CURRENT_NORMAL_A = 20.0f;
+constexpr float REGEN_TOTAL_CURRENT_EFF_A = 30.0f;
 // Initial values assume the PCB scales 0/2.5/5 V to approximately
 // 0/half/full ESP32 ADC range. They are placeholders until measured.
 // Contiguous gear-ladder boundaries. The classifier interprets these as:
 // Neutral [0, REVERSE), Reverse [REVERSE, DRIVE), Drive [DRIVE, 4095].
 constexpr unsigned GEAR_REVERSE_ADC = 500U;
 constexpr unsigned GEAR_DRIVE_ADC = 2500U;
-// Brake/BMS/current polarity and charge limits are not validated yet. Keeping
-// this false makes a Cluster Regen-Auto request observable but unable to
-// produce negative phase current.
-constexpr bool REGEN_HARDWARE_VALIDATED = false;
+// Keep false until motor polarity and battery charge acceptance are validated.
+// Even when true, regen still requires a valid BMS report and low enough SOC.
+constexpr bool REGEN_HARDWARE_VALIDATED = true;
 // Throttle command ceiling, per motor. This is a software test limit, not a
 // competition-rule or battery-current limit. Raise/lower only here after
 // checking controller, motor, battery/BMS and energy-meter data.
-constexpr float DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A = 500.0f;
+constexpr float DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A = 400.0f;
 constexpr float DRIVE_PHASE_CURRENT_EFF_PER_MOTOR_A = 100.0f;
 // Apply the same launch slew limit in Normal and Paddock modes. At the 500 A
 // per-motor ceiling this gives 1000 A/s and reaches full demand in 0.5 s.
@@ -58,7 +64,7 @@ constexpr float MOTOR_CUTOFF_C = 120.0f;
 // Provisional speed/current test envelope.  The phase-current ceiling falls
 // continuously from 500 A/motor at standstill to 50 A/motor at 80 km/h, then
 // holds 50 A/motor above that speed.  This is only active in paddock mode.
-constexpr float PADDOCK_CURRENT_ZERO_SPEED_PER_MOTOR_A = 500.0f;
+constexpr float PADDOCK_CURRENT_ZERO_SPEED_PER_MOTOR_A = 400.0f;
 constexpr float PADDOCK_CURRENT_HIGH_SPEED_PER_MOTOR_A = 50.0f;
 constexpr float PADDOCK_CURRENT_LINEAR_END_SPEED_MPS = 80.0f / 3.6f;
 constexpr float PADDOCK_ENTRY_SPEED_MAX_MPS = 3.0f / 3.6f;
@@ -73,17 +79,16 @@ constexpr float PADDOCK_CONTROLLER_BUS_CURRENT_LIMIT_A = 200.0f;
 constexpr float PADDOCK_PACK_CURRENT_LIMIT_A = 150.0f;
 constexpr bool PADDOCK_REQUIRE_PACK_DATA = true;
 // Raw values below this floor are treated as a disconnected/failed signal,
-// not as a released pedal. Values from 400 through the 0% point at 500 are
-// accepted as a valid released pedal while still commanding zero current.
-constexpr unsigned THROTTLE_SIGNAL_VALID_MIN_ADC = 400U;
+// not as a released pedal.
+constexpr unsigned THROTTLE_SIGNAL_VALID_MIN_ADC = 200U;
 }  // namespace bringup
 
 namespace provisional {
 // Initial Hall-throttle calibration. These values are deliberately
 // conservative and MUST be replaced with the actual released/full ADC
 // readings from the 5 Hz serial diagnostics before a driven test.
-constexpr float THROTTLE_RAW_MIN = 500.0f;
-constexpr float THROTTLE_RAW_MAX = 3000.0f;
+constexpr float THROTTLE_RAW_MIN = 400.0f;
+constexpr float THROTTLE_RAW_MAX = 2600.0f;
 
 // 초기값: 구름둘레 1.50 m / 2pi. 운전자 탑승·실사용 공기압 상태에서
 // 누적 WSS 펄스와 실주행 거리로 다시 식별한다.

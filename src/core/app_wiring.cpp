@@ -116,9 +116,15 @@ namespace {
 
 static void throttle_update() {
     state.throttle_raw_adc = analogRead(board_pins::THROTTLE_ADC);
+    if (state.throttle_raw_adc < state.throttle_window_min)
+        state.throttle_window_min = (uint16_t)state.throttle_raw_adc;
     state.throttle_signal_valid =
         state.throttle_raw_adc >=
             (int)realcar_cal::bringup::THROTTLE_SIGNAL_VALID_MIN_ADC;
+    if (!state.throttle_signal_valid) {
+        state.throttle_last_invalid_raw = (uint16_t)state.throttle_raw_adc;
+        if (state.throttle_invalid_samples != UINT16_MAX) ++state.throttle_invalid_samples;
+    }
     state.throttle_pct = state.throttle_signal_valid
         ? throttle_compute({ state.throttle_raw_adc }) : Percent(0.0f);
 }
@@ -215,12 +221,17 @@ static void longitudinal_update() {
     static RegenReleaseState release_state{};
     const bool released_for_regen = regen_release_update(
         (float)state.throttle_pct, state.throttle_signal_valid, release_state);
+    const bool forward_for_regen = regen_forward_rotation_ok(
+        state.controller_fb1_L.motor_speed_rpm,
+        state.controller_fb1_R.motor_speed_rpm,
+        state.controller_feedback_fresh_L && state.controller_feedback_fresh_R,
+        realcar_cal::bringup::REGEN_MIN_FORWARD_RPM);
     state.total_torque = longitudinal_compute({
-        (float)state.throttle_pct, (float)state.brake_pct, state.pack_soc, drive_mode,
+        (float)state.throttle_pct, state.pack_soc, drive_mode,
         released_for_regen && state.regen_auto_requested &&
             realcar_cal::bringup::REGEN_HARDWARE_VALIDATED &&
-            realcar_cal::bringup::BRAKE_SENSOR_INSTALLED &&
-            state.gear == Gear::Drive && state.pack_data_valid });
+            state.gear == Gear::Drive && state.pack_data_valid &&
+            forward_for_regen });
     state.longitudinal_regen_demand = state.total_torque < 0.0f;
     const bool throttle_released =
         (float)state.throttle_pct <= fixed_config::runtime::THROTTLE_ARM_MAX_PCT;
@@ -314,7 +325,8 @@ static void drive_supervisor_update() {
         requested_left_a, requested_right_a,
         state.controller_feedback_fresh,
         state.controller_fault_latched ||
-            state.controller_fb2_L.speed_mode || state.controller_fb2_R.speed_mode,
+            state.controller_fb2_L.speed_mode || state.controller_fb2_R.speed_mode ||
+            !torque_allowed(),
         state.controller_fb1_L.bus_voltage_v, state.controller_fb1_R.bus_voltage_v,
         state.controller_fb1_L.bus_current_a, state.controller_fb1_R.bus_current_a,
         state.controller_fb1_L.phase_current_a, state.controller_fb1_R.phase_current_a,
@@ -356,24 +368,43 @@ static void drive_supervisor_update() {
     command_snapshot.right_a = out.right_a;
     command_snapshot.gear = state.gear;
     command_snapshot.safety_allow = torque_allowed();
+    if (!state.controller_feedback_fresh) command_snapshot.block_reasons |= BLOCK_FEEDBACK;
+    if (state.controller_fault_latched) command_snapshot.block_reasons |= BLOCK_FAULT;
+    if (state.controller_fb2_L.speed_mode || state.controller_fb2_R.speed_mode)
+        command_snapshot.block_reasons |= BLOCK_SPEED_MODE;
+    if (out.paddock_sensor_blocked) command_snapshot.block_reasons |= BLOCK_PADDOCK_SENSOR;
+    if (out.thermal_limited && out.left_a == 0.0f && out.right_a == 0.0f &&
+        (requested_left_a != 0.0f || requested_right_a != 0.0f))
+        command_snapshot.block_reasons |= BLOCK_THERMAL;
     command_snapshot.throttle_signal_valid = state.throttle_signal_valid;
     command_snapshot.propulsion_direction_armed =
         state.propulsion_direction_armed;
-    command_snapshot.brake_active = state.brake_active;
     command_snapshot.regen_allowed = realcar_cal::bringup::REGEN_HARDWARE_VALIDATED &&
-        realcar_cal::bringup::BRAKE_SENSOR_INSTALLED &&
         state.regen_auto_requested && state.pack_data_valid &&
         state.throttle_signal_valid && (float)state.throttle_pct == 0.0f;
     // Installed motor polarity confirmed from the 2026-09-05 and 2026-09-21
     // vehicle logs: forward rotation is left +RPM and right -RPM.  Reuse the
-    // direction-change threshold so zero-speed noise cannot enable regen.
-    const int forward_rotation_min_rpm =
-        realcar_cal::bringup::GEAR_DIRECTION_CHANGE_MAX_RPM;
-    command_snapshot.forward_rotation = state.controller_feedback_fresh_L &&
-        state.controller_feedback_fresh_R &&
-        state.controller_fb1_L.motor_speed_rpm > forward_rotation_min_rpm &&
-        state.controller_fb1_R.motor_speed_rpm < -forward_rotation_min_rpm;
+    // dedicated regen threshold so zero-speed noise cannot enable regen.
+    command_snapshot.forward_rotation = regen_forward_rotation_ok(
+        state.controller_fb1_L.motor_speed_rpm,
+        state.controller_fb1_R.motor_speed_rpm,
+        state.controller_feedback_fresh_L && state.controller_feedback_fresh_R,
+        realcar_cal::bringup::REGEN_MIN_FORWARD_RPM);
     can_bus::publish_motor_command(command_snapshot);
+
+    // Record every 10ms control verdict as well as the latest 50ms TX verdict.
+    // Thus one short invalid ADC sample is not lost by the slow CAN logger.
+    uint16_t observed = command_snapshot.block_reasons;
+    if (!command_snapshot.safety_allow) observed |= BLOCK_SAFETY;
+    if (!command_snapshot.throttle_signal_valid) observed |= BLOCK_THROTTLE;
+    if (!command_snapshot.propulsion_direction_armed) observed |= BLOCK_DIRECTION;
+    observed |= can_bus::motor_tx_diagnostics().requested.block_reasons;
+    if (observed && !state.diagnostic_block_reasons) {
+        state.first_block_reasons = observed;
+        state.first_block_ms = millis();
+        if (state.block_event_count != UINT16_MAX) ++state.block_event_count;
+    }
+    state.diagnostic_block_reasons = observed;
 
     can_bus::note_command();
 }
@@ -384,6 +415,7 @@ static void clamp_stats_can_tx_update() { can_bus::send_clamp_stats(); }
 static void cluster_status_can_tx_update() { can_bus::send_cluster_status(); }
 static void sensor_telemetry_can_tx_update() { can_bus::send_sensor_telemetry(); }
 static void safety_task()    { safety_update(); }
+static void drive_diagnostics_update() { can_bus::send_drive_diagnostics(); }
 
 // --- task table: add a new module here (one line) ---
 Task g_tasks[] = {
@@ -407,6 +439,7 @@ Task g_tasks[] = {
     { vehicle_speed_can_tx_update, 50, 0 }, // 20 Hz VCU -> Cluster/TMA-1 single speed telemetry
     { log_can_tx_update,       10, 0 },   // 100 Hz VCU -> Monolith 고속 로깅 (Prio 7)
     { clamp_stats_can_tx_update, 1000, 0 }, // 1 Hz Amp 포화 통계 (Prio 7)
+    { drive_diagnostics_update, 100, 0 }, // 3 nonblocking frames, 30 frames/s
     { cluster_status_can_tx_update, 50, 0 }, // 20 Hz gear/brake/HV display status
     { sensor_telemetry_can_tx_update, car_check::PERIOD_MS, 0 }, // steering/IMU/WSS/control diagnostics
     { debug_update,            50, 0 },   // 20 Hz compact test log; 1 Hz idle summary

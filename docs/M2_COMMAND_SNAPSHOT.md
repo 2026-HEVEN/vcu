@@ -1,16 +1,20 @@
 # M2 — 좌우 모터 명령 스냅샷과 크로스코어 원자성
 
-## 최신 dev 회생 변경 통합 (2026-09-21)
+## 현재 회생 주행시험 설정 (2026-09-24)
 
-dev c76f0e9의 회생 부호/페달 정책을 병합했다. 아래 초기 설명보다 이 절이 우선한다.
-브레이크·회생 허용·양쪽 전진 회전 확인도 MotorCommandSnapshot에 포함하고,
+dev c76f0e9의 회생 부호를 유지하면서 M2에서 브레이크 의존성을 제거했다.
+이 절은 아래 초기 설계 설명보다 우선한다. 회생 허용·양쪽 전진 회전 확인은
+MotorCommandSnapshot에 포함하고,
 motor_command_resolve는 dev의 motor_direction_command를 재사용한다.
 CAN 태스크는 정상 명령 해석을 위해 공유 gear/regen 상태를 별도로 다시 읽지 않는다.
-회생 허용에는 검증/설치/요청/BMS 유효/유효 스로틀 0% 조건이 포함된다.
-100ms 페달 해제 조건은 상위 longitudinal에서 유지된다.
+회생 허용에는 검증/Cluster ON 요청/BMS 유효/유효 스로틀 0% 조건이 포함된다.
+상위 longitudinal은 100ms 연속 페달 해제 후 전진 D에서 양쪽 모터가
+`REGEN_MIN_FORWARD_RPM`(기본 50 motor rpm)을 넘을 때만 회생전류를 요구한다.
+브레이크 스위치는 회생 시작 조건이 아니다. SOC 90~95% 구간에서 전류가
+감소하고 95% 이상에서는 0 A다.
 조건 변경은 다음 게시/송신 주기에 반영되며 하드웨어 동시 수신을 보장하지 않는다.
-브레이크+양수 스로틀은 D/R 구동, D 음전류는 조건부 회생, R 양전류는 무토크다.
-회생 활성 플래그는 OFF 유지. Energy Meter 기능은 이 브랜치에 병합하지 않았다.
+양수 스로틀은 D/R 구동, D 음전류는 조건부 회생, R 양전류는 무토크다.
+`REGEN_HARDWARE_VALIDATED`는 로컬 실차시험 설정을 확인해야 한다.
 
 ## 2026-09-21 리뷰 보완 (아래 초기 설계 설명보다 우선)
 
@@ -296,12 +300,10 @@ struct MotorCommandSnapshot {
     bool     throttle_signal_valid;
     bool     propulsion_direction_armed;
 };
-// 구현 시 확정: 브레이크·컨트롤러 fault·피드백 stale은 스냅샷에 **넣지 않았다.**
-// 이미 상위에서 명령값 자체를 0으로 만들기 때문이다(브레이크는
-// `longitudinal_compute()`의 Brake Override, 나머지는 `drive_supervisor.cpp:76-82`).
-// 여기서 다시 게이트로 쓰면 두 가지가 깨진다. 회생이 켜졌을 때 제동 중 명령까지
-// 차단되고, 피드백 stale 시 `run=false`가 되어 지금의 "0 A로 idle"이 "HALT"로
-// 바뀐다. 둘 다 거동 변경이므로 중복 게이트를 두지 않는다.
+// 현재 구현: 브레이크는 회생 명령 조건이 아니며 스냅샷에도 넣지 않는다.
+// 컨트롤러 fault·피드백 stale은 상위 drive_supervisor가 명령값을 0으로 만든다.
+// 여기서 중복 게이트를 두면 피드백 stale 시 `run=false`가 되어 현재의
+// "0 A로 idle"이 "HALT"로 바뀌므로 거동을 변경하지 않는다.
 
 // core 1이 자기 소유로 관리하는 게이트. 공유 상태가 아니다.
 struct MotorCommandGates {
@@ -629,7 +631,7 @@ M2 수정이 아래 항목을 **강화**한다. 제거하거나 우회하지 않
 | NaN/Inf 검사 + 모터별 상전류 clamp | **신규 추가.** 기존 최종 경로에 없었다 (3.5) |
 | 센서 오류 → TV만 OFF, 50:50 복귀 | 영향 없음. TV 상위 단계 |
 | 10 kW 규정 전력 제한 | 영향 없음. `drive_supervisor` 유지 |
-| 브레이크 입력 시 구동토크 차단 | 기존 `longitudinal_compute()` Brake Override 유지. 중복 게이트 없음 |
+| 스로틀 해제 시 회생 | Cluster ON + BMS 유효 + D 전진 RPM 기준 충족 시 자동 회생. 브레이크 입력은 필수 아님 |
 | D/R 전환 정지 + 스로틀 해제 조건 | 스냅샷의 `propulsion_direction_armed` 포함 |
 
 ---

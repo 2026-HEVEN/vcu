@@ -49,6 +49,50 @@ namespace {
     uint8_t            g_life = 0;
     uint8_t            g_status_life = 0;
     MotorTxDiagnostics g_tx_work{}; // life task owns counters and history
+    RearmDwell g_fault_rearm_dwell{}; // RX scheduler only
+    void latch_fault(uint8_t origin) {
+        if (!state.controller_fault_latched) {
+            state.fault_origin = 0;
+            std::memset(state.first_fault_bytes, 0, sizeof(state.first_fault_bytes));
+            state.fault_first_ms = millis();
+        }
+        if ((origin & 1U) && !(state.fault_origin & 1U)) {
+            state.first_fault_bytes[0] = state.controller_fb2_L.error1;
+            state.first_fault_bytes[1] = state.controller_fb2_L.error2;
+            state.first_fault_bytes[2] = state.controller_fb2_L.error3;
+        }
+        if ((origin & 2U) && !(state.fault_origin & 2U)) {
+            state.first_fault_bytes[3] = state.controller_fb2_R.error1;
+            state.first_fault_bytes[4] = state.controller_fb2_R.error2;
+            state.first_fault_bytes[5] = state.controller_fb2_R.error3;
+        }
+        state.fault_origin |= origin;
+        state.controller_fault_latched = true;
+        state.fault_rearm_ready = false;
+        g_fault_rearm_dwell.tracking = false;
+    }
+    bool rearm_conditions_ok() {
+        return g_handshaked_L && g_handshaked_R &&
+            state.controller_feedback_fresh_L && state.controller_feedback_fresh_R &&
+            !state.controller_fb2_L.any_fault() && !state.controller_fb2_R.any_fault() &&
+            !state.controller_fb2_L.speed_mode && !state.controller_fb2_R.speed_mode &&
+            state.throttle_signal_valid && (float)state.throttle_pct == 0.0f &&
+            std::abs(state.controller_fb1_L.motor_speed_rpm) <= 50 &&
+            std::abs(state.controller_fb1_R.motor_speed_rpm) <= 50 &&
+            std::isfinite(state.controller_fb1_L.phase_current_a) &&
+            std::isfinite(state.controller_fb1_R.phase_current_a) &&
+            std::fabs(state.controller_fb1_L.phase_current_a) <= fixed_config::runtime::PHASE_CURRENT_HARD_CUTOFF_A &&
+            std::fabs(state.controller_fb1_R.phase_current_a) <= fixed_config::runtime::PHASE_CURRENT_HARD_CUTOFF_A &&
+            state.controller_fb2_L.controller_temp_c < realcar_cal::bringup::CONTROLLER_DERATE_START_C &&
+            state.controller_fb2_R.controller_temp_c < realcar_cal::bringup::CONTROLLER_DERATE_START_C &&
+            state.controller_fb2_L.motor_temp_c < realcar_cal::bringup::MOTOR_DERATE_START_C &&
+            state.controller_fb2_R.motor_temp_c < realcar_cal::bringup::MOTOR_DERATE_START_C &&
+            !state.component_test_active && !state.component_test_normal_inhibit &&
+            !state.time_sync_armed && !state.time_sync_active;
+    }
+    portMUX_TYPE         g_link_diag_mux = portMUX_INITIALIZER_UNLOCKED;
+    uint32_t             g_link_drops_L = 0U; // guarded by g_link_diag_mux
+    uint32_t             g_link_drops_R = 0U;
 
     // The only command data shared between the cores.
     portMUX_TYPE         g_cmd_mux = portMUX_INITIALIZER_UNLOCKED;
@@ -65,18 +109,25 @@ namespace {
     }
 
     void invalidate_controller_link(bool left, const char *reason) {
-        bool was_handshaked = false;
+        // The RX scheduler and TX task can both invalidate a link. Count the
+        // established -> invalid transition exactly once across the two cores.
+        portENTER_CRITICAL(&g_link_diag_mux);
+        const bool was_handshaked = left ? g_handshaked_L : g_handshaked_R;
         if (left) {
-            was_handshaked = g_handshaked_L;
             g_handshaked_L = false;
+            if (was_handshaked) ++g_link_drops_L;
+        } else {
+            g_handshaked_R = false;
+            if (was_handshaked) ++g_link_drops_R;
+        }
+        portEXIT_CRITICAL(&g_link_diag_mux);
+        if (left) {
             state.controller_handshaked_L = false;
             state.controller_feedback_fresh_L = false;
             state.controller_fb1_last_ms_L = 0U;
             state.controller_fb2_last_ms_L = 0U;
             g_feedback_recovery_expected_L = true;
         } else {
-            was_handshaked = g_handshaked_R;
-            g_handshaked_R = false;
             state.controller_handshaked_R = false;
             state.controller_feedback_fresh_R = false;
             state.controller_fb1_last_ms_R = 0U;
@@ -310,6 +361,8 @@ namespace {
             g_tx_work.requested.target_rpm_L = rpm_l; g_tx_work.requested.target_rpm_R = rpm_r;
             g_tx_work.requested.run_L = run_l; g_tx_work.requested.run_R = run_r;
             g_tx_work.requested.normal_allow = normal_allow;
+            g_tx_work.requested.block_reasons = resolved.block_reasons |
+                (state.component_test_active ? BLOCK_TEST : 0);
             g_tx_work.snapshot_age_ms = snapshot_age_ms;
             g_tx_work.snapshot_fresh = gates.snapshot_fresh;
             if (!gates.snapshot_fresh && g_tx_work.stale_total != UINT32_MAX)
@@ -354,6 +407,47 @@ MotorTxDiagnostics motor_tx_diagnostics() {
     out = g_tx_diagnostics;
     portEXIT_CRITICAL(&g_cmd_mux);
     return out;
+}
+
+bool rearm_controller_fault() {
+    if (!state.controller_fault_latched || !state.fault_rearm_ready ||
+        !rearm_conditions_ok()) return false;
+    safety_require_rearm();
+    state.controller_fault_latched = false;
+    state.fault_rearm_ready = false;
+    g_fault_rearm_dwell.tracking = false;
+    ++state.fault_rearm_count;
+    return true;
+}
+
+void send_drive_diagnostics() {
+    uint8_t d[8]{};
+    const auto put_u16 = [&](unsigned k, uint16_t v) {
+        d[k] = (uint8_t)v; d[k+1] = (uint8_t)(v >> 8);
+    };
+    const auto send = [&](uint32_t id) {
+        const bool ok = transmit_ext(id, d, 0);
+        if (!ok) ++state.drive_diagnostic_tx_drops;
+        return ok;
+    };
+    put_u16(0, (uint16_t)state.throttle_raw_adc);
+    put_u16(2, state.throttle_window_min);
+    put_u16(4, state.throttle_last_invalid_raw);
+    put_u16(6, state.throttle_invalid_samples);
+    if (send(CAN_ID_VCU_LOG_THROTTLE))
+        state.throttle_window_min = (uint16_t)state.throttle_raw_adc;
+    put_u16(0, state.diagnostic_block_reasons);
+    put_u16(2, state.first_block_reasons);
+    put_u16(4, state.block_event_count);
+    put_u16(6, (state.drive_slew_limited ? 1 : 0) | (state.thermal_limited ? 2 : 0) |
+        (state.power_limited ? 4 : 0) | (state.paddock_current_limited ? 8 : 0) |
+        (state.paddock_active ? 16 : 0) | (state.fault_rearm_ready ? 32 : 0));
+    send(CAN_ID_VCU_LOG_BLOCK);
+    for (unsigned i = 0; i < 6; ++i) d[i] = state.first_fault_bytes[i];
+    d[6] = state.fault_origin;
+    d[7] = (state.controller_fault_latched ? 1 : 0) |
+        (state.fault_rearm_ready ? 2 : 0);
+    send(CAN_ID_VCU_LOG_FAULT);
 }
 
 void start_life_task() {
@@ -466,7 +560,9 @@ void send_sensor_telemetry() {
     car_check::encode_wheels(state.wheel_telemetry, data);
     send(car_check::WHEELS_ID);
 
-    const bool output_allowed = torque_allowed() && deadman_ok() &&
+    const auto tx_status = motor_tx_diagnostics();
+    const bool output_allowed = tx_status.seq != 0 && tx_status.snapshot_fresh &&
+        tx_status.requested.normal_allow && torque_allowed() && deadman_ok() &&
         state.throttle_signal_valid && !g_reconnect_inhibit &&
         !state.component_test_normal_inhibit && state.propulsion_direction_armed &&
         state.controller_feedback_fresh && !state.controller_fault_latched &&
@@ -483,7 +579,7 @@ void send_sensor_telemetry() {
         output_allowed, state.component_test_active || state.time_sync_active,
         realcar_cal::bringup::REGEN_HARDWARE_VALIDATED,
         realcar_cal::bringup::BRAKE_SENSOR_INSTALLED, state.pack_data_valid,
-        state.brake_active, state.longitudinal_regen_demand,
+        state.longitudinal_regen_demand,
         state.pack_soc, (float)state.torque_L, (float)state.torque_R,
         state.gear==Gear::Drive ? 1 : (state.gear==Gear::Reverse ? -1 : 0)
     };
@@ -529,12 +625,16 @@ void poll_rx() {
             const esp_err_t tx_result = twai_transmit(&reply, pdMS_TO_TICKS(5));
             if (tx_result == ESP_OK) {
                 if (from_l) {
+                    portENTER_CRITICAL(&g_link_diag_mux);
                     g_handshaked_L = true;
+                    portEXIT_CRITICAL(&g_link_diag_mux);
                     state.controller_handshaked_L = true;
                     g_feedback_recovery_expected_L = false;
                     g_handshake_reply_ms_L = millis();
                 } else {
+                    portENTER_CRITICAL(&g_link_diag_mux);
                     g_handshaked_R = true;
+                    portEXIT_CRITICAL(&g_link_diag_mux);
                     state.controller_handshaked_R = true;
                     g_feedback_recovery_expected_R = false;
                     g_handshake_reply_ms_R = millis();
@@ -567,7 +667,7 @@ void poll_rx() {
             state.controller_fb1_last_ms_L = now;
             if (std::fabs(state.controller_fb1_L.phase_current_a) >
                 fixed_config::runtime::PHASE_CURRENT_HARD_CUTOFF_A) {
-                state.controller_fault_latched = true;
+                latch_fault(4U);
             }
             continue;
         }
@@ -576,20 +676,20 @@ void poll_rx() {
             state.controller_fb1_last_ms_R = now;
             if (std::fabs(state.controller_fb1_R.phase_current_a) >
                 fixed_config::runtime::PHASE_CURRENT_HARD_CUTOFF_A) {
-                state.controller_fault_latched = true;
+                latch_fault(8U);
             }
             continue;
         }
         if (m.data_length_code == 8 && m.identifier == CAN_ID_FB2_L) {
             state.controller_fb2_L = decode_controller_feedback_part2(m.data);
             state.controller_fb2_last_ms_L = now;
-            if (state.controller_fb2_L.any_fault()) state.controller_fault_latched = true;
+            if (state.controller_fb2_L.any_fault()) latch_fault(1U);
             continue;
         }
         if (m.data_length_code == 8 && m.identifier == CAN_ID_FB2_R) {
             state.controller_fb2_R = decode_controller_feedback_part2(m.data);
             state.controller_fb2_last_ms_R = now;
-            if (state.controller_fb2_R.any_fault()) state.controller_fault_latched = true;
+            if (state.controller_fb2_R.any_fault()) latch_fault(2U);
             continue;
         }
         if (m.data_length_code == 8 && m.identifier == CAN_ID_CLUSTER_BMS_STATUS) {
@@ -630,7 +730,9 @@ void poll_rx() {
     // one-second torque ramp performs the controlled recovery.
     if (!g_handshaked_L && g_feedback_recovery_expected_L &&
         state.controller_feedback_fresh_L) {
+        portENTER_CRITICAL(&g_link_diag_mux);
         g_handshaked_L = true;
+        portEXIT_CRITICAL(&g_link_diag_mux);
         state.controller_handshaked_L = true;
         g_feedback_recovery_expected_L = false;
         g_handshake_reply_ms_L = now;
@@ -639,7 +741,9 @@ void poll_rx() {
     }
     if (!g_handshaked_R && g_feedback_recovery_expected_R &&
         state.controller_feedback_fresh_R) {
+        portENTER_CRITICAL(&g_link_diag_mux);
         g_handshaked_R = true;
+        portEXIT_CRITICAL(&g_link_diag_mux);
         state.controller_handshaked_R = true;
         g_feedback_recovery_expected_R = false;
         g_handshake_reply_ms_R = now;
@@ -716,9 +820,17 @@ void poll_rx() {
     g_handshaked = fixed_config::runtime::REQUIRE_BOTH_MOTOR_CONTROLLERS
         ? (g_handshaked_L && g_handshaked_R)
         : (g_handshaked_L || g_handshaked_R);
+    state.fault_rearm_ready = fault_rearm_dwell(
+        state.controller_fault_latched && rearm_conditions_ok(), millis(), g_fault_rearm_dwell);
 }
 
 bool handshaked() { return g_handshaked; }
+void link_drop_counts(uint32_t &left, uint32_t &right) {
+    portENTER_CRITICAL(&g_link_diag_mux);
+    left = g_link_drops_L;
+    right = g_link_drops_R;
+    portEXIT_CRITICAL(&g_link_diag_mux);
+}
 bool deadman_ok() { return (millis() - g_last_cmd_ms) < DEADMAN_MS; }
 void note_command() { g_last_cmd_ms = millis(); }
 

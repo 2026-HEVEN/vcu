@@ -1,5 +1,7 @@
 # VCU 안전·보호 기능 전수표
 
+> 2026-09-24 구현 업데이트: [M2 주행 복구·진단 정리](M2_DRIVE_CLEANUP_20260924.md)를 우선 참조한다. 현재 fault의 양쪽 차단은 유지하되, fault 해소 후 `FAULT_REARM`으로 명시적 재무장이 가능해졌다. 스로틀 하한은 200, 구동 상한은 400A/모터이며 아래 9월21일 표의 500A/영구 latch 표현은 과거 상태다.
+
 기준: `fix/m2-command-snapshot`의 2026-09-21 작업본. 여기서 “보호”는 차량을
 정지시키는 기능뿐 아니라 잘못된 명령 생성, 통신 단절, 센서 오류 및 시험 명령의
 오사용을 막는 게이트를 포함한다.
@@ -22,12 +24,12 @@
 | 기능 | 동작 | 코드 위치 | 출처 | 판단 |
 |---|---|---|---|---|
 | 스로틀 단선 하한 | raw ADC가 설정 하한 미만이면 invalid·0% | `src/core/app_wiring.cpp` `throttle_update`, `src/modules/throttle.cpp` | 하네스/실측 | 유지. 컨트롤러는 VCU가 만든 CAN 명령만 보므로 원 페달 ADC 오류를 대신 알 수 없다. |
-| 기동 시 페달 해제 | valid throttle가 1% 이하로 300 ms인 뒤 Drive 상태 허용 | `src/core/safety.cpp`, `src/logic/safety_logic.cpp` | 팀 정책 | 유지. unintended launch 방지. |
+| 기동 시 페달 해제 | 최초 기동은 valid throttle가 1% 이하로 300 ms인 뒤 Drive 허용. 주행 중 Halt에서는 스로틀·핸드셰이크·heartbeat 복구 시 페달 유지 상태로 자동 재무장 | `src/core/safety.cpp`, `src/logic/safety_logic.cpp` | 팀 정책/2026-09-24 실차 로그 | 최초 기동 인터록 유지. 복귀 시 0.5초 전류 상승 제한 재적용. |
 | D/R 전환 인터록 | 정지(좌우 50 rpm 이하)+페달 해제 300 ms 뒤 방향 arm | `src/core/app_wiring.cpp`, `src/modules/direction_interlock.cpp` | 실차/팀 정책 | 유지. 컨트롤러의 개별 방향 보호로 대체 불가. |
 | 양쪽 컨트롤러 준비 | L/R 모두 handshake 완료 전 양쪽 토크 금지 | `src/core/can_bus.cpp`, `src/logic/safety_logic.cpp` | CAN 계약/듀얼모터 정책 | 유지. 한쪽만 구동되는 yaw 방지. |
 | 좌우 명령 스냅샷 | 한 tick의 전류·기어·허용상태를 임계구역에서 한 번에 게시/복사 | `src/core/app_wiring.cpp`, `src/core/can_bus.cpp`, `src/logic/safety_logic.cpp` | 동시성 설계 | 유지. 두 프레임 동시 도착이 아니라 동일한 계산 시점 보장이 목적. |
 | 스냅샷 freshness | 게시 후 100 ms가 지난 명령은 양쪽 0/run=false | `src/logic/safety_logic.cpp`, `src/core/can_bus.cpp` | 팀 정책 | 유지. 멈춘 제어 코어의 마지막 명령 재사용 방지. |
-| 스케줄러 deadman | 명령 갱신이 200 ms 넘으면 Halt | `src/core/can_bus.cpp`, `src/core/safety.cpp` | 팀 정책 | 유지하되 이름을 scheduler watchdog으로 정정할 후보. 외부 명령 freshness가 아니다. |
+| 스케줄러 deadman | 명령 갱신이 200 ms 넘으면 즉시 Halt, 회복 시 자동 재무장 | `src/core/can_bus.cpp`, `src/core/safety.cpp` | 팀 정책 | 외부 명령 freshness가 아니라 scheduler watchdog. |
 | feedback freshness | 각 컨트롤러 Part I+II가 250 ms 이내가 아니면 양쪽 명령 차단 | `src/core/can_bus.cpp`, `src/modules/drive_supervisor.cpp` | CAN 계약/실차 장애 | 유지. 컨트롤러 내부 timeout보다 먼저 대칭 차단. |
 | TX 실패 대칭 차단 | 연속 3회 queue 실패 시 링크 무효화, 양쪽 토크 차단 | `src/core/can_bus.cpp` | TWAI/팀 정책 | 유지. 한쪽 프레임만 계속 유실되는 경우 대응. |
 | bus-off 복구 | handshake 무효화→TWAI recovery/restart→재연결 | `src/core/can_bus.cpp` | ESP-IDF 동작/실차 장애 | 유지. |
@@ -36,7 +38,7 @@
 | NaN/범위 방어 | 비유한 명령 차단, Amp/Percent/Rpm 도메인 clamp·통계 | `src/logic/safety_logic.cpp`, `include/types.h` | 소프트웨어 무결성 | 유지. |
 | TV fail-off/no-add | IMU·차속·최소속도·게인 조건 불충족 시 50:50, 차등전류가 총 요구를 만들지 않음 | `src/modules/tv/gate.cpp`, `src/modules/tv/allocation.cpp` | 제어 안전 설계 | 유지. |
 | Cluster 요청 stale | 200 ms 동안 명령이 없으면 TV/회생/Paddock/debug 요청 OFF | `src/core/can_bus.cpp` | 통신 무결성 | 유지. 기본 주행 스로틀은 Cluster 명령에 의존하지 않는다. |
-| 회생 다중 게이트 | D기어, 브레이크, 스로틀 0%, BMS valid, 전진극성 L>+50/R<-50, hardware validated 모두 만족 | `src/core/app_wiring.cpp`, `src/modules/motor_direction.cpp` | 실차 로그/배터리 정책 | 유지. `REGEN_HARDWARE_VALIDATED=false` 유지 후 별도 시험. |
+| 회생 다중 게이트 | Cluster ON, D기어, 스로틀 0% 100 ms, BMS valid, 전진극성 L>+50/R<-50, hardware validated 모두 만족. 브레이크 입력은 불필요 | `src/core/app_wiring.cpp`, `src/modules/motor_direction.cpp` | 실차 로그/시험 정책 | 현재 M2 시험 설정에서는 `REGEN_HARDWARE_VALIDATED=true`. |
 | 시험 명령 게이트 | throttle released, D, 정지, fresh/fault-free, 제한전류·시간·deadline | `src/core/debug_monitor.cpp`, `src/core/can_bus.cpp`, `src/modules/time_sync_pulse.cpp` | 벤치시험 절차 | 시험 기능을 남길 경우 유지. 장기적으로 production build에서 제외 가능. |
 
 ## 컨트롤러/BMS와 겹치는 기능
