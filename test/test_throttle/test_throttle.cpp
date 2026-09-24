@@ -1,11 +1,12 @@
 #include <unity.h>
 #include "modules/throttle.h"
+#include "modules/realcar_calibration.h"
 
 void test_zero_at_bottom(void)   { TEST_ASSERT_EQUAL_FLOAT(0.0f,   (float)throttle_compute({0})); }
 void test_deadzone(void)         { TEST_ASSERT_EQUAL_FLOAT(0.0f,   (float)throttle_compute({150})); } // RAW_MIN 아래
-void test_zero_at_calibrated_min(void) { TEST_ASSERT_EQUAL_FLOAT(0.0f, (float)throttle_compute({500})); }
-void test_positive_above_calibrated_min(void) { TEST_ASSERT_TRUE((float)throttle_compute({501}) > 0.0f); }
-void test_full_at_calibrated_max(void) { TEST_ASSERT_EQUAL_FLOAT(100.0f, (float)throttle_compute({3000})); }
+void test_zero_at_calibrated_min(void) { TEST_ASSERT_EQUAL_FLOAT(0.0f, (float)throttle_compute({(int)realcar_cal::provisional::THROTTLE_RAW_MIN})); }
+void test_positive_above_calibrated_min(void) { TEST_ASSERT_TRUE((float)throttle_compute({(int)realcar_cal::provisional::THROTTLE_RAW_MIN+1}) > 0.0f); }
+void test_full_at_calibrated_max(void) { TEST_ASSERT_EQUAL_FLOAT(100.0f, (float)throttle_compute({(int)realcar_cal::provisional::THROTTLE_RAW_MAX})); }
 void test_full_at_top(void)      { TEST_ASSERT_EQUAL_FLOAT(100.0f, (float)throttle_compute({4095})); }
 void test_clamps_overrange(void) { TEST_ASSERT_EQUAL_FLOAT(100.0f, (float)throttle_compute({99999})); }
 

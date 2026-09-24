@@ -24,7 +24,8 @@ Bus Current/Phase Current의 시간축을 상관 정합하기 위한 시험 전�
 - 0.5초 ON / 0.5초 OFF × 3회
 - 마지막 OFF 구간까지 포함해 총 3초
 
-값은 `src/modules/realcar_calibration.h`의 `TIME_SYNC_*` 상수에서 바꾼다.
+값은 `src/modules/fixed_config.h`의 `fixed_config::bench::TIME_SYNC_*`
+상수에서 바꾼다. 이 값들은 실차 캘리브레이션이 아니라 시험 절차 설정이다.
 20 A는 검증값이 아니라 시작값이다. 반드시 구동륜을 지면에서 띄운 스탠드,
 롤러 또는 통제된 시험 환경에서 HV Bus Current 식별성과 휠 가속을 확인한 뒤
 조정한다.

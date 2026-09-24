@@ -19,14 +19,13 @@ float longitudinal_compute(const LongInput &in) {
     // exactly the configured per-motor ceiling at full throttle.
     constexpr float DRIVE_MAX_A_NORMAL =
         2.0f * realcar_cal::bringup::DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A;
-    constexpr float REGEN_MAX_A_NORMAL = 20.0f;
+    constexpr float REGEN_MAX_A_NORMAL = realcar_cal::bringup::REGEN_TOTAL_CURRENT_NORMAL_A;
     constexpr float DRIVE_MAX_A_EFF =
         2.0f * realcar_cal::bringup::DRIVE_PHASE_CURRENT_EFF_PER_MOTOR_A;
-    constexpr float REGEN_MAX_A_EFF = 30.0f;
+    constexpr float REGEN_MAX_A_EFF = realcar_cal::bringup::REGEN_TOTAL_CURRENT_EFF_A;
     
     constexpr float SOC_TAPER_START = 0.90f; // 회생제동 감소 시작
     constexpr float SOC_TAPER_END = 0.95f;   // 회생제동 완전 차단
-    constexpr float BRAKE_DEADZONE = 5.0f;   // 브레이크 노이즈 무시 구간
 
     float drive_max_a = DRIVE_MAX_A_NORMAL;
     float regen_max_a = REGEN_MAX_A_NORMAL;
@@ -47,13 +46,13 @@ float longitudinal_compute(const LongInput &in) {
     }
     regen_max_a *= regen_multiplier;
 
-    // Explicit policy: positive throttle wins even with the brake pressed.
-    // Do not subtract regen from propulsion or apply a brake-throttle override.
+    // Positive throttle always requests propulsion. Once the pedal has been
+    // released long enough, the caller enables automatic coast regeneration;
+    // the brake switch has no role in this demand.
     if (!std::isfinite(in.throttle_pct) || in.throttle_pct < 0.0f) return 0.0f;
     if (in.throttle_pct > 0.0f)
         return std::fmin(in.throttle_pct, 100.0f) / 100.0f * drive_max_a;
-    if (!in.regen_auto_enabled || !std::isfinite(in.brake_pct) ||
-        in.brake_pct <= BRAKE_DEADZONE || !std::isfinite(in.pack_soc) ||
+    if (!in.regen_auto_enabled || !std::isfinite(in.pack_soc) ||
         in.pack_soc < 0.0f || in.pack_soc > 1.0f) return 0.0f;
-    return -std::fmin(in.brake_pct, 100.0f) / 100.0f * regen_max_a;
+    return -regen_max_a;
 }

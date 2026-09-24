@@ -66,6 +66,9 @@ constexpr uint32_t CAN_ID_VCU_LOG_MOTOR   = 0x1C02C0D0; // 10ms 회전수/모선
 constexpr uint32_t CAN_ID_VCU_LOG_TV_YAW  = 0x1C03C0D0; // 20ms TV 요 제어
 constexpr uint32_t CAN_ID_VCU_LOG_TV_LOAD = 0x1C04C0D0; // 20ms TV 하중/한계
 constexpr uint32_t CAN_ID_VCU_LOG_CLAMP   = 0x1C05C0D0; // 1s Amp 포화 통계
+constexpr uint32_t CAN_ID_VCU_LOG_THROTTLE = 0x1C06C0D0;
+constexpr uint32_t CAN_ID_VCU_LOG_BLOCK = 0x1C07C0D0;
+constexpr uint32_t CAN_ID_VCU_LOG_FAULT = 0x1C08C0D0;
 
 // Cluster -> logger BMS summary. VCU may observe this for diagnostics only;
 // the BLE path is not an authoritative safety input.

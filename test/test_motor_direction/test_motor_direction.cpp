@@ -24,9 +24,9 @@ void test_demand_sign_and_gears() {
 }
 
 void test_wire_direction_combinations() {
-    const auto drive = motor_direction_command(10, Gear::Drive, true, false, false, true);
-    const auto regen = motor_direction_command(-10, Gear::Drive, true, true, true, true);
-    const auto reverse = motor_direction_command(-10, Gear::Reverse, true, false, false, false);
+    const auto drive = motor_direction_command(10, Gear::Drive, true, false, true);
+    const auto regen = motor_direction_command(-10, Gear::Drive, true, true, true);
+    const auto reverse = motor_direction_command(-10, Gear::Reverse, true, false, false);
     TEST_ASSERT_EQUAL_FLOAT(10, drive.current_a);
     TEST_ASSERT_EQUAL_INT(4000, drive.target_rpm);
     TEST_ASSERT_EQUAL_FLOAT(-10, regen.current_a);
@@ -41,24 +41,28 @@ void test_wire_direction_combinations() {
 }
 
 void test_regen_permission_and_motion_guards() {
-    TEST_ASSERT_EQUAL_FLOAT(0, motor_direction_command(-10, Gear::Drive, true, true, false, true).current_a);
-    TEST_ASSERT_EQUAL_FLOAT(0, motor_direction_command(-10, Gear::Drive, true, true, true, false).current_a);
-    TEST_ASSERT_EQUAL_FLOAT(0, motor_direction_command(-10, Gear::Drive, true, false, true, true).current_a);
-    TEST_ASSERT_FALSE(motor_direction_command(-10, Gear::Drive, false, true, true, true).running);
-    TEST_ASSERT_FALSE(motor_direction_command(-10, Gear::Neutral, true, true, true, true).running);
-    TEST_ASSERT_FALSE(motor_direction_command(NAN, Gear::Drive, true, true, true, true).running);
+    TEST_ASSERT_EQUAL_FLOAT(0, motor_direction_command(-10, Gear::Drive, true, false, true).current_a);
+    TEST_ASSERT_EQUAL_FLOAT(0, motor_direction_command(-10, Gear::Drive, true, true, false).current_a);
+    TEST_ASSERT_FALSE(motor_direction_command(-10, Gear::Drive, false, true, true).running);
+    TEST_ASSERT_FALSE(motor_direction_command(-10, Gear::Neutral, true, true, true).running);
+    TEST_ASSERT_FALSE(motor_direction_command(NAN, Gear::Drive, true, true, true).running);
 }
 
-void test_brake_allows_drive_in_both_gears() {
-    TEST_ASSERT_EQUAL_FLOAT(10, motor_direction_command(10, Gear::Drive, true, true, false, true).current_a);
-    TEST_ASSERT_EQUAL_FLOAT(-10, motor_direction_command(-10, Gear::Reverse, true, true, false, false).current_a);
-    TEST_ASSERT_EQUAL_FLOAT(0, motor_direction_command(10, Gear::Reverse, true, false, true, false).current_a);
-    const float braking = longitudinal_compute({100, 100, 0.5f, DriveMode::Normal, false});
-    TEST_ASSERT_EQUAL_FLOAT(-1000, directional_current(braking, Gear::Reverse, true));
+void test_forward_rpm_threshold_and_reverse_drive() {
+    TEST_ASSERT_TRUE(regen_forward_rotation_ok(51, -51, true, 50));
+    TEST_ASSERT_FALSE(regen_forward_rotation_ok(50, -51, true, 50));
+    TEST_ASSERT_FALSE(regen_forward_rotation_ok(51, -50, true, 50));
+    TEST_ASSERT_FALSE(regen_forward_rotation_ok(51, -51, false, 50));
+    TEST_ASSERT_FALSE(regen_forward_rotation_ok(-51, 51, true, 50));
+    TEST_ASSERT_EQUAL_FLOAT(10, motor_direction_command(10, Gear::Drive, true, false, true).current_a);
+    TEST_ASSERT_EQUAL_FLOAT(-10, motor_direction_command(-10, Gear::Reverse, true, false, false).current_a);
+    TEST_ASSERT_EQUAL_FLOAT(0, motor_direction_command(10, Gear::Reverse, true, true, false).current_a);
+    const float drive = longitudinal_compute({100, 0.5f, DriveMode::Normal, false});
+    TEST_ASSERT_EQUAL_FLOAT(-drive, directional_current(drive, Gear::Reverse, true));
 }
 
 void test_forward_regen_survives_longitudinal_tv_and_wire() {
-    const float demand = longitudinal_compute({0, 100, 0.5f, DriveMode::Normal, true});
+    const float demand = longitudinal_compute({0, 0.5f, DriveMode::Normal, true});
     TEST_ASSERT_EQUAL_FLOAT(-20, demand);
     const float signed_demand = directional_current(demand, Gear::Drive, true);
     TVInput input{};
@@ -77,7 +81,7 @@ void test_forward_regen_survives_longitudinal_tv_and_wire() {
     DriveSupervisorState supervisor_state{};
     const auto supervised = drive_supervisor_compute(supervisor_in, params, supervisor_state);
     for (float current : {supervised.left_a, supervised.right_a}) {
-        const auto wire = motor_direction_command(current, Gear::Drive, true, true, true, true);
+        const auto wire = motor_direction_command(current, Gear::Drive, true, true, true);
         TEST_ASSERT_EQUAL_FLOAT(-10, wire.current_a);
         TEST_ASSERT_EQUAL_INT(0, wire.target_rpm);
     }
@@ -96,11 +100,11 @@ void test_regen_to_overlap_drive_restarts_ramp() {
         in.control_dt_s = 0.01f;
         in.requested_left_a = in.requested_right_a = -10;
         drive_supervisor_compute(in, params, state); // regen resets launch history
-        const float demand = longitudinal_compute({100, 100, 0.5f, DriveMode::Normal, true});
+        const float demand = longitudinal_compute({100, 0.5f, DriveMode::Normal, true});
         in.requested_left_a = in.requested_right_a = directional_current(demand, gear, true) / 2;
         in.propulsion_requested = true; // overlap still counts as propulsion
         const auto out = drive_supervisor_compute(in, params, state);
-        const auto cmd = motor_direction_command(out.left_a, gear, true, true, false, true);
+        const auto cmd = motor_direction_command(out.left_a, gear, true, false, true);
         TEST_ASSERT_TRUE(out.drive_slew_limited);
         TEST_ASSERT_FLOAT_WITHIN(0.001f, gear == Gear::Drive ? 10 : -10, cmd.current_a);
         TEST_ASSERT_EQUAL_INT(gear == Gear::Drive ? 4000 : -4000, cmd.target_rpm);
@@ -112,7 +116,7 @@ int main(int, char **) {
     RUN_TEST(test_demand_sign_and_gears);
     RUN_TEST(test_wire_direction_combinations);
     RUN_TEST(test_regen_permission_and_motion_guards);
-    RUN_TEST(test_brake_allows_drive_in_both_gears);
+    RUN_TEST(test_forward_rpm_threshold_and_reverse_drive);
     RUN_TEST(test_forward_regen_survives_longitudinal_tv_and_wire);
     RUN_TEST(test_regen_to_overlap_drive_restarts_ramp);
     return UNITY_END();

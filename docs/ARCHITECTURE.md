@@ -187,18 +187,23 @@ void life_task(void *) {
 
 ```cpp
 SafetyState safety_step(SafetyState cur, const SafetyInputs &in) {
-    if (!in.shutdown_ok) return SafetyState::Halt;       // 셧다운 끊기면 즉시 HALT
+    if (!in.shutdown_ok || !in.throttle_valid) return SafetyState::Halt;
     switch (cur) {
         case Idle:  return in.handshaked    ? Ready : Idle;
-        case Ready: return in.start_pressed ? Drive : Ready;
-        case Drive: return in.deadman_ok    ? Drive : Halt;  // 명령 끊기면 HALT
-        case Halt:  return Halt;                             // 래치 (전원 재투입 전까지)
+        case Ready: return in.start_pressed && in.handshaked && in.deadman_ok
+                          ? Drive : Ready;  // 최초 기동: 페달 해제 확인
+        case Drive: return in.deadman_ok ? Drive : Halt;
+        case Halt:  return in.handshaked && in.deadman_ok
+                          ? Drive : Halt;  // 통신·스로틀 회복 시 자동 재무장
     }
 }
 ```
 
 토크는 `torque_allowed()`(= 상태가 `Drive`일 때만 true)가 통과해야 나간다.
-순수 함수라 노트북에서 모든 전이를 테스트했다.
+주행 중 스로틀 무효 신호가 오면 즉시 양쪽 0 A로 차단한다. 다시 유효해지고
+핸드셰이크·제어 heartbeat가 복구되면 페달을 놓지 않아도 재무장하며, 기존
+0.5초 전류 상승 제한은 차단 시 0 A로 초기화되어 복귀 시 다시 적용된다.
+순수 상태 전이는 `test_safety_logic`에서 검증한다.
 `src/core/safety.cpp`(코어)는 GPIO를 읽어 이 함수에 넣어주는 껍데기.
 
 ---

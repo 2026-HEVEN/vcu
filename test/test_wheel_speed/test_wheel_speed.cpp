@@ -1,8 +1,9 @@
 #include <unity.h>
 #include "modules/wheel_speed.h"
 #include "modules/realcar_calibration.h"
+#include "modules/fixed_config.h"
 
-static constexpr float PPR = realcar_cal::confirmed::WSS_PULSES_PER_WHEEL_REV_FL;
+static constexpr float PPR = fixed_config::vehicle::WSS_PULSES_PER_WHEEL_REV_FL;
 
 // 24 pulses/rev. 24 pulses in 100ms => 10 rev/s => 600 rpm.
 void test_typical(void) {

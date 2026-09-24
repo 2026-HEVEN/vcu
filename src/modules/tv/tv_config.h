@@ -1,5 +1,6 @@
 #pragma once
 #include "modules/realcar_calibration.h"
+#include "modules/fixed_config.h"
 // ============================================================
 //  토크벡터링 정책/튜닝 상수 — TV팀 공용 설정 파일
 // ============================================================
@@ -26,8 +27,8 @@ struct TVParams {
     float lltd_r          = realcar_cal::provisional::REAR_LLTD;
 
     // --- HPM05KW + 감속기: 모터 상전류[A] <-> 휠 종력 변환 ---
-    float gear_ratio             = realcar_cal::confirmed::GEAR_RATIO;
-    float motor_kt_nm_per_a      = realcar_cal::confirmed::MOTOR_KT_NM_PER_A;
+    float gear_ratio             = fixed_config::vehicle::GEAR_RATIO;
+    float motor_kt_nm_per_a      = fixed_config::vehicle::MOTOR_KT_NM_PER_A;
     // Bring-up software ceiling. The separate 103 A value in confirmed is
     // the estimated continuous motor operating point, not this short test cap.
     float motor_current_max_a    =

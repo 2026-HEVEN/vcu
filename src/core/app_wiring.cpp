@@ -20,6 +20,7 @@
 #include "modules/wheel_speed.h"
 #include "modules/vehicle_speed.h"
 #include "modules/realcar_calibration.h"
+#include "modules/fixed_config.h"
 #include "modules/longitudinal.h"
 #include "modules/torque_vectoring.h"
 #include "modules/gear.h"
@@ -48,15 +49,15 @@ namespace {
 
     // 실차 확정값: 림 부착 자석 48개, PCNT 상승엣지만 카운트.
     // 센서 장착반경은 RPM에 영향을 주지 않는다. 한 바퀴 실제 펄스 수가 바뀌면
-    // realcar_calibration.h의 채널별 값을 수정한다.
+    // fixed_config.h의 채널별 값을 수정한다.
     const WssCalib WSS_CAL[WHEEL_COUNT] = {
-        { realcar_cal::confirmed::WSS_PULSES_PER_WHEEL_REV_FL,
+        { fixed_config::vehicle::WSS_PULSES_PER_WHEEL_REV_FL,
           realcar_cal::provisional::WSS_FILTER_TIME_CONSTANT_S },
-        { realcar_cal::confirmed::WSS_PULSES_PER_WHEEL_REV_FR,
+        { fixed_config::vehicle::WSS_PULSES_PER_WHEEL_REV_FR,
           realcar_cal::provisional::WSS_FILTER_TIME_CONSTANT_S },
-        { realcar_cal::confirmed::WSS_PULSES_PER_WHEEL_REV_RL,
+        { fixed_config::vehicle::WSS_PULSES_PER_WHEEL_REV_RL,
           realcar_cal::provisional::WSS_FILTER_TIME_CONSTANT_S },
-        { realcar_cal::confirmed::WSS_PULSES_PER_WHEEL_REV_RR,
+        { fixed_config::vehicle::WSS_PULSES_PER_WHEEL_REV_RR,
           realcar_cal::provisional::WSS_FILTER_TIME_CONSTANT_S },
     };
     WheelSpeedFilterState wheel_speed_filter_state[WHEEL_COUNT]{};
@@ -71,13 +72,11 @@ namespace {
     };
     TVYawState       tv_yaw_state{};       // yaw 제어기 이력 (전역상태 아님, 여기서만 보유)
     DriveMode        drive_mode = DriveMode::Normal;
-    constexpr float  TV_DT_S = realcar_cal::confirmed::CONTROL_PERIOD_S;
-    constexpr float  WHEEL_SPEED_DT_S = realcar_cal::confirmed::CONTROL_PERIOD_S;
+    constexpr float  TV_DT_S = fixed_config::vehicle::CONTROL_PERIOD_S;
+    constexpr float  WHEEL_SPEED_DT_S = fixed_config::vehicle::CONTROL_PERIOD_S;
     const GearCalib GEAR_CAL {
-        (uint16_t)realcar_cal::bringup::GEAR_NEUTRAL_ADC,
         (uint16_t)realcar_cal::bringup::GEAR_REVERSE_ADC,
         (uint16_t)realcar_cal::bringup::GEAR_DRIVE_ADC,
-        (uint16_t)realcar_cal::bringup::GEAR_ADC_TOLERANCE,
     };
     GearFilterState gear_filter_state{};
     DirectionInterlockState direction_interlock_state{};
@@ -88,14 +87,14 @@ namespace {
         realcar_cal::bringup::ENABLE_DRIVE_POWER_LIMIT
             ? realcar_cal::bringup::DRIVE_POWER_SOFT_LIMIT_W : 0.0f,
         realcar_cal::bringup::DRIVETRAIN_EFFICIENCY,
-        realcar_cal::confirmed::MOTOR_KT_NM_PER_A,
+        fixed_config::vehicle::MOTOR_KT_NM_PER_A,
         realcar_cal::bringup::PADDOCK_CURRENT_ZERO_SPEED_PER_MOTOR_A,
         realcar_cal::bringup::PADDOCK_CURRENT_HIGH_SPEED_PER_MOTOR_A,
         realcar_cal::bringup::PADDOCK_CURRENT_LINEAR_END_SPEED_MPS,
         realcar_cal::bringup::PADDOCK_POWER_SOFT_LIMIT_W,
         realcar_cal::bringup::PADDOCK_CONTROLLER_BUS_CURRENT_LIMIT_A,
         realcar_cal::bringup::PADDOCK_PACK_CURRENT_LIMIT_A,
-        realcar_cal::bringup::TELEMETRY_TEMPERATURE_VALID_MIN_C,
+        fixed_config::runtime::TELEMETRY_TEMPERATURE_VALID_MIN_C,
         realcar_cal::bringup::PADDOCK_REQUIRE_PACK_DATA,
         realcar_cal::bringup::CONTROLLER_DERATE_START_C,
         realcar_cal::bringup::CONTROLLER_CUTOFF_C,
@@ -103,22 +102,29 @@ namespace {
         realcar_cal::bringup::MOTOR_CUTOFF_C,
     };
     const TimeSyncPulseParams TIME_SYNC_PARAMS {
-        realcar_cal::bringup::ENABLE_TIME_SYNC_PULSE,
-        realcar_cal::bringup::TIME_SYNC_PHASE_CURRENT_PER_MOTOR_A,
-        realcar_cal::bringup::TIME_SYNC_PULSE_ON_S,
-        realcar_cal::bringup::TIME_SYNC_PULSE_OFF_S,
-        realcar_cal::bringup::TIME_SYNC_PULSE_COUNT,
-        realcar_cal::bringup::TIME_SYNC_ARM_TIMEOUT_S,
+        fixed_config::bench::ENABLE_TIME_SYNC_PULSE,
+        fixed_config::bench::TIME_SYNC_PHASE_CURRENT_PER_MOTOR_A,
+        fixed_config::bench::TIME_SYNC_PULSE_ON_S,
+        fixed_config::bench::TIME_SYNC_PULSE_OFF_S,
+        fixed_config::bench::TIME_SYNC_PULSE_COUNT,
+        fixed_config::bench::TIME_SYNC_ARM_TIMEOUT_S,
     };
     TimeSyncPulseState time_sync_state{};
     TimeSyncPulseOutput time_sync_output{};
+    uint32_t motor_command_seq = 0U;   // starts at 1; seq 0 = nothing published
 }
 
 static void throttle_update() {
     state.throttle_raw_adc = analogRead(board_pins::THROTTLE_ADC);
+    if (state.throttle_raw_adc < state.throttle_window_min)
+        state.throttle_window_min = (uint16_t)state.throttle_raw_adc;
     state.throttle_signal_valid =
         state.throttle_raw_adc >=
             (int)realcar_cal::bringup::THROTTLE_SIGNAL_VALID_MIN_ADC;
+    if (!state.throttle_signal_valid) {
+        state.throttle_last_invalid_raw = (uint16_t)state.throttle_raw_adc;
+        if (state.throttle_invalid_samples != UINT16_MAX) ++state.throttle_invalid_samples;
+    }
     state.throttle_pct = state.throttle_signal_valid
         ? throttle_compute({ state.throttle_raw_adc }) : Percent(0.0f);
 }
@@ -207,7 +213,7 @@ static void paddock_update() {
     }
     if (!state.paddock_active &&
         state.vehicle_speed_mps <= realcar_cal::bringup::PADDOCK_ENTRY_SPEED_MAX_MPS &&
-        (float)state.throttle_pct <= realcar_cal::bringup::THROTTLE_ARM_MAX_PCT) {
+        (float)state.throttle_pct <= fixed_config::runtime::THROTTLE_ARM_MAX_PCT) {
         state.paddock_active = true;
     }
 }
@@ -215,15 +221,20 @@ static void longitudinal_update() {
     static RegenReleaseState release_state{};
     const bool released_for_regen = regen_release_update(
         (float)state.throttle_pct, state.throttle_signal_valid, release_state);
+    const bool forward_for_regen = regen_forward_rotation_ok(
+        state.controller_fb1_L.motor_speed_rpm,
+        state.controller_fb1_R.motor_speed_rpm,
+        state.controller_feedback_fresh_L && state.controller_feedback_fresh_R,
+        realcar_cal::bringup::REGEN_MIN_FORWARD_RPM);
     state.total_torque = longitudinal_compute({
-        (float)state.throttle_pct, (float)state.brake_pct, state.pack_soc, drive_mode,
+        (float)state.throttle_pct, state.pack_soc, drive_mode,
         released_for_regen && state.regen_auto_requested &&
             realcar_cal::bringup::REGEN_HARDWARE_VALIDATED &&
-            realcar_cal::bringup::BRAKE_SENSOR_INSTALLED &&
-            state.gear == Gear::Drive && state.pack_data_valid });
+            state.gear == Gear::Drive && state.pack_data_valid &&
+            forward_for_regen });
     state.longitudinal_regen_demand = state.total_torque < 0.0f;
     const bool throttle_released =
-        (float)state.throttle_pct <= realcar_cal::bringup::THROTTLE_ARM_MAX_PCT;
+        (float)state.throttle_pct <= fixed_config::runtime::THROTTLE_ARM_MAX_PCT;
     const bool stopped =
         abs(state.controller_fb1_L.motor_speed_rpm) <=
             realcar_cal::bringup::GEAR_DIRECTION_CHANGE_MAX_RPM &&
@@ -263,7 +274,7 @@ static void torque_vectoring_update() {
 }
 static void time_sync_pulse_update() {
     const bool throttle_released =
-        (float)state.throttle_pct <= realcar_cal::bringup::THROTTLE_ARM_MAX_PCT;
+        (float)state.throttle_pct <= fixed_config::runtime::THROTTLE_ARM_MAX_PCT;
     const bool mode_requests_off = !state.tv_enable_requested &&
         !state.regen_auto_requested && !state.paddock_active &&
         !state.paddock_requested;
@@ -274,7 +285,7 @@ static void time_sync_pulse_update() {
         state.gear == Gear::Drive && mode_requests_off &&
         state.vehicle_speed_valid &&
         state.vehicle_speed_mps <=
-            realcar_cal::bringup::TIME_SYNC_START_SPEED_MAX_MPS;
+            fixed_config::bench::TIME_SYNC_START_SPEED_MAX_MPS;
     const bool start_ok = runtime_ok;
 
     time_sync_output = time_sync_pulse_step({
@@ -283,7 +294,7 @@ static void time_sync_pulse_update() {
         debug_consume_time_sync_cancel_request(),
         start_ok,
         runtime_ok,
-        realcar_cal::confirmed::CONTROL_PERIOD_S,
+        fixed_config::vehicle::CONTROL_PERIOD_S,
     }, TIME_SYNC_PARAMS, time_sync_state);
 
     state.time_sync_armed = time_sync_output.armed;
@@ -303,7 +314,7 @@ static void drive_supervisor_update() {
                   std::fabs((float)state.controller_fb1_R.motor_speed_rpm)) *
         TWO_PI_OVER_60 *
         realcar_cal::provisional::WHEEL_SPEED_ROLLING_RADIUS_M /
-        realcar_cal::confirmed::GEAR_RATIO;
+        fixed_config::vehicle::GEAR_RATIO;
     state.paddock_speed_mps =
         std::fmax(state.vehicle_speed_mps, motor_speed_mps);
     const bool propulsion_requested =
@@ -314,7 +325,8 @@ static void drive_supervisor_update() {
         requested_left_a, requested_right_a,
         state.controller_feedback_fresh,
         state.controller_fault_latched ||
-            state.controller_fb2_L.speed_mode || state.controller_fb2_R.speed_mode,
+            state.controller_fb2_L.speed_mode || state.controller_fb2_R.speed_mode ||
+            !torque_allowed(),
         state.controller_fb1_L.bus_voltage_v, state.controller_fb1_R.bus_voltage_v,
         state.controller_fb1_L.bus_current_a, state.controller_fb1_R.bus_current_a,
         state.controller_fb1_L.phase_current_a, state.controller_fb1_R.phase_current_a,
@@ -324,7 +336,7 @@ static void drive_supervisor_update() {
         (float)state.controller_fb2_L.motor_temp_c,
         (float)state.controller_fb2_R.motor_temp_c,
         state.paddock_active,
-        propulsion_requested, realcar_cal::confirmed::CONTROL_PERIOD_S,
+        propulsion_requested, fixed_config::vehicle::CONTROL_PERIOD_S,
         state.vehicle_speed_mps, state.paddock_speed_mps,
         state.pack_data_valid, state.pack_current_a,
     };
@@ -345,6 +357,55 @@ static void drive_supervisor_update() {
     state.paddock_sensor_blocked = out.paddock_sensor_blocked;
     state.paddock_current_limited = out.paddock_current_limited;
     state.drive_slew_limited = out.drive_slew_limited;
+
+    // Publish this tick's decision as one unit. safety_task runs BEFORE this
+    // task, so torque_allowed() here is this tick's verdict, not the previous.
+    MotorCommandSnapshot command_snapshot;
+    if (++motor_command_seq == 0U) ++motor_command_seq; // zero is unpublished
+    command_snapshot.seq = motor_command_seq;
+    command_snapshot.published_ms = millis();
+    command_snapshot.left_a = out.left_a;
+    command_snapshot.right_a = out.right_a;
+    command_snapshot.gear = state.gear;
+    command_snapshot.safety_allow = torque_allowed();
+    if (!state.controller_feedback_fresh) command_snapshot.block_reasons |= BLOCK_FEEDBACK;
+    if (state.controller_fault_latched) command_snapshot.block_reasons |= BLOCK_FAULT;
+    if (state.controller_fb2_L.speed_mode || state.controller_fb2_R.speed_mode)
+        command_snapshot.block_reasons |= BLOCK_SPEED_MODE;
+    if (out.paddock_sensor_blocked) command_snapshot.block_reasons |= BLOCK_PADDOCK_SENSOR;
+    if (out.thermal_limited && out.left_a == 0.0f && out.right_a == 0.0f &&
+        (requested_left_a != 0.0f || requested_right_a != 0.0f))
+        command_snapshot.block_reasons |= BLOCK_THERMAL;
+    command_snapshot.throttle_signal_valid = state.throttle_signal_valid;
+    command_snapshot.propulsion_direction_armed =
+        state.propulsion_direction_armed;
+    command_snapshot.regen_allowed = realcar_cal::bringup::REGEN_HARDWARE_VALIDATED &&
+        state.regen_auto_requested && state.pack_data_valid &&
+        state.throttle_signal_valid && (float)state.throttle_pct == 0.0f;
+    // Installed motor polarity confirmed from the 2026-09-05 and 2026-09-21
+    // vehicle logs: forward rotation is left +RPM and right -RPM.  Reuse the
+    // dedicated regen threshold so zero-speed noise cannot enable regen.
+    command_snapshot.forward_rotation = regen_forward_rotation_ok(
+        state.controller_fb1_L.motor_speed_rpm,
+        state.controller_fb1_R.motor_speed_rpm,
+        state.controller_feedback_fresh_L && state.controller_feedback_fresh_R,
+        realcar_cal::bringup::REGEN_MIN_FORWARD_RPM);
+    can_bus::publish_motor_command(command_snapshot);
+
+    // Record every 10ms control verdict as well as the latest 50ms TX verdict.
+    // Thus one short invalid ADC sample is not lost by the slow CAN logger.
+    uint16_t observed = command_snapshot.block_reasons;
+    if (!command_snapshot.safety_allow) observed |= BLOCK_SAFETY;
+    if (!command_snapshot.throttle_signal_valid) observed |= BLOCK_THROTTLE;
+    if (!command_snapshot.propulsion_direction_armed) observed |= BLOCK_DIRECTION;
+    observed |= can_bus::motor_tx_diagnostics().requested.block_reasons;
+    if (observed && !state.diagnostic_block_reasons) {
+        state.first_block_reasons = observed;
+        state.first_block_ms = millis();
+        if (state.block_event_count != UINT16_MAX) ++state.block_event_count;
+    }
+    state.diagnostic_block_reasons = observed;
+
     can_bus::note_command();
 }
 static void can_rx_update()  { can_bus::poll_rx(); }
@@ -354,6 +415,7 @@ static void clamp_stats_can_tx_update() { can_bus::send_clamp_stats(); }
 static void cluster_status_can_tx_update() { can_bus::send_cluster_status(); }
 static void sensor_telemetry_can_tx_update() { can_bus::send_sensor_telemetry(); }
 static void safety_task()    { safety_update(); }
+static void drive_diagnostics_update() { can_bus::send_drive_diagnostics(); }
 
 // --- task table: add a new module here (one line) ---
 Task g_tasks[] = {
@@ -369,11 +431,15 @@ Task g_tasks[] = {
     { longitudinal_update,     10, 0 },
     { torque_vectoring_update, 10, 0 },
     { time_sync_pulse_update,  10, 0 },
-    { drive_supervisor_update, 10, 0 },
+    // safety BEFORE drive_supervisor: the command snapshot is published at the
+    // end of drive_supervisor_update and must carry this tick's safety verdict,
+    // not the previous tick's. Do not reorder these two.
     { safety_task,             10, 0 },
+    { drive_supervisor_update, 10, 0 },
     { vehicle_speed_can_tx_update, 50, 0 }, // 20 Hz VCU -> Cluster/TMA-1 single speed telemetry
     { log_can_tx_update,       10, 0 },   // 100 Hz VCU -> Monolith 고속 로깅 (Prio 7)
     { clamp_stats_can_tx_update, 1000, 0 }, // 1 Hz Amp 포화 통계 (Prio 7)
+    { drive_diagnostics_update, 100, 0 }, // 3 nonblocking frames, 30 frames/s
     { cluster_status_can_tx_update, 50, 0 }, // 20 Hz gear/brake/HV display status
     { sensor_telemetry_can_tx_update, car_check::PERIOD_MS, 0 }, // steering/IMU/WSS/control diagnostics
     { debug_update,            50, 0 },   // 20 Hz compact test log; 1 Hz idle summary
