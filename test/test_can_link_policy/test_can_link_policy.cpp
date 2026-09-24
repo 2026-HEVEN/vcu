@@ -77,6 +77,13 @@ static int32_t after(int32_t p, int32_t shift) {
     int32_t r = (p - shift) % 50; return r < 0 ? r + 50 : r;
 }
 
+void test_two_sides_are_centred(void) {
+    // 2026-09-24 run: L drifted to 11, R 16. Both should straddle CENTER.
+    CmdPhaseInput in; in.known_L = true; in.phase_L_ms = 11; in.known_R = true; in.phase_R_ms = 16;
+    const int32_t d = cmd_phase_shift_ms(in);
+    const int32_t l = after(11, d), r = after(16, d);
+    TEST_ASSERT_TRUE(l >= 26 && l <= 30 && r >= 30 && r <= 34);
+}
 void test_no_shift_when_safe_or_unknown(void) {
     CmdPhaseInput in; in.known_L = true; in.phase_L_ms = 20; in.known_R = true; in.phase_R_ms = 30;
     TEST_ASSERT_EQUAL_INT32(0, cmd_phase_shift_ms(in));
@@ -86,8 +93,8 @@ void test_no_shift_when_safe_or_unknown(void) {
 void test_single_side_in_window_moves_to_target(void) {
     CmdPhaseInput in; in.known_L = true; in.phase_L_ms = 2;
     const int32_t d = cmd_phase_shift_ms(in);
-    TEST_ASSERT_TRUE(in_band(after(2, d), rt::CMD_PHASE_TARGET_MIN_MS, rt::CMD_PHASE_TARGET_MAX_MS));
-    TEST_ASSERT_EQUAL_INT32(12, d);   // smallest move: 2 -> 40 by sending 12 ms later
+    TEST_ASSERT_EQUAL_INT32(rt::CMD_PHASE_CENTER_MS, after(2, d));
+    TEST_ASSERT_EQUAL_INT32(22, d);   // 2 -> 30 by sending 22 ms later
 }
 void test_every_phase_pair_has_a_safe_shift(void) {
     for (int l = 0; l < 50; ++l) {
@@ -103,8 +110,8 @@ void test_every_phase_pair_has_a_safe_shift(void) {
     }
 }
 void test_measured_window_is_never_left_alone(void) {
-    // Real window 1-2.5 ms plus up to 5 ms RX-poll delay -> measured 1-7.5 ms.
-    for (int p = 0; p <= 8; ++p) {
+    // Real windows ~1-3.5 ms and ~8 ms plus up to 5 ms RX-poll delay -> measured 0-13 ms.
+    for (int p = 0; p <= 13; ++p) {
         CmdPhaseInput in; in.known_R = true; in.phase_R_ms = p;
         TEST_ASSERT_TRUE(cmd_phase_shift_ms(in) != 0);
     }
@@ -139,6 +146,7 @@ int main(int, char **) {
     RUN_TEST(test_phase_of_basic_and_negative);
     RUN_TEST(test_phase_of_survives_millis_rollover);
     RUN_TEST(test_no_shift_when_safe_or_unknown);
+    RUN_TEST(test_two_sides_are_centred);
     RUN_TEST(test_single_side_in_window_moves_to_target);
     RUN_TEST(test_every_phase_pair_has_a_safe_shift);
     RUN_TEST(test_measured_window_is_never_left_alone);

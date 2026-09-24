@@ -39,9 +39,9 @@ struct CmdPhaseInput {
     int32_t phase_R_ms = 0;
 };
 
-// Smallest shift (ms) to apply to the next send so every known phase sits
-// inside the target band. Positive = send later. 0 when no shift is needed or
-// nothing is known.
+// Shift (ms) to apply to the next send once a known phase has left the safe
+// band: every known phase lands in the safe band, as close to CENTER as
+// possible. Positive = send later. 0 when no shift is needed or nothing is known.
 int32_t cmd_phase_shift_ms(const CmdPhaseInput &in);
 
 // Debounced wrapper: a phase must be outside the safe band for several

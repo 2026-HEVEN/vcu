@@ -27,14 +27,38 @@ bool all_in(const CmdPhaseInput &in, int32_t shift, int32_t lo, int32_t hi) {
     return true;
 }
 
-int32_t smallest_shift(const CmdPhaseInput &in, int32_t lo, int32_t hi, bool &found) {
-    const int32_t half = (int32_t)rt::MOTOR_COMMAND_PERIOD_MS / 2;
-    for (int32_t d = 0; d <= half; ++d) {
-        if (all_in(in, d, lo, hi))  { found = true; return d; }
-        if (all_in(in, -d, lo, hi)) { found = true; return -d; }
+// Worst distance from CENTER over the known phases after `shift`.
+int32_t off_center(const CmdPhaseInput &in, int32_t shift) {
+    const int32_t period = (int32_t)rt::MOTOR_COMMAND_PERIOD_MS;
+    int32_t worst = 0;
+    if (in.known_L) {
+        const int32_t e = wrap(in.phase_L_ms - shift, period) - rt::CMD_PHASE_CENTER_MS;
+        worst = e < 0 ? -e : e;
     }
+    if (in.known_R) {
+        const int32_t e = wrap(in.phase_R_ms - shift, period) - rt::CMD_PHASE_CENTER_MS;
+        const int32_t a = e < 0 ? -e : e;
+        if (a > worst) worst = a;
+    }
+    return worst;
+}
+
+// Among shifts that put every known phase in the safe band, the one that
+// keeps the phases closest to CENTER; ties go to the smaller move.
+int32_t centered_shift(const CmdPhaseInput &in, bool &found) {
+    const int32_t half = (int32_t)rt::MOTOR_COMMAND_PERIOD_MS / 2;
     found = false;
-    return 0;
+    int32_t best = 0, best_cost = 0;
+    for (int32_t mag = 0; mag <= half; ++mag) {
+        for (int32_t sign = 1; sign >= -1; sign -= 2) {
+            const int32_t d = sign * mag;
+            if (!all_in(in, d, rt::CMD_PHASE_SAFE_MIN_MS, rt::CMD_PHASE_SAFE_MAX_MS)) continue;
+            const int32_t cost = off_center(in, d);
+            if (!found || cost < best_cost) { found = true; best = d; best_cost = cost; }
+            if (mag == 0) break;
+        }
+    }
+    return best;
 }
 }  // namespace
 
@@ -72,11 +96,7 @@ int32_t cmd_phase_shift_ms(const CmdPhaseInput &in) {
     if (!in.known_L && !in.known_R) return 0;
     if (all_in(in, 0, rt::CMD_PHASE_SAFE_MIN_MS, rt::CMD_PHASE_SAFE_MAX_MS)) return 0;
     bool found = false;
-    int32_t d = smallest_shift(in, rt::CMD_PHASE_TARGET_MIN_MS,
-                               rt::CMD_PHASE_TARGET_MAX_MS, found);
-    if (found) return d;
-    // Phases too far apart for the target band: the safe band always fits.
-    d = smallest_shift(in, rt::CMD_PHASE_SAFE_MIN_MS, rt::CMD_PHASE_SAFE_MAX_MS, found);
+    const int32_t d = centered_shift(in, found);
     return found ? d : 0;
 }
 

@@ -43,18 +43,19 @@ static_assert(CONTROLLER_REHANDSHAKE_TIMEOUT_MS < CONTROLLER_FB1_MAX_AGE_MS,
               "both-silent limit must be the tighter one");
 
 // Command phase guard (docs/CAN_PHASE_GUARD.md). EZkontrol drops feedback
-// when a command arrives ~1-2.5 ms before its FB1 slot. Phases here are
-// measured through the 5 ms RX poll, so they read 0-5 ms late: a measured
-// phase inside [SAFE_MIN, SAFE_MAX] is at least ~8 ms from the window.
-constexpr int CMD_PHASE_SAFE_MIN_MS = 12;
+// when a command arrives ~1-2.5 ms before its FB1 slot (strong) and, less,
+// around 8 ms. Phases here are measured through the 5 ms RX poll, so they
+// read 0-5 ms late: a measured 15 ms is a real 10-15 ms, clear of both.
+// When a phase leaves the safe band the pair is moved so the phases sit as
+// close to CENTER as possible, which also maximises time until the next move.
+constexpr int CMD_PHASE_SAFE_MIN_MS = 15;
 constexpr int CMD_PHASE_SAFE_MAX_MS = 46;
-constexpr int CMD_PHASE_TARGET_MIN_MS = 18;
-constexpr int CMD_PHASE_TARGET_MAX_MS = 40;
+constexpr int CMD_PHASE_CENTER_MS = 30;
 constexpr unsigned CMD_PHASE_CONFIRM_TICKS = 3U;
-static_assert(CMD_PHASE_SAFE_MIN_MS <= CMD_PHASE_TARGET_MIN_MS &&
-              CMD_PHASE_TARGET_MAX_MS <= CMD_PHASE_SAFE_MAX_MS &&
+static_assert(CMD_PHASE_SAFE_MIN_MS < CMD_PHASE_CENTER_MS &&
+              CMD_PHASE_CENTER_MS < CMD_PHASE_SAFE_MAX_MS &&
               CMD_PHASE_SAFE_MAX_MS < (int)MOTOR_COMMAND_PERIOD_MS,
-              "phase bands must nest inside one command period");
+              "phase band must nest inside one command period");
 // Any two phases are at most period/2 apart on the circle, so the safe band
 // must be at least that wide for a common shift to always exist.
 static_assert(CMD_PHASE_SAFE_MAX_MS - CMD_PHASE_SAFE_MIN_MS >=
