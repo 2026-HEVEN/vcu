@@ -388,6 +388,7 @@ namespace {
             // every few minutes. The pair stays one snapshot sent back to
             // back; only its position inside the period moves, rarely, so
             // that neither controller's next FB1 falls in that window.
+            TickType_t wait = period;
             {
                 const TickType_t now_tick = xTaskGetTickCount();
                 const uint32_t now_ms = millis();
@@ -406,15 +407,22 @@ namespace {
                 ph.phase_R_ms = cmd_phase_of(fb1_R, send_ms, cmd_period_ms);
                 const int32_t shift_ms = cmd_phase_step(g_phase_state, ph);
                 if (shift_ms != 0) {
-                    // Unsigned add of a negative value wraps to the intended tick.
-                    next += (TickType_t)(shift_ms / (int32_t)portTICK_PERIOD_MS);
+                    // Apply the shift to this one wait only. Never move `next`
+                    // itself ahead of the tick count: vTaskDelayUntil() reads a
+                    // previous wake time in the future as a tick overflow,
+                    // returns at once and advances it again, so the task spins
+                    // without ever blocking (bench 2026-09-24: first +7 ms shift
+                    // flooded the bus and starved loop()). |shift| <= period/2,
+                    // so the wait stays in [period/2, 3*period/2].
+                    wait = (TickType_t)((int32_t)period +
+                                        shift_ms / (int32_t)portTICK_PERIOD_MS);
                     Serial.printf("[CAN] command phase shift %+ld ms (L=%ld%s R=%ld%s)\n",
                                   (long)shift_ms,
                                   (long)ph.phase_L_ms, ph.known_L ? "" : "?",
                                   (long)ph.phase_R_ms, ph.known_R ? "" : "?");
                 }
             }
-            vTaskDelayUntil(&next, period);   // configured cadence, phase-guarded
+            vTaskDelayUntil(&next, wait);   // configured cadence, phase-guarded
         }
     }
 }
