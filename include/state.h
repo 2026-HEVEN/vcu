@@ -23,6 +23,7 @@ struct VehicleState {
     Percent   throttle_pct;       // 0..100 (clamped both ways)
     Pct0to100 brake_pct;
     bool      brake_active = false;
+    uint16_t  steering_raw_counts = 0; // 12-bit ADC sample shifted to SteerRaw's 14-bit scale
     Unit      steering_angle;     // -1..+1
     float     yaw_rate = 0.0f;    // deg/s
     float     accel_x  = 0.0f;

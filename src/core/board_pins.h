@@ -18,6 +18,6 @@ constexpr int WSS_FR = 17;
 constexpr int WSS_RL = 16;
 constexpr int WSS_RR = 4;
 
-constexpr int IMU_RX = 21;
-constexpr int IMU_TX = 19;
+constexpr int IMU_RX = 19;
+constexpr int IMU_TX = 21;
 } // namespace board_pins

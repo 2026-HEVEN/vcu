@@ -29,7 +29,7 @@ constexpr int GEAR_DIRECTION_CHANGE_MAX_RPM = 50;
 constexpr int REGEN_MIN_FORWARD_RPM = 50;
 // SUM of both motor phase-current magnitudes. TV OFF => 10 A / 15 A each.
 // Retained test strength; not increased without pack charge-current validation.
-constexpr float REGEN_TOTAL_CURRENT_NORMAL_A = 200.0f;
+constexpr float REGEN_TOTAL_CURRENT_NORMAL_A = 300.0f;
 constexpr float REGEN_TOTAL_CURRENT_EFF_A = 30.0f;
 // Initial values assume the PCB scales 0/2.5/5 V to approximately
 // 0/half/full ESP32 ADC range. They are placeholders until measured.
@@ -99,12 +99,12 @@ constexpr float TV_FORCE_RADIUS_M = 0.2387f;
 
 // CarMaker BOM197/설계 형상에서 가져온 실차 시험 시작값. 줄자·코너웨이트
 // 및 CG 식별 결과가 나오면 이 파일만 수정한다.
-constexpr float VEHICLE_MASS_WITH_DRIVER_KG = 197.345f;
+constexpr float VEHICLE_MASS_WITH_DRIVER_KG = 247.0f;  // 2026-09-17: 247.0 kg, driver + 1/2 pack + 1/2 motor
 constexpr float WHEELBASE_M = 1.530f;
 constexpr float FRONT_TRACK_M = 1.140f;
 constexpr float REAR_TRACK_M = 1.090f;
 constexpr float CG_HEIGHT_M = 0.2800873f;
-constexpr float REAR_STATIC_WEIGHT_FRACTION = 0.6180974f;
+constexpr float REAR_STATIC_WEIGHT_FRACTION = 125.0f / 247.0f;  // 2026-09-17: 125.0 kg rear / 247.0 kg total
 constexpr float REAR_LLTD = 0.50f;
 
 // 차속 추정의 샘플 간 물리 타당성 검사. 실차 로그의 최대 종가속도와
@@ -123,7 +123,7 @@ constexpr float MAX_ROAD_WHEEL_STEER_RAD = 0.52f;
 // 최신 하네스: D25의 12-bit ADC 슬라이드 포텐셔미터. GPIO-fixed의 기존
 // SteerRaw 계약에 맞춰 드라이버가 14-bit로 스케일한다. 직진/좌최대/우최대
 // raw를 측정한 뒤 center와 counts_per_unit을 교체한다.
-constexpr unsigned STEERING_CENTER_COUNTS = 8192U;
+constexpr unsigned STEERING_CENTER_COUNTS = 6800U;  // straight ahead: raw12 1700 << 2
 constexpr float STEERING_COUNTS_PER_UNIT = 4096.0f;
 constexpr bool STEERING_INVERT = false;
 }  // namespace provisional

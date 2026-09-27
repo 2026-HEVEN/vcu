@@ -140,6 +140,7 @@ static void brake_update() {
 }
 static void steering_update() {
     const SteerRaw raw = steering_encoder_driver::read();
+    state.steering_raw_counts = raw.counts;
     state.steering_angle = steering_compute(raw, STEER_CAL);
     state.steering_telemetry.unit = (float)state.steering_angle;
     state.steering_telemetry.valid = raw.counts <= 16380U &&

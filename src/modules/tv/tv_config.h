@@ -45,12 +45,12 @@ struct TVParams {
 
     // --- yaw 제어기 (yaw_control stage) PID ---
     // 0/0/0은 master OFF다. 잭업·직선 검증 전에는 바꾸지 않는다.
-    float kp             = 0.0f;
+    float kp             = 10.0f;
     float ki             = 0.0f;
     float kd             = 0.0f;
     float yaw_deadband_degps = 0.5f;
     float integral_max       = 100.0f; // integral-state hard limit [deg]
-    float yaw_moment_max = 100.0f;   // Mz 출력 상한 [N·m]
+    float yaw_moment_max = 40.0f;   // Mz 출력 상한 [N·m]
 };
 
 // 팀 공용 인스턴스. 위 기본값을 바꾸면 전체 파이프라인에 반영됩니다.

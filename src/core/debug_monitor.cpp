@@ -354,6 +354,11 @@ void debug_update() {
                 state.imu_telemetry.yaw_valid, state.imu_telemetry.accel_valid,
                 state.wheel_telemetry.valid[0], state.wheel_telemetry.valid[1],
                 state.wheel_telemetry.valid[2], state.wheel_telemetry.valid[3]);
+            Serial.printf("STEER raw12=%u counts14=%u unit=%+.3f valid=%d\n",
+                (unsigned)(state.steering_raw_counts >> 2),
+                (unsigned)state.steering_raw_counts,
+                state.steering_telemetry.unit,
+                state.steering_telemetry.valid);
             Serial.printf("DRIVE_DIAG block=%04X first=%04X event=%u at=%lu rawMin=%u invalidRaw=%u invalidN=%u faultAt=%lu origin=%02X rearmReady=%d rearmN=%u logDrop=%lu\n",
                 state.diagnostic_block_reasons, state.first_block_reasons,
                 state.block_event_count, (unsigned long)state.first_block_ms,
