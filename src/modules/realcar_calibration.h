@@ -29,7 +29,7 @@ constexpr int GEAR_DIRECTION_CHANGE_MAX_RPM = 50;
 constexpr int REGEN_MIN_FORWARD_RPM = 50;
 // SUM of both motor phase-current magnitudes. TV OFF => 10 A / 15 A each.
 // Retained test strength; not increased without pack charge-current validation.
-constexpr float REGEN_TOTAL_CURRENT_NORMAL_A = 20.0f;
+constexpr float REGEN_TOTAL_CURRENT_NORMAL_A = 200.0f;
 constexpr float REGEN_TOTAL_CURRENT_EFF_A = 30.0f;
 // Initial values assume the PCB scales 0/2.5/5 V to approximately
 // 0/half/full ESP32 ADC range. They are placeholders until measured.
@@ -43,7 +43,7 @@ constexpr bool REGEN_HARDWARE_VALIDATED = true;
 // Throttle command ceiling, per motor. This is a software test limit, not a
 // competition-rule or battery-current limit. Raise/lower only here after
 // checking controller, motor, battery/BMS and energy-meter data.
-constexpr float DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A = 400.0f;
+constexpr float DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A = 500.0f;
 constexpr float DRIVE_PHASE_CURRENT_EFF_PER_MOTOR_A = 100.0f;
 // Apply the same launch slew limit in Normal and Paddock modes. At the 500 A
 // per-motor ceiling this gives 1000 A/s and reaches full demand in 0.5 s.
