@@ -39,6 +39,16 @@ struct VehicleState {
     uint32_t sensor_telemetry_tx_drops = 0; // best-effort display CAN queue failures
     Rpm       wheel_speed[WHEEL_COUNT];   // FL, FR, RL, RR (개별 휠속)
     uint32_t  wheel_pulse_total[WHEEL_COUNT]{}; // hand-spin sensor check
+    // Serial-only WSS diagnostics. These counters never affect speed or control.
+    struct WssDiagnostics {
+        uint32_t raw_pulses = 0;       // successful PCNT reads, including rejected samples
+        uint32_t counted_pulses = 0;        // pulses preserved in wheel_pulse_total
+        uint32_t speed_skipped_pulses = 0;  // counted, but stale/invalid for speed
+        uint32_t invalid_samples = 0;
+        uint32_t long_gap_samples = 0; // dt_ms > 100
+        uint32_t read_failures = 0;
+        uint32_t max_dt_ms = 0;
+    } wss_diagnostics[WHEEL_COUNT]{};
     float     vehicle_speed_mps  = 0.0f;  // 전륜 기준 추정 차속 (vehicle_speed 모듈)
     bool      vehicle_speed_valid = false;// false = 전륜 신호 불신 → TV 비활성
     float     pack_soc = 0.0f;    // 0..1, diagnostic BLE mirror only

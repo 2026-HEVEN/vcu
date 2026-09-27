@@ -128,6 +128,29 @@ void reset_all_clamp_stats() {
     Rpm::reset_clamp_stats();
 }
 
+void print_wss_diagnostics() {
+    Serial.println("[WSS_DIAG] raw=PCNT edges, counted=pulses preserved, speedSkip=counted but excluded from speed");
+    static const char *names[WHEEL_COUNT] = {"FL", "FR", "RL", "RR"};
+    for (int ch = 0; ch < WHEEL_COUNT; ++ch) {
+        const auto &d = state.wss_diagnostics[ch];
+        Serial.printf("[WSS_DIAG] %s raw=%lu counted=%lu speedSkip=%lu invalid=%lu gap100=%lu readFail=%lu maxDt=%lums\n",
+            names[ch], (unsigned long)d.raw_pulses,
+            (unsigned long)d.counted_pulses,
+            (unsigned long)d.speed_skipped_pulses,
+            (unsigned long)d.invalid_samples,
+            (unsigned long)d.long_gap_samples,
+            (unsigned long)d.read_failures,
+            (unsigned long)d.max_dt_ms);
+    }
+}
+
+void reset_wss_diagnostics() {
+    for (int ch = 0; ch < WHEEL_COUNT; ++ch) {
+        state.wss_diagnostics[ch] = VehicleState::WssDiagnostics{};
+    }
+    Serial.println("[WSS_DIAG] counters reset; PCNT and control state unchanged");
+}
+
 void accept_serial_command() {
     g_serial_line[g_serial_line_length] = '\0';
     float test_current_a = 0.0f;
@@ -151,6 +174,10 @@ void accept_serial_command() {
     } else if (std::strcmp(g_serial_line, "CLAMP_RESET") == 0) {
         reset_all_clamp_stats();
         Serial.println("[CLAMP] stats cleared");
+    } else if (std::strcmp(g_serial_line, "WSS_DIAG") == 0) {
+        print_wss_diagnostics();
+    } else if (std::strcmp(g_serial_line, "WSS_DIAG_RESET") == 0) {
+        reset_wss_diagnostics();
     } else if (std::sscanf(g_serial_line, "MOTOR_L %f %u %c",
                            &test_current_a, &test_duration_ms, &trailing) == 2) {
         request_motor_test(true, false, test_current_a, test_duration_ms);
@@ -163,7 +190,8 @@ void accept_serial_command() {
     } else if (g_serial_line_length != 0U) {
         Serial.println(
             "[CMD] use MOTOR_L|MOTOR_R|MOTOR_BOTH <A> <ms> or "
-            "SYNC_ARM|SYNC_RUN|SYNC_CANCEL or CLAMP|CLAMP_RESET or FAULT_REARM");
+            "SYNC_ARM|SYNC_RUN|SYNC_CANCEL or CLAMP|CLAMP_RESET or "
+            "WSS_DIAG|WSS_DIAG_RESET or FAULT_REARM");
     }
     g_serial_line_length = 0U;
 }
@@ -284,7 +312,7 @@ void debug_update() {
                 (unsigned long)(tx.left.queued_valid ? tx_now-tx.left.last_queued_ms : UINT32_MAX),
                 (unsigned long)(tx.right.queued_valid ? tx_now-tx.right.last_queued_ms : UINT32_MAX));
             Serial.printf(
-                "STAT arm=%d dm=%d hs=%d/%d fb=%d/%d fault=%d gear=%u/%u raw=%u thr=%d/%d/%.1f imu=%d sync=%d/%d test=%d/%u up_s=%lu hsDrop=%lu/%lu regenReq=%d regenDem=%d\n"
+                "STAT arm=%d dm=%d hs=%d/%d fb=%d/%d fault=%d gear=%u/%u raw=%u thr=%d/%d/%.1f brk=%d imu=%d sync=%d/%d test=%d/%u up_s=%lu hsDrop=%lu/%lu regenReq=%d regenDem=%d\n"
                 "MCU V=%.1f/%.1f Ibus=%+.1f/%+.1f Iph=%+.1f/%+.1f rpm=%d/%d tempC=%d/%d,%d/%d err=%02X%02X%02X/%02X%02X%02X\n"
                 "CAN state=%u age1=%u/%u age2=%u/%u q=%u peak=%u rxMiss=%u busErr=%u arbLost=%u txFail=%u | WSS=%.0f/%.0f/%.0f/%.0f pulse=%u/%u/%u/%u\n"
                 "IMU valid=%d yaw=%+.2f ax=%+.3f ay=%+.3f rxBytes=%u frames=%u csErr=%u\n",
@@ -296,6 +324,7 @@ void debug_update() {
                 (unsigned)state.gear_sensed, (unsigned)state.gear_raw_adc,
                 state.throttle_raw_adc, state.throttle_signal_valid,
                 (float)state.throttle_pct,
+                state.brake_active,
                 state.imu_valid, state.time_sync_armed, state.time_sync_active,
                 state.component_test_active, test_remaining_ms,
                 (unsigned long)(now / 1000U),

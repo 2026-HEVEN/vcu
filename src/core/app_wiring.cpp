@@ -162,11 +162,27 @@ static void imu_update() {
 static void wheel_speed_update() {
     for (int ch = 0; ch < WHEEL_COUNT; ++ch) {
         const WssReading reading = wss_driver::read(ch);
-        const bool valid = car_check_wheel_sample_valid(wss_driver::last_read_ok(ch),
+        const bool read_ok = wss_driver::last_read_ok(ch);
+        const bool valid = car_check_wheel_sample_valid(read_ok,
             reading.pulse_delta, reading.dt_ms, WSS_CAL[ch].pulses_per_rev);
+        auto &diag = state.wss_diagnostics[ch];
+        if (read_ok) {
+            diag.raw_pulses += reading.pulse_delta;
+            // PCNT edges are real counts even if this scheduler interval is too
+            // long for a trustworthy instantaneous speed estimate.
+            diag.counted_pulses += reading.pulse_delta;
+            state.wheel_pulse_total[ch] += reading.pulse_delta;
+            if (reading.dt_ms > diag.max_dt_ms) diag.max_dt_ms = reading.dt_ms;
+            if (reading.dt_ms > 100U) ++diag.long_gap_samples;
+        } else {
+            ++diag.read_failures;
+        }
+        if (!valid) {
+            ++diag.invalid_samples;
+            if (read_ok) diag.speed_skipped_pulses += reading.pulse_delta;
+        }
         state.wheel_telemetry.valid[ch] = valid;
         if (valid) {
-            state.wheel_pulse_total[ch] += reading.pulse_delta;
             state.wheel_speed[ch] = wheel_speed_compute_filtered(
                 reading, WSS_CAL[ch], wheel_speed_filter_state[ch]);
             const float rpm = (float)wheel_speed_compute_filtered(
@@ -186,7 +202,11 @@ static void vehicle_speed_update() {
     in.dt       = WHEEL_SPEED_DT_S;
     VehicleSpeedOutput o = vehicle_speed_compute(in, VSPEED_CAL, vspeed_state);
     state.vehicle_speed_mps   = o.speed_mps;
-    state.vehicle_speed_valid = o.valid;
+    // A stale pair of front-wheel samples must not authorize TV, even if the
+    // speed estimator can still calculate from its previously held RPM values.
+    state.vehicle_speed_valid = o.valid &&
+        (state.wheel_telemetry.valid[WHEEL_FL] ||
+         state.wheel_telemetry.valid[WHEEL_FR]);
 }
 static void gear_update_task() {
     // Read the raw ladder on every build so the wiring can be checked even

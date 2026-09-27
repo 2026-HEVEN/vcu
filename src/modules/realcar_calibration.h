@@ -20,7 +20,7 @@ constexpr bool BRAKE_SENSOR_INSTALLED = true;
 // PCB V3 connects the gear selector to GPIO32. Stable Drive
 // and Reverse classifications can grant propulsion after the stopped,
 // released-throttle direction interlock; Neutral/invalid readings halt it.
-constexpr bool GEAR_SELECTOR_INSTALLED = false;
+constexpr bool GEAR_SELECTOR_INSTALLED = true;
 constexpr unsigned GEAR_STABLE_SAMPLES = 10U;  // 100 ms at 100 Hz
 constexpr unsigned GEAR_DIRECTION_ARM_SAMPLES = 30U;  // 300 ms at 100 Hz
 constexpr int GEAR_DIRECTION_CHANGE_MAX_RPM = 50;
@@ -49,7 +49,7 @@ constexpr float DRIVE_PHASE_CURRENT_EFF_PER_MOTOR_A = 100.0f;
 // per-motor ceiling this gives 1000 A/s and reaches full demand in 0.5 s.
 // Only rising propulsion magnitude is limited; release and protection cuts
 // remain immediate.
-constexpr float DRIVE_CURRENT_RISE_TIME_S = 0.5f;
+constexpr float DRIVE_CURRENT_RISE_TIME_S = 0.0f;
 // Keep the model-based normal-drive limiter disabled until the official
 // Energy Meter path has been driven, time-aligned, and validated. The 8 kW
 // value is retained only as the next test calibration; false means no normal
@@ -97,14 +97,15 @@ constexpr float WHEEL_SPEED_ROLLING_RADIUS_M = 0.2387f;
 // 유지하여 필요할 때 차속용 반경과 독립 보정할 수 있게 한다.
 constexpr float TV_FORCE_RADIUS_M = 0.2387f;
 
-// CarMaker BOM197/설계 형상에서 가져온 실차 시험 시작값. 줄자·코너웨이트
-// 및 CG 식별 결과가 나오면 이 파일만 수정한다.
-constexpr float VEHICLE_MASS_WITH_DRIVER_KG = 247.0f;  // 2026-09-17: 247.0 kg, driver + 1/2 pack + 1/2 motor
+// 효건 탑승 평지 코너웨이트(2026-09-27): FL 68.1, FR 61.0,
+// RL 59.7, RR 68.0 kg. CG 높이는 앞축 14도 들기 시험의 잠정 추정치다.
+// 정하중 타이어 반경 미측정 및 경사 시험의 총중량 불일치 때문에 재측정 전 확정값이 아니다.
+constexpr float VEHICLE_MASS_WITH_DRIVER_KG = 256.8f;
 constexpr float WHEELBASE_M = 1.530f;
 constexpr float FRONT_TRACK_M = 1.140f;
 constexpr float REAR_TRACK_M = 1.090f;
-constexpr float CG_HEIGHT_M = 0.2800873f;
-constexpr float REAR_STATIC_WEIGHT_FRACTION = 125.0f / 247.0f;  // 2026-09-17: 125.0 kg rear / 247.0 kg total
+constexpr float CG_HEIGHT_M = 0.410f;  // provisional ground-to-CG height, not IMU mounting height
+constexpr float REAR_STATIC_WEIGHT_FRACTION = 127.7f / 256.8f;
 constexpr float REAR_LLTD = 0.50f;
 
 // 차속 추정의 샘플 간 물리 타당성 검사. 실차 로그의 최대 종가속도와
