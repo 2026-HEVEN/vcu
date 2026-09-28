@@ -111,7 +111,7 @@ constexpr float MAX_ROAD_WHEEL_STEER_RAD = 0.52f;
 // raw를 측정한 뒤 center와 counts_per_unit을 교체한다.
 constexpr unsigned STEERING_CENTER_COUNTS = 6800U;  // straight ahead: raw12 1700 << 2
 constexpr float STEERING_COUNTS_PER_UNIT = 4096.0f;
-constexpr bool STEERING_INVERT = false;
+constexpr bool STEERING_INVERT = true;
 }  // namespace provisional
 
 }  // namespace realcar_cal
