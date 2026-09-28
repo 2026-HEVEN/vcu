@@ -73,7 +73,6 @@ namespace {
     TVYawState       tv_yaw_state{};       // yaw 제어기 이력 (전역상태 아님, 여기서만 보유)
     DriveMode        drive_mode = DriveMode::Normal;
     constexpr float  TV_DT_S = fixed_config::vehicle::CONTROL_PERIOD_S;
-    constexpr float  WHEEL_SPEED_DT_S = fixed_config::vehicle::CONTROL_PERIOD_S;
     const GearCalib GEAR_CAL {
         (uint16_t)realcar_cal::bringup::GEAR_REVERSE_ADC,
         (uint16_t)realcar_cal::bringup::GEAR_DRIVE_ADC,
@@ -198,16 +197,14 @@ static void wheel_speed_update() {
 static void vehicle_speed_update() {
     VehicleSpeedInput in{};
     for (int ch = 0; ch < WHEEL_COUNT; ++ch) {
-        in.wheel_rpm[ch] = state.wheel_speed[ch];
-        in.wheel_sample_valid[ch] = state.wheel_telemetry.valid[ch];
+        in.wheel_rpm[ch]   = state.wheel_speed[ch];
+        // A stale front-wheel sample keeps its last RPM in state.wheel_speed, so
+        // the estimator must be told which samples are fresh this tick.
+        in.wheel_valid[ch] = state.wheel_telemetry.valid[ch];
     }
     in.yaw_rate = state.yaw_rate;
-    in.dt       = WHEEL_SPEED_DT_S;
     VehicleSpeedOutput o = vehicle_speed_compute(in, VSPEED_CAL, vspeed_state);
     state.vehicle_speed_mps   = o.speed_mps;
-    // A short held front estimate remains usable through one missed sample;
-    // vehicle_speed_compute expires it after 100 ms. Stale wheel RPM alone
-    // cannot keep this valid because sample validity is passed in above.
     state.vehicle_speed_valid = o.valid;
 }
 static void gear_update_task() {

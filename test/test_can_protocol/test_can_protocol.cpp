@@ -136,6 +136,7 @@ void test_decode_cluster_command_regen_off(void) {
 
 void test_vehicle_speed_kph_to_raw_clamps_and_rounds(void) {
     TEST_ASSERT_EQUAL_UINT16(0, vehicle_speed_kph_to_raw(-1.0f));
+    TEST_ASSERT_EQUAL_UINT16(0, vehicle_speed_kph_to_raw(NAN));
     TEST_ASSERT_EQUAL_UINT16(563, vehicle_speed_kph_to_raw(56.3f));
     TEST_ASSERT_EQUAL_UINT16(564, vehicle_speed_kph_to_raw(56.35f));
     TEST_ASSERT_EQUAL_UINT16(65535, vehicle_speed_kph_to_raw(7000.0f));
@@ -149,8 +150,12 @@ void test_encode_vcu_vehicle_speed(void) {
     TEST_ASSERT_EQUAL_UINT8(1, out[2]);
     for (int i = 3; i < 8; ++i) TEST_ASSERT_EQUAL_UINT8(0, out[i]);
 
+    // invalid여도 값은 채우고 플래그만 0이다.
     encode_vcu_vehicle_speed(56.3f, false, out);
-    for (int i = 0; i < 8; ++i) TEST_ASSERT_EQUAL_UINT8(0, out[i]);
+    TEST_ASSERT_EQUAL_UINT8(0x33, out[0]);
+    TEST_ASSERT_EQUAL_UINT8(0x02, out[1]);
+    TEST_ASSERT_EQUAL_UINT8(0, out[2]);
+    for (int i = 3; i < 8; ++i) TEST_ASSERT_EQUAL_UINT8(0, out[i]);
 }
 
 // ── 고속 로깅 프레임 (Monolith 데이터로거용) ──────────────────────────────
