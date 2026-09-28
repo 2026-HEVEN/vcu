@@ -225,7 +225,7 @@ Paddock active는 Cluster의 스위치 요청값이 아니라 VCU가 실제로 �
 | 바이트 | 항목 | 분해능/의미 |
 |--------|------|-------------|
 | 0~1 | Vehicle speed | uint16 little-endian, km/h x 10 |
-| 2 | Valid flag | 1=valid, 0=invalid |
+| 2 | Valid flag | 1=valid, 0=invalid (전륜 두 바퀴 모두 무효. 속도값은 직전 추정치로 채워 보낸다) |
 | 3~7 | Reserved | 0 |
 
 구현 위치:

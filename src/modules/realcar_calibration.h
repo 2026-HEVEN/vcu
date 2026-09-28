@@ -108,10 +108,6 @@ constexpr float CG_HEIGHT_M = 0.410f;  // provisional ground-to-CG height, not I
 constexpr float REAR_STATIC_WEIGHT_FRACTION = 127.7f / 256.8f;
 constexpr float REAR_LLTD = 0.50f;
 
-// 차속 추정의 샘플 간 물리 타당성 검사. 실차 로그의 최대 종가속도와
-// WSS 양자화가 확보된 뒤 조정한다.
-constexpr float VEHICLE_SPEED_MAX_ACCEL_MPS2 = 15.0f;
-
 // 24 PPR를 10 ms마다 직접 RPM으로 바꾸면 한 펄스 차이가 약 250 rpm이다.
 // 아래 1차 필터로 펄스 양자화가 차속/슬립 판정에 그대로 들어가는 것을 막는다.
 // 실차에서는 응답 지연과 속도 노이즈를 함께 보고 조정한다.

@@ -49,7 +49,7 @@ ClusterCommandRequest decode_cluster_command(const uint8_t data[8]) {
 }
 
 uint16_t vehicle_speed_kph_to_raw(float kph) {
-    if (kph < 0.0f) return 0;
+    if (!(kph > 0.0f)) return 0;   // 음수와 NaN
     const float raw = kph * 10.0f;
     if (raw > 65535.0f) return 65535;
     return (uint16_t)(raw + 0.5f);
@@ -124,7 +124,8 @@ void encode_vcu_cluster_status(uint8_t gear, bool brake, bool hv_active,
 
 void encode_vcu_vehicle_speed(float speed_kph, bool valid, uint8_t out[8]) {
     for (int i = 0; i < 8; ++i) out[i] = 0;
-    put_u16le(out + 0, valid ? vehicle_speed_kph_to_raw(speed_kph) : 0);
+    // invalid여도 값은 채운다. 받는 쪽이 플래그를 보고 표시·제어 사용 여부를 정한다.
+    put_u16le(out + 0, vehicle_speed_kph_to_raw(speed_kph));
     out[2] = valid ? 1 : 0;
 }
 

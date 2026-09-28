@@ -16,24 +16,22 @@ struct VehicleSpeedCalib {
     // WSS 자석 장착반경이 아니라 하중 상태의 타이어 유효 구름반경이다.
     float tire_radius_m  = realcar_cal::provisional::WHEEL_SPEED_ROLLING_RADIUS_M;
     float track_m        = realcar_cal::provisional::FRONT_TRACK_M;
-    float max_accel_mps2 = realcar_cal::provisional::VEHICLE_SPEED_MAX_ACCEL_MPS2;
 };
 
 struct VehicleSpeedInput {
-    Rpm   wheel_rpm[WHEEL_COUNT];   // FL, FR, RL, RR
+    Rpm   wheel_rpm[WHEEL_COUNT];   // FL, FR, RL, RR (후륜은 읽지 않는다)
+    bool  wheel_valid[WHEEL_COUNT]; // 이번 tick 샘플의 드라이버 판정 (read 실패, dt, 펄스 상한)
     float yaw_rate;                 // deg/s (전륜 한쪽만 살아있을 때 선회 보정에 사용)
-    float dt;                       // s
 };
 
-// 이력(직전 추정 차속)은 전역변수가 아니라 이 struct에 담는다 (ImuFilterState와 동일 패턴).
+// 전륜이 둘 다 무효일 때 표시값을 유지하려고 직전 추정 차속만 담는다.
 struct VehicleSpeedState {
     float speed_mps  = 0.0f;
-    bool  primed     = false;       // 첫 샘플 여부 (첫 tick은 급변 검사를 건너뛴다)
 };
 
 struct VehicleSpeedOutput {
-    float speed_mps;                // 추정 차속 [m/s]
-    bool  valid;                    // false = 전륜 신호를 못 믿음 → TV는 비활성화할 것
+    float speed_mps;                // 추정 차속 [m/s]. invalid여도 직전 값을 유지해 표시에 쓴다
+    bool  valid;                    // false = 전륜 둘 다 무효 → TV는 비활성화할 것
 };
 
 // 전륜(비구동륜) 기준으로 차속을 추정한다. 구동륜은 토크로 슬립하므로 쓰지 않는다.
