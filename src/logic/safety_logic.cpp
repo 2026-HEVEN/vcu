@@ -111,5 +111,20 @@ MotorFrameCommand motor_command_resolve(const MotorCommandSnapshot &snapshot,
     out.run_R = right.running;
     out.target_rpm_L = left.target_rpm;
     out.target_rpm_R = right.target_rpm;
+    // Only change propulsion RPM, never the verified 0-RPM regen command.
+    const int limit = snapshot.propulsion_rpm_limit;
+    if (limit < 0 || limit > DRIVE_TARGET_SPEED_RPM) {
+        out = MotorFrameCommand{};
+        out.block_reasons = BLOCK_NONFINITE;
+        return out;
+    }
+    if (out.target_rpm_L != 0) {
+        out.target_rpm_L = out.target_rpm_L > 0 ? limit : -limit;
+        if (limit == 0) out.left_a = 0.0f;
+    }
+    if (out.target_rpm_R != 0) {
+        out.target_rpm_R = out.target_rpm_R > 0 ? limit : -limit;
+        if (limit == 0) out.right_a = 0.0f;
+    }
     return out;
 }

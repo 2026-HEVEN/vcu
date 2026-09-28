@@ -292,18 +292,10 @@ namespace {
                     const bool left_ok = !state.component_test_left ||
                         (g_handshaked_L && g_feedback_both_recent_L &&
                          !state.controller_fb2_L.any_fault() &&
-                         state.controller_fb2_L.controller_temp_c <
-                            realcar_cal::bringup::CONTROLLER_CUTOFF_C &&
-                         state.controller_fb2_L.motor_temp_c <
-                            realcar_cal::bringup::MOTOR_CUTOFF_C &&
                          !state.controller_fb2_L.speed_mode);
                     const bool right_ok = !state.component_test_right ||
                         (g_handshaked_R && g_feedback_both_recent_R &&
                          !state.controller_fb2_R.any_fault() &&
-                         state.controller_fb2_R.controller_temp_c <
-                            realcar_cal::bringup::CONTROLLER_CUTOFF_C &&
-                         state.controller_fb2_R.motor_temp_c <
-                            realcar_cal::bringup::MOTOR_CUTOFF_C &&
                          !state.controller_fb2_R.speed_mode);
                     if (!common_ok || !left_ok || !right_ok) {
                         state.component_test_active = false;

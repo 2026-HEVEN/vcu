@@ -76,8 +76,6 @@ void test_forward_regen_survives_longitudinal_tv_and_wire() {
     supervisor_in.controller_feedback_fresh = true;
     supervisor_in.control_dt_s = 0.01f;
     DriveSupervisorParams params{};
-    params.controller_derate_start_c = params.motor_derate_start_c = 70;
-    params.controller_cutoff_c = params.motor_cutoff_c = 90;
     DriveSupervisorState supervisor_state{};
     const auto supervised = drive_supervisor_compute(supervisor_in, params, supervisor_state);
     for (float current : {supervised.left_a, supervised.right_a}) {
@@ -91,8 +89,6 @@ void test_regen_to_overlap_drive_restarts_ramp() {
     DriveSupervisorParams params{};
     params.drive_current_max_per_motor_a = 500;
     params.drive_current_rise_time_s = 0.5f;
-    params.controller_derate_start_c = params.motor_derate_start_c = 70;
-    params.controller_cutoff_c = params.motor_cutoff_c = 90;
     for (Gear gear : {Gear::Drive, Gear::Reverse}) {
         DriveSupervisorState state{};
         DriveSupervisorInput in{};

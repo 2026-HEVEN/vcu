@@ -1,76 +1,45 @@
-# Paddock speed-dependent current test profile
+# Paddock RPM 제어 — 2026-09-28
 
-This branch turns the existing Cluster paddock request into a continuous
-speed-dependent phase-current test envelope. It does **not** make 500 A/motor
-continuous. Full pedal in paddock mode is limited by all of the following:
+## 현재 동작
 
-- a phase-current ceiling that falls linearly from 500 A/motor at 0 km/h to
-  50 A/motor at 80 km/h, and stays at 50 A/motor above 80 km/h;
-- the shared Normal/Paddock 1000 A/s propulsion rise limit, so 0 to 500 A
-  takes 0.5 seconds;
-- the greater of front-wheel vehicle speed and motor-RPM-derived driven-wheel
-  speed, so a low or missing WSS reading cannot bypass the current envelope;
-- an 8.0 kW measured/estimated input-power ceiling;
-- 200 A sum of absolute controller bus currents;
-- 150 A absolute BMS pack-current ceiling;
-- valid BMS data and valid controller/motor temperature telemetry;
-- the existing controller and motor thermal derating;
+- Cluster의 기존 Paddock 요청/적용상태 CAN 정의는 그대로 사용.
+- Paddock 진입 조건은 기존대로 차속 3km/h 이하 + 페달 해제. 최초 시동·기어 인터록 유지.
+- 일반 주행은 기존 상전류 명령과 ±4000RPM을 유지.
+- Paddock에서는 스로틀 0~100%를 목표 차속 0~5km/h로 변환. 전진/후진 모두 적용.
+- 모터 목표 RPM = 목표 차속[km/h] / 3.6 × 60 × 감속비 / (2π × 구름반경).
+- 감속비 3.72, 반경 0.2387m: 풀페달 목표 206RPM(정수 내림), 환산 약 4.98km/h.
+- 목표 상전류 필드는 속도제어에 사용할 최대값: 모터당 100A. 실제 전류 100A를 강제하는 뜻은 아님.
+- 좌우 동일한 속도 목표·전류 상한을 명령 스냅샷으로 함께 게시. Paddock에서는 TV 비활성.
+- 페달 해제 시 속도 유지/정지 홀드용 100A를 보내지 않음. 기존 회생 ON/BMS 유효/SOC/전진 회전/릴리즈 조건을 통과하면 기존 회생, 아니면 0A 자연감속.
+- BMS 데이터 필수 구동 조건과 종전 400→50A 속도별 전류 맵 제거.
+- 전력/버스전류/BMS 전류 제한은 기존처럼 설정 0으로 비활성. 온도 자체 감산·차단 없음.
+- 컨트롤러 오류/통신/명령 유효성, 초기 출발·방향 인터록, 250ms 오류·재연결 전류 복구 램프 유지.
+- BMS 데이터 유무와 SOC에 따른 회생 허용 조건은 삭제하지 않음.
 
-The current equation is:
+## 컨트롤러 앱 설정을 변경하지 않는 근거
 
-```text
-ratio = clamp(speed / 80 km/h, 0, 1)
-phase_current_limit_each = 500 A + (50 A - 500 A) * ratio
-```
+[Golden Motor 제공 CAN 설명서 §5(3)](https://cdn.shopify.com/s/files/1/0694/1582/9749/files/EZKontrol-Controllers-CAN-Protocols-Instruction-2.pdf?v=1721925258):
+속도제어에서는 목표속도를 조절하며 목표상전류가 최대전류가 됨. Byte4 bit1 변경은 필요하지 않다고 명시.
+따라서 기존 RUNNING=0x01을 유지하고 Byte0~1 전류 / Byte2~3 RPM만 변경. 별도 앱 설정 쓰기나 PID 제어기를 VCU에 추가하지 않음.
+설치 컨트롤러의 펌웨어별 실제 동작은 아직 미검증. speed_mode 피드백을 억지로 허용하거나 보호를 우회하지 않음.
 
-## Why phase current falls with speed
+## 튜닝 위치
 
-The Bexel pack is approximately 4.14 kWh. The 2026-09-05 road logs reached
-about 8.47 kW and 153 A around 40--45 km/h at 300 A/motor, which cannot be
-maintained as speed continues to rise. The falling phase-current ceiling gives
-stronger launch current while reducing the electrical demand as motor speed
-rises. The independent power, bus-current and pack-current scalers can reduce
-the command below the linear ceiling.
+src/modules/realcar_calibration.h:
+- PADDOCK_MAX_SPEED_KPH = 5.0f
+- PADDOCK_CURRENT_MAX_PER_MOTOR_A = 100.0f (시험 시작값이며 연속 운전 허용을 뜻하지 않음)
 
-## Cooling prerequisites
+구현: motor_direction.cpp의 paddock_motor_request → app_wiring.cpp의 supervisor 입력 및 RPM 스냅샷 → safety_logic.cpp 최종 공통 게이트 → can_protocol.cpp 기존 CAN 인코딩.
 
-The vehicle's EZkontrol controllers use an antifreeze liquid-cooling circuit.
-Before an endurance run, verify coolant level, pump flow, equal flow through
-both controllers, radiator fan operation, hose routing, air bleeding, and that
-both controller temperature values respond to load. Motor cooling is a
-separate limit and must be verified independently.
+## 검증 및 한계
 
-## Required pre-test sequence
+호스트 테스트: 스로틀 비례 RPM, D/R 부호, 5km/h 환산, 페달 해제·NaN·중립 무출력, 기존 CAN 모드 바이트 유지, 좌우 원자 스냅샷, 오류/통신 차단, 복구 램프, 회생 허용 조건, 일반 주행 목표 복귀.
+보드 업로드·실차 검증은 아직 하지 않음.
 
-1. Lift/roller test with zero throttle and confirm both controller and motor
-   temperatures are real values, not the EZkontrol `-40 C` invalid sentinel.
-2. Confirm `BMS=1` in the `LIMIT` serial line before enabling paddock mode.
-3. Select paddock mode only below 3 km/h with released throttle.
-4. Start with the driven wheels lifted or a controlled dynamometer load. Check
-   the 0/20/40/60/80 km/h current points before any road test.
-5. Treat any CAN fault, stale feedback, `sensorBlock=1`, `currentLimit=1`,
-   `pwr=1`, `therm=1`, abnormal noise, smell, vibration or leakage as a stop
-   condition requiring inspection.
-
-## Serial diagnostics
-
-The 1 Hz summary includes:
-
-```text
-LIMIT pad=... sensorBlock=... currentLimit=...
-      pwr=... therm=... scale=... speed=...kmh Ilim=...A
-      P=measured/actual-estimated/command-predictedW BMS=... V=... I=... T=...
-```
-
-`Ilim` is the calculated per-motor phase-current ceiling before the independent
-bus-current, pack-current, power and thermal scalers. The 500 A zero-speed value
-is a short test ceiling, not a manufacturer-confirmed continuous rating and not
-proof that the installed cooling system can sustain it.
-
-The rise limiter is shared with Normal mode and only delays an increase in
-propulsion-current magnitude.
-Throttle release, a lower speed/current/power/thermal ceiling, stale CAN
-feedback, controller faults and invalid required telemetry reduce the command
-immediately. Reverse propulsion uses the same magnitude ramp; regenerative
-braking is not delayed by this launch ramp. The `LIMIT` line reports `slew=1`
-while the rise limiter is actively below the requested current.
+바퀴를 안전하게 띄운 상태에서 저페달부터 시작해 양쪽 피드백 RPM 절댓값과 실제 회전방향을 확인.
+풀페달에서 약 206RPM인지, 페달 해제 후 불필요한 유지 토크가 없는지 확인한 뒤 저속 지상 시험.
+주행 중 목표 RPM을 낮출 때 컨트롤러가 어떤 감속/충전 동작을 하는지도 확인해야 함.
+BMS 회생 게이트는 VCU의 명시적 회생 명령에 대한 것이며 컨트롤러 내부 속도루프의 모든 동작까지 보장하지 않음.
+5km/h는 목표값이며 내리막·관성·제어 오버슈트에도 무조건 지켜지는 물리적 제한이 아님. 기계식 브레이크가 필요.
+좌우 같은 RPM 목표이므로 저속 조향 시 타이어 끌림/회전성도 확인할 것. 필요하면 별도 검증 후 조향 기반 목표 분배를 검토.
+기존 동작대로 Paddock OFF 요청은 일반 모드로 복귀하므로 페달을 놓고 전환.

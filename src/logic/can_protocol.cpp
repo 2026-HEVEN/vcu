@@ -30,7 +30,9 @@ void encode_motor_control(float amps, int target_rpm, bool running,
     out[1] = (uint8_t)((current_raw >> 8) & 0xFF);
     out[2] = (uint8_t)(speed_raw & 0xFF);
     out[3] = (uint8_t)((speed_raw >> 8) & 0xFF);
-    out[4] = running ? 0x01 : 0x00;  // bit0 RUNNING, bit1=0 Torque Control
+    // EZkontrol instruction section 5(3): speed/current targets select the
+    // limiting behavior; leave bit1 unchanged even for Paddock RPM control.
+    out[4] = running ? 0x01 : 0x00;
     out[7] = life;
 }
 

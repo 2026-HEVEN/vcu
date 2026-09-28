@@ -1,12 +1,12 @@
 #include <unity.h>
+#include <initializer_list>
 #include "modules/drive_supervisor.h"
 #include "modules/realcar_calibration.h"
 
 static DriveSupervisorParams params() {
     return {500.0f, 0.5f, 8000.0f, 0.92f, 0.1266f,
-            500.0f, 50.0f, 22.2222f,
-            8000.0f, 200.0f, 150.0f, -30.0f, true,
-            75.0f, 85.0f, 100.0f, 120.0f};
+            500.0f,
+            8000.0f, 200.0f, 150.0f};
 }
 
 static DriveSupervisorState supervisor_state{};
@@ -125,39 +125,20 @@ void test_zero_power_limit_disables_power_limiting(void) {
     TEST_ASSERT_EQUAL_FLOAT(300.0f, out.right_a);
 }
 
-void test_paddock_current_limit_decreases_linearly_with_speed(void) {
-    DriveSupervisorInput in = nominal();
+void test_paddock_fixed_current_ceiling(void) {
+    auto in = nominal();
     in.paddock_active = true;
-    in.requested_left_a = 600.0f;
-    in.requested_right_a = 600.0f;
-    in.motor_rpm_left = 0;
-    in.motor_rpm_right = 0;
-    DriveSupervisorParams p = params();
-    p.drive_current_rise_time_s = 0.0f;
-    auto out = compute(in, p);
-    TEST_ASSERT_FLOAT_WITHIN(0.01f, 500.0f, out.left_a);
-    TEST_ASSERT_FLOAT_WITHIN(0.01f, 500.0f, out.paddock_current_limit_a);
-
-    in.paddock_speed_mps = 20.0f / 3.6f;
-    out = compute(in, p);
-    TEST_ASSERT_FLOAT_WITHIN(0.02f, 387.5f, out.left_a);
-
-    in.paddock_speed_mps = 40.0f / 3.6f;
-    out = compute(in, p);
-    TEST_ASSERT_FLOAT_WITHIN(0.02f, 275.0f, out.left_a);
-    TEST_ASSERT_FLOAT_WITHIN(0.02f, 275.0f, out.paddock_current_limit_a);
-
-    in.paddock_speed_mps = 60.0f / 3.6f;
-    out = compute(in, p);
-    TEST_ASSERT_FLOAT_WITHIN(0.02f, 162.5f, out.left_a);
-
-    in.paddock_speed_mps = 80.0f / 3.6f;
-    out = compute(in, p);
-    TEST_ASSERT_FLOAT_WITHIN(0.02f, 50.0f, out.left_a);
-
-    in.paddock_speed_mps = 120.0f / 3.6f;
-    out = compute(in, p);
-    TEST_ASSERT_FLOAT_WITHIN(0.02f, 50.0f, out.left_a);
+    in.requested_left_a = in.requested_right_a = 600.0f;
+    in.motor_rpm_left = in.motor_rpm_right = 0;
+    auto p = params();
+    p.paddock_current_max_per_motor_a = 100.0f;
+    for (float speed : {0.0f, 1.0f, 20.0f}) {
+        in.paddock_speed_mps = speed;
+        auto out = compute(in, p);
+        TEST_ASSERT_EQUAL_FLOAT(100.0f, out.left_a);
+        TEST_ASSERT_EQUAL_FLOAT(100.0f, out.right_a);
+        TEST_ASSERT_TRUE(out.paddock_current_limited);
+    }
 }
 
 void test_paddock_propulsion_rises_to_500_a_in_half_second(void) {
@@ -249,20 +230,20 @@ void test_paddock_release_and_fault_reductions_are_immediate(void) {
     TEST_ASSERT_FLOAT_WITHIN(0.001f, -10.0f, out.left_a);
 }
 
-void test_paddock_blocks_missing_temperature_or_pack_data(void) {
+void test_paddock_ignores_missing_temperature_and_pack(void) {
     DriveSupervisorInput in = nominal();
     in.paddock_active = true;
     in.motor_temp_left_c = -40.0f;
     auto out = compute(in);
-    TEST_ASSERT_TRUE(out.paddock_sensor_blocked);
-    TEST_ASSERT_EQUAL_FLOAT(0.0f, out.left_a);
+    TEST_ASSERT_FALSE(out.paddock_sensor_blocked);
+    TEST_ASSERT_EQUAL_FLOAT(100.0f, out.left_a);
 
     in = nominal();
     in.paddock_active = true;
     in.pack_data_valid = false;
     out = compute(in);
-    TEST_ASSERT_TRUE(out.paddock_sensor_blocked);
-    TEST_ASSERT_EQUAL_FLOAT(0.0f, out.right_a);
+    TEST_ASSERT_FALSE(out.paddock_sensor_blocked);
+    TEST_ASSERT_EQUAL_FLOAT(100.0f, out.right_a);
 }
 
 void test_paddock_pack_current_and_power_guards_scale_drive(void) {
@@ -284,15 +265,31 @@ void test_paddock_pack_current_and_power_guards_scale_drive(void) {
     TEST_ASSERT_TRUE(out.left_a < 100.0f);
 }
 
-void test_thermal_cutoff_also_blocks_regen(void) {
-    DriveSupervisorInput in = nominal();
-    in.requested_left_a = -20.0f;
-    in.requested_right_a = -20.0f;
-    in.controller_temp_left_c = 85.0f;
+void test_temperature_does_not_limit_drive_or_regen(void) {
+    for (bool paddock : {false, true}) {
+        for (float demand : {100.0f, -20.0f}) {
+            for (float temperature : {-40.0f, 80.0f, 125.0f, 200.0f}) {
+                DriveSupervisorInput in = nominal();
+                in.paddock_active = paddock;
+                in.requested_left_a = in.requested_right_a = demand;
+                in.controller_temp_left_c = in.controller_temp_right_c = temperature;
+                in.motor_temp_left_c = in.motor_temp_right_c = temperature;
+                auto out = compute(in);
+                TEST_ASSERT_FALSE(out.thermal_limited);
+                TEST_ASSERT_EQUAL_FLOAT(demand, out.left_a);
+                TEST_ASSERT_EQUAL_FLOAT(demand, out.right_a);
+            }
+        }
+    }
+}
+
+void test_normal_drive_does_not_require_pack(void) {
+    auto in = nominal();
+    in.pack_data_valid = false;
     auto out = compute(in);
-    TEST_ASSERT_TRUE(out.thermal_limited);
-    TEST_ASSERT_EQUAL_FLOAT(0.0f, out.left_a);
-    TEST_ASSERT_EQUAL_FLOAT(0.0f, out.right_a);
+    TEST_ASSERT_FALSE(out.paddock_sensor_blocked);
+    TEST_ASSERT_EQUAL_FLOAT(100.0f, out.left_a);
+    TEST_ASSERT_EQUAL_FLOAT(100.0f, out.right_a);
 }
 
 void setUp(void) { supervisor_state = DriveSupervisorState{}; }
@@ -304,8 +301,7 @@ void test_current_profile_electrical_feedback_does_not_limit_drive(void) {
     p.paddock_power_soft_limit_w = PADDOCK_POWER_SOFT_LIMIT_W;
     p.paddock_controller_bus_current_limit_a = PADDOCK_CONTROLLER_BUS_CURRENT_LIMIT_A;
     p.paddock_pack_current_limit_a = PADDOCK_PACK_CURRENT_LIMIT_A;
-    p.paddock_current_zero_speed_per_motor_a = PADDOCK_CURRENT_ZERO_SPEED_PER_MOTOR_A;
-    p.paddock_current_high_speed_per_motor_a = PADDOCK_CURRENT_HIGH_SPEED_PER_MOTOR_A;
+    p.paddock_current_max_per_motor_a = PADDOCK_CURRENT_MAX_PER_MOTOR_A;
     const bool modes[] = {false, true};
     for (bool paddock : modes) {
         auto in = nominal();
@@ -337,12 +333,13 @@ int main(int, char **) {
     RUN_TEST(test_power_limit_uses_actual_phase_current_not_500_a_target);
     RUN_TEST(test_slew_limited_command_prediction_caps_before_feedback_arrives);
     RUN_TEST(test_zero_power_limit_disables_power_limiting);
-    RUN_TEST(test_paddock_current_limit_decreases_linearly_with_speed);
+    RUN_TEST(test_paddock_fixed_current_ceiling);
     RUN_TEST(test_paddock_propulsion_rises_to_500_a_in_half_second);
     RUN_TEST(test_normal_propulsion_rises_to_500_a_in_half_second);
     RUN_TEST(test_paddock_release_and_fault_reductions_are_immediate);
-    RUN_TEST(test_paddock_blocks_missing_temperature_or_pack_data);
+    RUN_TEST(test_paddock_ignores_missing_temperature_and_pack);
+    RUN_TEST(test_normal_drive_does_not_require_pack);
     RUN_TEST(test_paddock_pack_current_and_power_guards_scale_drive);
-    RUN_TEST(test_thermal_cutoff_also_blocks_regen);
+    RUN_TEST(test_temperature_does_not_limit_drive_or_regen);
     return UNITY_END();
 }

@@ -10,12 +10,6 @@ float clamp01(float value) {
 
 float positive(float value) { return value > 0.0f ? value : 0.0f; }
 
-float temperature_scale(float value, float derate_start, float cutoff) {
-    if (value <= derate_start) return 1.0f;
-    if (value >= cutoff || cutoff <= derate_start) return 0.0f;
-    return (cutoff - value) / (cutoff - derate_start);
-}
-
 void scale_positive(float &value, float scale) {
     if (value > 0.0f) value *= scale;
 }
@@ -81,61 +75,13 @@ DriveSupervisorOutput drive_supervisor_compute(
         return out;
     }
 
-    float thermal_scale = 1.0f;
-    const float thermal_candidates[] = {
-        temperature_scale(in.controller_temp_left_c,
-                          params.controller_derate_start_c,
-                          params.controller_cutoff_c),
-        temperature_scale(in.controller_temp_right_c,
-                          params.controller_derate_start_c,
-                          params.controller_cutoff_c),
-        temperature_scale(in.motor_temp_left_c,
-                          params.motor_derate_start_c,
-                          params.motor_cutoff_c),
-        temperature_scale(in.motor_temp_right_c,
-                          params.motor_derate_start_c,
-                          params.motor_cutoff_c),
-    };
-    for (float candidate : thermal_candidates) {
-        if (candidate < thermal_scale) thermal_scale = candidate;
-    }
-    thermal_scale = clamp01(thermal_scale);
-    if (thermal_scale < 1.0f) {
-        scale_all(out.left_a, thermal_scale);
-        scale_all(out.right_a, thermal_scale);
-        out.thermal_limited = true;
-    }
-
+    // Temperature telemetry is diagnostic only. Controller-reported faults
+    // still use the common fault gate above; no VCU temperature thresholds.
     float paddock_scale = 1.0f;
     if (in.paddock_active) {
-        const bool temperatures_valid =
-            in.controller_temp_left_c >= params.telemetry_temperature_valid_min_c &&
-            in.controller_temp_right_c >= params.telemetry_temperature_valid_min_c &&
-            in.motor_temp_left_c >= params.telemetry_temperature_valid_min_c &&
-            in.motor_temp_right_c >= params.telemetry_temperature_valid_min_c;
-        const bool pack_valid =
-            !params.paddock_require_pack_data || in.pack_data_valid;
-        if (!temperatures_valid || !pack_valid) {
-            out.left_a = 0.0f;
-            out.right_a = 0.0f;
-            reset_rise_limit(state);
-            out.paddock_limited = true;
-            out.paddock_sensor_blocked = true;
-            return out;
-        }
-        const float high_current_limit = positive(
-            params.paddock_current_zero_speed_per_motor_a);
-        const float low_current_limit = std::fmin(
-            high_current_limit,
-            positive(params.paddock_current_high_speed_per_motor_a));
-        const float speed_fraction =
-            params.paddock_current_linear_end_speed_mps > 0.0f
-                ? clamp01(positive(in.paddock_speed_mps) /
-                          params.paddock_current_linear_end_speed_mps)
-                : 1.0f;
-        out.paddock_current_limit_a =
-            high_current_limit +
-            (low_current_limit - high_current_limit) * speed_fraction;
+        // No pack-data gate for propulsion. Regen eligibility is evaluated
+        // separately upstream and at the final motor-command gate.
+        out.paddock_current_limit_a = positive(params.paddock_current_max_per_motor_a);
 
         const float requested_peak = std::fmax(
             drive_magnitude(out.left_a, in.propulsion_requested),
@@ -271,6 +217,6 @@ DriveSupervisorOutput drive_supervisor_compute(
     }
 
     out.applied_scale =
-        thermal_scale * paddock_scale * power_scale * slew_scale;
+        paddock_scale * power_scale * slew_scale;
     return out;
 }

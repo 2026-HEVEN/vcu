@@ -57,23 +57,16 @@ constexpr float DRIVE_CURRENT_RISE_TIME_S = 0.0f;
 constexpr bool ENABLE_DRIVE_POWER_LIMIT = false;
 constexpr float DRIVE_POWER_SOFT_LIMIT_W = 8000.0f;
 constexpr float DRIVETRAIN_EFFICIENCY = 0.92f;
-constexpr float CONTROLLER_DERATE_START_C = 75.0f;
-constexpr float CONTROLLER_CUTOFF_C = 85.0f;
-constexpr float MOTOR_DERATE_START_C = 100.0f;
-constexpr float MOTOR_CUTOFF_C = 120.0f;
-// Provisional speed/current test envelope.  The phase-current ceiling falls
-// continuously from 500 A/motor at standstill to 50 A/motor at 80 km/h, then
-// holds 50 A/motor above that speed.  This is only active in paddock mode.
-constexpr float PADDOCK_CURRENT_ZERO_SPEED_PER_MOTOR_A = 400.0f;
-constexpr float PADDOCK_CURRENT_HIGH_SPEED_PER_MOTOR_A = 50.0f;
-constexpr float PADDOCK_CURRENT_LINEAR_END_SPEED_MPS = 80.0f / 3.6f;
+// EZkontrol target-speed field controls speed; current is the allowed ceiling.
+// Pedal maps to 0..5 km/h in either propulsion gear. Verify on raised wheels.
+constexpr float PADDOCK_MAX_SPEED_KPH = 5.0f;
+constexpr float PADDOCK_CURRENT_MAX_PER_MOTOR_A = 100.0f;
 constexpr float PADDOCK_ENTRY_SPEED_MAX_MPS = 3.0f / 3.6f;
 // Feedback-based electrical limiting is disabled for this test profile.
 // Zero disables these scalers; voltage/current feedback remains logged.
 constexpr float PADDOCK_POWER_SOFT_LIMIT_W = 0.0f;
 constexpr float PADDOCK_CONTROLLER_BUS_CURRENT_LIMIT_A = 0.0f;
 constexpr float PADDOCK_PACK_CURRENT_LIMIT_A = 0.0f;
-constexpr bool PADDOCK_REQUIRE_PACK_DATA = true;
 // Raw values below this floor are treated as a disconnected/failed signal,
 // not as a released pedal.
 constexpr unsigned THROTTLE_SIGNAL_VALID_MIN_ADC = 200U;

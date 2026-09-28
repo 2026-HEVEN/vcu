@@ -87,8 +87,6 @@ constexpr unsigned CAN_RX_QUEUE_LENGTH = 32U;
 constexpr float THROTTLE_ARM_MAX_PCT = 1.0f;
 constexpr unsigned THROTTLE_ARM_CONSECUTIVE_TICKS = 30U;
 
-// EZkontrol reports -40 C for absent/invalid temperature telemetry.
-constexpr float TELEMETRY_TEMPERATURE_VALID_MIN_C = -30.0f;
 }  // namespace runtime
 
 namespace bench {

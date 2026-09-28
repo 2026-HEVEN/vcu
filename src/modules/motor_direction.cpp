@@ -1,6 +1,24 @@
 #include "modules/motor_direction.h"
 #include <cmath>
 
+MotorDirectionCommand paddock_motor_request(float throttle_pct, Gear gear,
+    float max_speed_kph, float current_limit_a, float rolling_radius_m,
+    float gear_ratio) {
+    if (!std::isfinite(throttle_pct) || !std::isfinite(max_speed_kph) ||
+        !std::isfinite(current_limit_a) || !std::isfinite(rolling_radius_m) ||
+        !std::isfinite(gear_ratio) || throttle_pct <= 0.0f ||
+        max_speed_kph <= 0.0f || current_limit_a <= 0.0f ||
+        rolling_radius_m <= 0.0f || gear_ratio <= 0.0f ||
+        (gear != Gear::Drive && gear != Gear::Reverse)) return {0, 0, false};
+    const float rpm = (max_speed_kph / 3.6f) * 60.0f * gear_ratio /
+        (6.283185307f * rolling_radius_m) * std::fmin(throttle_pct, 100.0f) / 100.0f;
+    // Floor rather than round up; do not issue nonzero current at 0 RPM.
+    const int target = static_cast<int>(std::fmin(rpm, 32000.0f));
+    if (target < 1) return {0, 0, false};
+    const int sign = gear == Gear::Drive ? 1 : -1;
+    return {sign * current_limit_a, sign * target, true};
+}
+
 float directional_current(float demand_a, Gear gear, bool direction_armed) {
     if (!direction_armed || !std::isfinite(demand_a)) return 0.0f;
     if (gear == Gear::Drive) return demand_a; // preserve regenerative sign

@@ -38,6 +38,7 @@ struct MotorCommandSnapshot {
     uint32_t published_ms = 0;
     float    left_a = 0.0f;
     float    right_a = 0.0f;
+    int      propulsion_rpm_limit = DRIVE_TARGET_SPEED_RPM; // unsigned magnitude, same tick
     Gear     gear = Gear::Neutral;
     bool     safety_allow = false;   // 같은 tick의 torque_allowed()
     bool     throttle_signal_valid = false;

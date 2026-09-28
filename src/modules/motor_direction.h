@@ -15,6 +15,11 @@ struct MotorDirectionCommand {
     bool running;
 };
 
+// Paddock propulsion only. No pedal -> zero current, not an active 0-RPM hold.
+MotorDirectionCommand paddock_motor_request(float throttle_pct, Gear gear,
+    float max_speed_kph, float current_limit_a, float rolling_radius_m,
+    float gear_ratio);
+
 // Input current is already gear-signed. Both installed controllers share this
 // convention. Regen permission is distinct from a negative reverse-drive current.
 MotorDirectionCommand motor_direction_command(

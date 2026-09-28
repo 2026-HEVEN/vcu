@@ -87,18 +87,10 @@ namespace {
             ? realcar_cal::bringup::DRIVE_POWER_SOFT_LIMIT_W : 0.0f,
         realcar_cal::bringup::DRIVETRAIN_EFFICIENCY,
         fixed_config::vehicle::MOTOR_KT_NM_PER_A,
-        realcar_cal::bringup::PADDOCK_CURRENT_ZERO_SPEED_PER_MOTOR_A,
-        realcar_cal::bringup::PADDOCK_CURRENT_HIGH_SPEED_PER_MOTOR_A,
-        realcar_cal::bringup::PADDOCK_CURRENT_LINEAR_END_SPEED_MPS,
+        realcar_cal::bringup::PADDOCK_CURRENT_MAX_PER_MOTOR_A,
         realcar_cal::bringup::PADDOCK_POWER_SOFT_LIMIT_W,
         realcar_cal::bringup::PADDOCK_CONTROLLER_BUS_CURRENT_LIMIT_A,
         realcar_cal::bringup::PADDOCK_PACK_CURRENT_LIMIT_A,
-        fixed_config::runtime::TELEMETRY_TEMPERATURE_VALID_MIN_C,
-        realcar_cal::bringup::PADDOCK_REQUIRE_PACK_DATA,
-        realcar_cal::bringup::CONTROLLER_DERATE_START_C,
-        realcar_cal::bringup::CONTROLLER_CUTOFF_C,
-        realcar_cal::bringup::MOTOR_DERATE_START_C,
-        realcar_cal::bringup::MOTOR_CUTOFF_C,
     };
     const TimeSyncPulseParams TIME_SYNC_PARAMS {
         fixed_config::bench::ENABLE_TIME_SYNC_PULSE,
@@ -276,7 +268,8 @@ static void torque_vectoring_update() {
         state.steering_angle,
         Mps{state.vehicle_speed_mps},
         GForce{state.accel_x}, GForce{state.accel_y}, Seconds{TV_DT_S},
-        state.tv_enable_requested, state.vehicle_speed_valid, state.imu_valid
+        state.tv_enable_requested && !state.paddock_active,
+        state.vehicle_speed_valid, state.imu_valid
     };
     TVOutput o = tv_compute(tv_in, tv_yaw_state);
     state.tv_gate = o.gate;
@@ -324,9 +317,9 @@ static void time_sync_pulse_update() {
     if (time_sync_output.aborted_event) ++state.time_sync_aborted_count;
 }
 static void drive_supervisor_update() {
-    const float requested_left_a = time_sync_output.override_active
+    float requested_left_a = time_sync_output.override_active
         ? time_sync_output.left_a : (float)state.requested_torque_L;
-    const float requested_right_a = time_sync_output.override_active
+    float requested_right_a = time_sync_output.override_active
         ? time_sync_output.right_a : (float)state.requested_torque_R;
     constexpr float TWO_PI_OVER_60 = 0.104719755f;
     const float motor_speed_mps =
@@ -341,6 +334,21 @@ static void drive_supervisor_update() {
         !time_sync_output.override_active &&
         state.propulsion_direction_armed && state.throttle_signal_valid &&
         (float)state.throttle_pct > 0.0f;
+    int propulsion_rpm_limit = DRIVE_TARGET_SPEED_RPM;
+    if (state.paddock_active) {
+        propulsion_rpm_limit = 0;
+        if (propulsion_requested) {
+            const auto request = paddock_motor_request((float)state.throttle_pct,
+                state.gear, realcar_cal::bringup::PADDOCK_MAX_SPEED_KPH,
+                std::fmin(realcar_cal::bringup::PADDOCK_CURRENT_MAX_PER_MOTOR_A,
+                          realcar_cal::bringup::DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A),
+                realcar_cal::provisional::WHEEL_SPEED_ROLLING_RADIUS_M,
+                fixed_config::vehicle::GEAR_RATIO);
+            requested_left_a = requested_right_a = request.current_a;
+            propulsion_rpm_limit = std::abs(request.target_rpm);
+        }
+        // Pedal release keeps the existing separately gated regen/coast path.
+    }
     const DriveSupervisorInput in {
         requested_left_a, requested_right_a,
         state.controller_feedback_fresh,
@@ -387,6 +395,7 @@ static void drive_supervisor_update() {
     command_snapshot.published_ms = millis();
     command_snapshot.left_a = out.left_a;
     command_snapshot.right_a = out.right_a;
+    command_snapshot.propulsion_rpm_limit = propulsion_rpm_limit;
     command_snapshot.gear = state.gear;
     command_snapshot.safety_allow = torque_allowed();
     if (!state.controller_feedback_fresh) command_snapshot.block_reasons |= BLOCK_FEEDBACK;
@@ -395,9 +404,6 @@ static void drive_supervisor_update() {
     if (state.controller_fb2_L.speed_mode || state.controller_fb2_R.speed_mode)
         command_snapshot.block_reasons |= BLOCK_SPEED_MODE;
     if (out.paddock_sensor_blocked) command_snapshot.block_reasons |= BLOCK_PADDOCK_SENSOR;
-    if (out.thermal_limited && out.left_a == 0.0f && out.right_a == 0.0f &&
-        (requested_left_a != 0.0f || requested_right_a != 0.0f))
-        command_snapshot.block_reasons |= BLOCK_THERMAL;
     command_snapshot.throttle_signal_valid = state.throttle_signal_valid;
     command_snapshot.propulsion_direction_armed =
         state.propulsion_direction_armed;

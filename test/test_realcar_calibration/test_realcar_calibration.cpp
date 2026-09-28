@@ -102,24 +102,13 @@ void test_throttle_signal_and_zero_percent_thresholds() {
 }
 
 void test_paddock_speed_current_profile_is_bounded() {
-    TEST_ASSERT_TRUE(
-        realcar_cal::bringup::PADDOCK_CURRENT_ZERO_SPEED_PER_MOTOR_A <=
+    TEST_ASSERT_EQUAL_FLOAT(5.0f, realcar_cal::bringup::PADDOCK_MAX_SPEED_KPH);
+    TEST_ASSERT_EQUAL_FLOAT(100.0f, realcar_cal::bringup::PADDOCK_CURRENT_MAX_PER_MOTOR_A);
+    TEST_ASSERT_TRUE(realcar_cal::bringup::PADDOCK_CURRENT_MAX_PER_MOTOR_A <=
         realcar_cal::bringup::DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A);
-    TEST_ASSERT_TRUE(
-        realcar_cal::bringup::PADDOCK_CURRENT_HIGH_SPEED_PER_MOTOR_A <
-        realcar_cal::bringup::PADDOCK_CURRENT_ZERO_SPEED_PER_MOTOR_A);
-    TEST_ASSERT_TRUE(
-        realcar_cal::bringup::PADDOCK_CURRENT_HIGH_SPEED_PER_MOTOR_A <=
-        fixed_config::vehicle::MOTOR_CONTINUOUS_CURRENT_MAX_A);
-    TEST_ASSERT_TRUE(
-        realcar_cal::bringup::PADDOCK_CURRENT_LINEAR_END_SPEED_MPS > 0.0f);
-    TEST_ASSERT_EQUAL_FLOAT(0.0f,
-        realcar_cal::bringup::PADDOCK_POWER_SOFT_LIMIT_W);
-    TEST_ASSERT_EQUAL_FLOAT(0.0f,
-        realcar_cal::bringup::PADDOCK_CONTROLLER_BUS_CURRENT_LIMIT_A);
-    TEST_ASSERT_EQUAL_FLOAT(0.0f,
-        realcar_cal::bringup::PADDOCK_PACK_CURRENT_LIMIT_A);
-    TEST_ASSERT_TRUE(realcar_cal::bringup::PADDOCK_REQUIRE_PACK_DATA);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, realcar_cal::bringup::PADDOCK_POWER_SOFT_LIMIT_W);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, realcar_cal::bringup::PADDOCK_CONTROLLER_BUS_CURRENT_LIMIT_A);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, realcar_cal::bringup::PADDOCK_PACK_CURRENT_LIMIT_A);
 }
 
 void setUp(void) {}

@@ -6,18 +6,10 @@ struct DriveSupervisorParams {
     float power_soft_limit_w;
     float drivetrain_efficiency;
     float motor_kt_nm_per_a;
-    float paddock_current_zero_speed_per_motor_a;
-    float paddock_current_high_speed_per_motor_a;
-    float paddock_current_linear_end_speed_mps;
+    float paddock_current_max_per_motor_a;
     float paddock_power_soft_limit_w;
     float paddock_controller_bus_current_limit_a;
     float paddock_pack_current_limit_a;
-    float telemetry_temperature_valid_min_c;
-    bool paddock_require_pack_data;
-    float controller_derate_start_c;
-    float controller_cutoff_c;
-    float motor_derate_start_c;
-    float motor_cutoff_c;
 };
 
 struct DriveSupervisorInput {
@@ -56,7 +48,7 @@ struct DriveSupervisorOutput {
     float applied_scale = 0.0f;
     bool controller_blocked = false;
     bool power_limited = false;
-    bool thermal_limited = false;
+    bool thermal_limited = false; // Reserved legacy telemetry bit; always false.
     bool paddock_limited = false;
     bool paddock_sensor_blocked = false;
     bool paddock_current_limited = false;
