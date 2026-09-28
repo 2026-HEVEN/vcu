@@ -51,60 +51,48 @@ namespace {
     uint8_t            g_status_life = 0;
     MotorTxDiagnostics g_tx_work{}; // life task owns counters and history
     // Strict freshness (FB1 AND FB2 within 250 ms), written by poll_rx.
-    // Fault re-arm and the component test read FB2 fault/temperature
-    // values, so they must not accept the relaxed torque-gating freshness.
+    // Used only by the serial component test. Normal driving and fault
+    // recovery use the common link policy and consecutive FB2 samples.
     volatile bool      g_feedback_both_recent_L = false;
     volatile bool      g_feedback_both_recent_R = false;
-    FaultSampleState g_fault_samples_L{}; // RX scheduler only
-    FaultSampleState g_fault_samples_R{};
+    FaultRecoveryState g_fault_samples_L{}; // RX scheduler only
+    FaultRecoveryState g_fault_samples_R{};
     volatile bool g_fault_recovery_ramp_pending = false;
     volatile bool g_fault_recovery_ramp_active = false;
     volatile uint32_t g_fault_recovery_ramp_start_ms = 0U;
-    void latch_fault(uint8_t origin) {
-        if (!state.controller_fault_latched) {
-            state.fault_origin = 0;
-            std::memset(state.first_fault_bytes, 0, sizeof(state.first_fault_bytes));
-            state.fault_first_ms = millis();
+    void update_fault_feedback(bool left, bool active) {
+        const bool was_blocked = state.controller_fault_blocked;
+        auto &side = left ? g_fault_samples_L : g_fault_samples_R;
+        if (active) {
+            // Record the first report per side in this episode; history does
+            // not participate in output gating.
+            const uint8_t origin = left ? 1U : 2U;
+            if (!was_blocked) {
+                state.fault_origin = 0;
+                std::memset(state.first_fault_bytes, 0, sizeof(state.first_fault_bytes));
+                state.fault_first_ms = millis();
+            }
+            if (!(state.fault_origin & origin)) {
+                const auto &fb = left ? state.controller_fb2_L : state.controller_fb2_R;
+                const unsigned offset = left ? 0U : 3U;
+                state.first_fault_bytes[offset] = fb.error1;
+                state.first_fault_bytes[offset + 1] = fb.error2;
+                state.first_fault_bytes[offset + 2] = fb.error3;
+            }
+            state.fault_origin |= origin;
+            g_fault_recovery_ramp_active = false;
+            g_fault_recovery_ramp_pending = true;
         }
-        if ((origin & 1U) && !(state.fault_origin & 1U)) {
-            state.first_fault_bytes[0] = state.controller_fb2_L.error1;
-            state.first_fault_bytes[1] = state.controller_fb2_L.error2;
-            state.first_fault_bytes[2] = state.controller_fb2_L.error3;
+        fault_recovery_update(active,
+            fixed_config::runtime::MOTOR_FAULT_CLEAR_FRAMES, side);
+        state.controller_fault_blocked =
+            g_fault_samples_L.blocked || g_fault_samples_R.blocked;
+        if (was_blocked && !state.controller_fault_blocked) {
+            ++state.fault_recovery_count;
+            // Throttle, gear and link freshness are evaluated by common gates.
+            // The pending ramp starts only when a nonzero command can run.
+            Serial.println("[FAULT] two clear feedback samples; fault block cleared");
         }
-        if ((origin & 2U) && !(state.fault_origin & 2U)) {
-            state.first_fault_bytes[3] = state.controller_fb2_R.error1;
-            state.first_fault_bytes[4] = state.controller_fb2_R.error2;
-            state.first_fault_bytes[5] = state.controller_fb2_R.error3;
-        }
-        state.fault_origin |= origin;
-        state.controller_fault_latched = true;
-        state.fault_rearm_ready = false;
-        g_fault_recovery_ramp_active = false;
-        g_fault_recovery_ramp_pending = false;
-    }
-    bool rearm_conditions_ok() {
-        return g_handshaked_L && g_handshaked_R &&
-            g_feedback_both_recent_L && g_feedback_both_recent_R &&
-            !state.controller_fb2_L.any_fault() && !state.controller_fb2_R.any_fault() &&
-            g_fault_samples_L.clear_samples >= fixed_config::runtime::MOTOR_FAULT_CLEAR_FRAMES &&
-            g_fault_samples_R.clear_samples >= fixed_config::runtime::MOTOR_FAULT_CLEAR_FRAMES &&
-            !state.controller_fb2_L.speed_mode && !state.controller_fb2_R.speed_mode &&
-            state.throttle_signal_valid &&
-            std::isfinite(state.controller_fb1_L.phase_current_a) &&
-            std::isfinite(state.controller_fb1_R.phase_current_a) &&
-            std::fabs(state.controller_fb1_L.phase_current_a) <= fixed_config::runtime::PHASE_CURRENT_HARD_CUTOFF_A &&
-            std::fabs(state.controller_fb1_R.phase_current_a) <= fixed_config::runtime::PHASE_CURRENT_HARD_CUTOFF_A &&
-            state.controller_fb2_L.controller_temp_c < realcar_cal::bringup::CONTROLLER_CUTOFF_C &&
-            state.controller_fb2_R.controller_temp_c < realcar_cal::bringup::CONTROLLER_CUTOFF_C &&
-            state.controller_fb2_L.motor_temp_c < realcar_cal::bringup::MOTOR_CUTOFF_C &&
-            state.controller_fb2_R.motor_temp_c < realcar_cal::bringup::MOTOR_CUTOFF_C;
-    }
-    void clear_fault_latch() {
-        state.controller_fault_latched = false;
-        state.fault_rearm_ready = false;
-        ++state.fault_rearm_count;
-        g_fault_recovery_ramp_pending = true;
-        g_fault_recovery_ramp_active = false;
     }
     portMUX_TYPE         g_link_diag_mux = portMUX_INITIALIZER_UNLOCKED;
     uint32_t             g_link_drops_L = 0U; // guarded by g_link_diag_mux
@@ -144,14 +132,14 @@ namespace {
             state.controller_fb1_last_ms_L = 0U;
             state.controller_fb2_last_ms_L = 0U;
             g_feedback_recovery_expected_L = true;
-            g_fault_samples_L = {};
+            g_fault_samples_L.clear_samples = 0; // link loss must not erase an active fault
         } else {
             state.controller_handshaked_R = false;
             state.controller_feedback_fresh_R = false;
             state.controller_fb1_last_ms_R = 0U;
             state.controller_fb2_last_ms_R = 0U;
             g_feedback_recovery_expected_R = true;
-            g_fault_samples_R = {};
+            g_fault_samples_R.clear_samples = 0; // require two NEW clear samples after reconnect
         }
         state.controller_feedback_fresh = false;
         g_reconnect_inhibit = true;
@@ -258,7 +246,8 @@ namespace {
             gates.scheduler_alive = checked_at_ms - command_heartbeat_ms < DEADMAN_MS;
             gates.reconnect_inhibit = g_reconnect_inhibit;
             gates.component_test_inhibit = state.component_test_normal_inhibit;
-            gates.controller_fault_active = state.controller_fb2_L.any_fault() ||
+            gates.controller_fault_active = state.controller_fault_blocked ||
+                state.controller_fb2_L.any_fault() ||
                 state.controller_fb2_R.any_fault();
             gates.snapshot_fresh = motor_snapshot_fresh(snap, checked_at_ms,
                 fixed_config::runtime::MOTOR_COMMAND_SNAPSHOT_MAX_AGE_MS);
@@ -294,7 +283,7 @@ namespace {
                     const bool common_ok = scheduler_alive &&
                         component_test_safety_allowed() &&
                         state.throttle_signal_valid &&
-                        !state.controller_fault_latched &&
+                        !state.controller_fault_blocked &&
                         !state.controller_fb2_L.any_fault() &&
                         !state.controller_fb2_R.any_fault() &&
                         (float)state.throttle_pct <=
@@ -307,9 +296,7 @@ namespace {
                             realcar_cal::bringup::CONTROLLER_CUTOFF_C &&
                          state.controller_fb2_L.motor_temp_c <
                             realcar_cal::bringup::MOTOR_CUTOFF_C &&
-                         !state.controller_fb2_L.speed_mode &&
-                         std::fabs(state.controller_fb1_L.phase_current_a) <
-                            fixed_config::runtime::PHASE_CURRENT_HARD_CUTOFF_A);
+                         !state.controller_fb2_L.speed_mode);
                     const bool right_ok = !state.component_test_right ||
                         (g_handshaked_R && g_feedback_both_recent_R &&
                          !state.controller_fb2_R.any_fault() &&
@@ -317,9 +304,7 @@ namespace {
                             realcar_cal::bringup::CONTROLLER_CUTOFF_C &&
                          state.controller_fb2_R.motor_temp_c <
                             realcar_cal::bringup::MOTOR_CUTOFF_C &&
-                         !state.controller_fb2_R.speed_mode &&
-                         std::fabs(state.controller_fb1_R.phase_current_a) <
-                            fixed_config::runtime::PHASE_CURRENT_HARD_CUTOFF_A);
+                         !state.controller_fb2_R.speed_mode);
                     if (!common_ok || !left_ok || !right_ok) {
                         state.component_test_active = false;
                         ++state.component_test_aborted_count;
@@ -497,13 +482,6 @@ MotorTxDiagnostics motor_tx_diagnostics() {
     return out;
 }
 
-bool rearm_controller_fault() {
-    if (!state.controller_fault_latched || !state.fault_rearm_ready ||
-        !rearm_conditions_ok()) return false;
-    clear_fault_latch();
-    return true;
-}
-
 void send_drive_diagnostics() {
     uint8_t d[8]{};
     const auto put_u16 = [&](unsigned k, uint16_t v) {
@@ -525,12 +503,11 @@ void send_drive_diagnostics() {
     put_u16(4, state.block_event_count);
     put_u16(6, (state.drive_slew_limited ? 1 : 0) | (state.thermal_limited ? 2 : 0) |
         (state.power_limited ? 4 : 0) | (state.paddock_current_limited ? 8 : 0) |
-        (state.paddock_active ? 16 : 0) | (state.fault_rearm_ready ? 32 : 0));
+        (state.paddock_active ? 16 : 0));
     send(CAN_ID_VCU_LOG_BLOCK);
     for (unsigned i = 0; i < 6; ++i) d[i] = state.first_fault_bytes[i];
     d[6] = state.fault_origin;
-    d[7] = (state.controller_fault_latched ? 1 : 0) |
-        (state.fault_rearm_ready ? 2 : 0);
+    d[7] = state.controller_fault_blocked ? 1 : 0; // bit1 legacy rearmReady reserved=0
     send(CAN_ID_VCU_LOG_FAULT);
 }
 
@@ -649,7 +626,7 @@ void send_sensor_telemetry() {
         tx_status.requested.normal_allow && torque_allowed() && deadman_ok() &&
         state.throttle_signal_valid && !g_reconnect_inhibit &&
         !state.component_test_normal_inhibit && state.propulsion_direction_armed &&
-        state.controller_feedback_fresh && !state.controller_fault_latched &&
+        state.controller_feedback_fresh && !state.controller_fault_blocked &&
         !state.controller_fb2_L.any_fault() && !state.controller_fb2_R.any_fault() &&
         (state.gear == Gear::Drive || state.gear == Gear::Reverse);
     // 차단 사유를 여기서 재계산하지 않는다. 판정은 tv_gate_evaluate()가 이미
@@ -750,47 +727,23 @@ void poll_rx() {
         if (m.data_length_code == 8 && m.identifier == CAN_ID_FB1_L) {
             state.controller_fb1_L = decode_controller_feedback_part1(m.data);
             state.controller_fb1_last_ms_L = now;
-            if (std::fabs(state.controller_fb1_L.phase_current_a) >
-                fixed_config::runtime::PHASE_CURRENT_HARD_CUTOFF_A) {
-                latch_fault(4U);
-            }
             continue;
         }
         if (m.data_length_code == 8 && m.identifier == CAN_ID_FB1_R) {
             state.controller_fb1_R = decode_controller_feedback_part1(m.data);
             state.controller_fb1_last_ms_R = now;
-            if (std::fabs(state.controller_fb1_R.phase_current_a) >
-                fixed_config::runtime::PHASE_CURRENT_HARD_CUTOFF_A) {
-                latch_fault(8U);
-            }
             continue;
         }
         if (m.data_length_code == 8 && m.identifier == CAN_ID_FB2_L) {
             state.controller_fb2_L = decode_controller_feedback_part2(m.data);
             state.controller_fb2_last_ms_L = now;
-            if (state.controller_fb2_L.any_fault()) {
-                g_fault_recovery_ramp_active = false;
-                g_fault_recovery_ramp_pending = true;
-            }
-            fault_sample_update(state.controller_fb2_L.any_fault(),
-                fixed_config::runtime::MOTOR_FAULT_CONFIRM_FRAMES,
-                fixed_config::runtime::MOTOR_FAULT_CLEAR_FRAMES, g_fault_samples_L);
-            if (state.controller_fb2_L.any_fault() && g_fault_samples_L.confirmed)
-                latch_fault(1U);
+            update_fault_feedback(true, state.controller_fb2_L.any_fault());
             continue;
         }
         if (m.data_length_code == 8 && m.identifier == CAN_ID_FB2_R) {
             state.controller_fb2_R = decode_controller_feedback_part2(m.data);
             state.controller_fb2_last_ms_R = now;
-            if (state.controller_fb2_R.any_fault()) {
-                g_fault_recovery_ramp_active = false;
-                g_fault_recovery_ramp_pending = true;
-            }
-            fault_sample_update(state.controller_fb2_R.any_fault(),
-                fixed_config::runtime::MOTOR_FAULT_CONFIRM_FRAMES,
-                fixed_config::runtime::MOTOR_FAULT_CLEAR_FRAMES, g_fault_samples_R);
-            if (state.controller_fb2_R.any_fault() && g_fault_samples_R.confirmed)
-                latch_fault(2U);
+            update_fault_feedback(false, state.controller_fb2_R.any_fault());
             continue;
         }
         if (m.data_length_code == 8 && m.identifier == CAN_ID_CLUSTER_BMS_STATUS) {
@@ -929,11 +882,6 @@ void poll_rx() {
     g_handshaked = fixed_config::runtime::REQUIRE_BOTH_MOTOR_CONTROLLERS
         ? (g_handshaked_L && g_handshaked_R)
         : (g_handshaked_L || g_handshaked_R);
-    state.fault_rearm_ready = state.controller_fault_latched && rearm_conditions_ok();
-    if (state.fault_rearm_ready) {
-        clear_fault_latch();
-        Serial.println("[FAULT] controller feedback healthy; torque auto-resume ramp armed");
-    }
 }
 
 bool handshaked() { return g_handshaked; }

@@ -300,7 +300,7 @@ static void time_sync_pulse_update() {
         !state.paddock_requested;
     const bool runtime_ok = can_bus::handshaked() && torque_allowed() &&
         state.throttle_signal_valid && state.controller_feedback_fresh &&
-        !state.controller_fault_latched &&
+        !state.controller_fault_blocked &&
         throttle_released && !state.brake_active &&
         state.gear == Gear::Drive && mode_requests_off &&
         state.vehicle_speed_valid &&
@@ -344,7 +344,7 @@ static void drive_supervisor_update() {
     const DriveSupervisorInput in {
         requested_left_a, requested_right_a,
         state.controller_feedback_fresh,
-        state.controller_fault_latched ||
+        state.controller_fault_blocked ||
             state.controller_fb2_L.any_fault() || state.controller_fb2_R.any_fault() ||
             state.controller_fb2_L.speed_mode || state.controller_fb2_R.speed_mode ||
             !torque_allowed(),
@@ -390,7 +390,7 @@ static void drive_supervisor_update() {
     command_snapshot.gear = state.gear;
     command_snapshot.safety_allow = torque_allowed();
     if (!state.controller_feedback_fresh) command_snapshot.block_reasons |= BLOCK_FEEDBACK;
-    if (state.controller_fault_latched || state.controller_fb2_L.any_fault() ||
+    if (state.controller_fault_blocked || state.controller_fb2_L.any_fault() ||
         state.controller_fb2_R.any_fault()) command_snapshot.block_reasons |= BLOCK_FAULT;
     if (state.controller_fb2_L.speed_mode || state.controller_fb2_R.speed_mode)
         command_snapshot.block_reasons |= BLOCK_SPEED_MODE;

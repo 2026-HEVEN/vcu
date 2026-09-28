@@ -75,12 +75,11 @@ struct VehicleState {
     bool      controller_feedback_fresh_L = false;
     bool      controller_feedback_fresh_R = false;
     bool      controller_feedback_fresh = false;
-    bool      controller_fault_latched = false;
+    bool      controller_fault_blocked = false; // active fault or awaiting two clear FB2 samples
     uint8_t   first_fault_bytes[6]{}; // L error1/2/3, R error1/2/3
-    uint8_t   fault_origin = 0; // bit0 L fault,1 R fault,2 L >1000A,3 R >1000A
+    uint8_t   fault_origin = 0; // bit0 L fault, bit1 R fault; historical episode, never a control gate
     uint32_t  fault_first_ms = 0;
-    bool      fault_rearm_ready = false;
-    unsigned  fault_rearm_count = 0;
+    unsigned  fault_recovery_count = 0;
     uint16_t  first_block_reasons = 0; // first control/TX observation of latest episode
     uint16_t  block_event_count = 0;
     uint32_t  first_block_ms = 0;

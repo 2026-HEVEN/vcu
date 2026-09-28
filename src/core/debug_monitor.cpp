@@ -54,7 +54,7 @@ void request_motor_test(bool left, bool right, float current_a,
         reject_motor_test("throttle signal raw is below the valid floor");
         return;
     }
-    if (state.controller_fault_latched) {
+    if (state.controller_fault_blocked) {
         reject_motor_test("controller fault active; waiting for healthy feedback and auto-recovery");
         return;
     }
@@ -157,9 +157,7 @@ void accept_serial_command() {
     unsigned test_duration_ms = 0U;
     char trailing = '\0';
     if (std::strcmp(g_serial_line, "FAULT_REARM") == 0) {
-        Serial.println(can_bus::rearm_controller_fault()
-            ? "[FAULT] rearmed; automatic torque ramp armed; history retained"
-            : "[FAULT] not ready (active/stale fault or no latch); auto-recovery remains enabled");
+        Serial.println("[FAULT] manual rearm removed; recovery follows two clear FB2 samples");
     } else if (std::strcmp(g_serial_line, "SYNC_ARM") == 0) {
         g_sync_arm_request = true;
         Serial.println("[SYNC] arm requested");
@@ -277,7 +275,7 @@ void debug_update() {
             (float)state.wheel_speed[WHEEL_RR],
             state.controller_feedback_fresh_L,
             state.controller_feedback_fresh_R,
-            state.controller_fault_latched,
+            state.controller_fault_blocked,
             state.can_rx_queued_count, state.can_rx_missed_count,
             state.can_bus_error_count);
     } else {
@@ -320,7 +318,7 @@ void debug_update() {
                 state.controller_handshaked_L, state.controller_handshaked_R,
                 state.controller_feedback_fresh_L,
                 state.controller_feedback_fresh_R,
-                state.controller_fault_latched, (unsigned)state.gear,
+                state.controller_fault_blocked, (unsigned)state.gear,
                 (unsigned)state.gear_sensed, (unsigned)state.gear_raw_adc,
                 state.throttle_raw_adc, state.throttle_signal_valid,
                 (float)state.throttle_pct,
@@ -388,12 +386,12 @@ void debug_update() {
                 (unsigned)state.steering_raw_counts,
                 state.steering_telemetry.unit,
                 state.steering_telemetry.valid);
-            Serial.printf("DRIVE_DIAG block=%04X first=%04X event=%u at=%lu rawMin=%u invalidRaw=%u invalidN=%u faultAt=%lu origin=%02X rearmReady=%d rearmN=%u logDrop=%lu\n",
+            Serial.printf("DRIVE_DIAG block=%04X first=%04X event=%u at=%lu rawMin=%u invalidRaw=%u invalidN=%u faultAt=%lu origin=%02X faultBlocked=%d recoverN=%u logDrop=%lu\n",
                 state.diagnostic_block_reasons, state.first_block_reasons,
                 state.block_event_count, (unsigned long)state.first_block_ms,
                 state.throttle_window_min, state.throttle_last_invalid_raw,
                 state.throttle_invalid_samples, (unsigned long)state.fault_first_ms,
-                state.fault_origin, state.fault_rearm_ready, state.fault_rearm_count,
+                state.fault_origin, state.controller_fault_blocked, state.fault_recovery_count,
                 (unsigned long)state.drive_diagnostic_tx_drops);
         }
     }

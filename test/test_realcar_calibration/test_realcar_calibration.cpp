@@ -113,10 +113,12 @@ void test_paddock_speed_current_profile_is_bounded() {
         fixed_config::vehicle::MOTOR_CONTINUOUS_CURRENT_MAX_A);
     TEST_ASSERT_TRUE(
         realcar_cal::bringup::PADDOCK_CURRENT_LINEAR_END_SPEED_MPS > 0.0f);
-    TEST_ASSERT_TRUE(
-        realcar_cal::bringup::PADDOCK_POWER_SOFT_LIMIT_W > 0.0f);
-    TEST_ASSERT_TRUE(
-        realcar_cal::bringup::PADDOCK_PACK_CURRENT_LIMIT_A < 157.0f);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f,
+        realcar_cal::bringup::PADDOCK_POWER_SOFT_LIMIT_W);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f,
+        realcar_cal::bringup::PADDOCK_CONTROLLER_BUS_CURRENT_LIMIT_A);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f,
+        realcar_cal::bringup::PADDOCK_PACK_CURRENT_LIMIT_A);
     TEST_ASSERT_TRUE(realcar_cal::bringup::PADDOCK_REQUIRE_PACK_DATA);
 }
 

@@ -23,7 +23,7 @@ BMS, EM = 0x18F3FFC0, 0x1CF5FFC1
 IDS = {L1, R1, L2, R2, STATUS, CONTROL, SPEED, BLOCK, FAULT,
        THROTTLE, BMS, EM, DRIVE, MOTOR, TV_YAW, TV_LOAD}
 BLOCK_NAMES = ('throttle_invalid', 'safety_fsm', 'direction_gear',
-               'feedback_stale', 'fault_latch', 'speed_mode', 'snapshot_stale',
+               'feedback_stale', 'fault_block', 'speed_mode', 'snapshot_stale',
                'scheduler_heartbeat', 'reconnect_inhibit', 'component_test',
                'nonfinite_command', 'thermal_zero', 'paddock_sensor_invalid')
 
@@ -178,7 +178,8 @@ def summarize(path, around=None):
             elif cid == FAULT:
                 current_fault = (payload[0:6].hex(), payload[6], payload[7] & 1)
                 last_fault = {'t_s': t / 1000, 'first_error_hex': payload[0:6].hex(),
-                              'origin': payload[6], 'latched': bool(payload[7] & 1),
+                              'origin': payload[6], 'fault_blocked': bool(payload[7] & 1),
+                              'latched': bool(payload[7] & 1), # legacy key for older log consumers
                               'rearm_ready': bool(payload[7] & 2)}
                 if current_fault != last_fault_state and (payload[6] or payload[7] & 1):
                     fault_events.append(last_fault.copy())

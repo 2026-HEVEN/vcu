@@ -78,16 +78,14 @@ enum MotorBlock : uint16_t {
     BLOCK_PADDOCK_SENSOR = 1U << 12
 };
 
-// One FB2 fault frame blocks torque immediately; only
-// repeated fault frames become a persistent VCU fault episode. Recovery needs
-// repeated clear frames, never merely a missing/stale FB2 message.
-struct FaultSampleState {
-    unsigned fault_samples = 0;
+// One received fault blocks immediately. Only new, consecutive clear FB2
+// samples release that side; elapsed time or a missing frame cannot clear it.
+struct FaultRecoveryState {
     unsigned clear_samples = 0;
-    bool confirmed = false;
+    bool blocked = false;
 };
-void fault_sample_update(bool active, unsigned confirm_frames,
-                         unsigned clear_frames, FaultSampleState &state);
+void fault_recovery_update(bool active, unsigned clear_frames,
+                           FaultRecoveryState &state);
 
 // 불허면 좌우 모두 0 A / run=false / 0 rpm. 한쪽만 차단하는 경로는 없다.
 MotorFrameCommand motor_command_resolve(const MotorCommandSnapshot &snapshot,

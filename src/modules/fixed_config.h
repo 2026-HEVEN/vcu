@@ -67,10 +67,9 @@ constexpr unsigned MOTOR_RECONNECT_RAMP_MS = 250U;
 static_assert(MOTOR_RECONNECT_RAMP_MS > 0U,
               "motor reconnect ramp must be nonzero");
 constexpr unsigned MOTOR_FAULT_RECOVERY_RAMP_MS = 250U;
-constexpr unsigned MOTOR_FAULT_CONFIRM_FRAMES = 2U;
 constexpr unsigned MOTOR_FAULT_CLEAR_FRAMES = 2U;
 static_assert(MOTOR_FAULT_RECOVERY_RAMP_MS > 0U &&
-              MOTOR_FAULT_CONFIRM_FRAMES > 0U && MOTOR_FAULT_CLEAR_FRAMES > 0U,
+              MOTOR_FAULT_CLEAR_FRAMES > 0U,
               "fault recovery requires positive ramp and sample counts");
 
 constexpr unsigned MOTOR_COMMAND_SNAPSHOT_MAX_AGE_MS = 100U;
@@ -83,10 +82,6 @@ static_assert(MOTOR_TX_FAIL_LIMIT * MOTOR_COMMAND_PERIOD_MS < 250U,
 
 constexpr float CLUSTER_COMMAND_STALE_MS = 200.0f;
 constexpr unsigned CAN_RX_QUEUE_LENGTH = 32U;
-
-// This is retained as a malformed-feedback/anomaly latch, not as the primary
-// motor-current protection. The controller enforces its configured current.
-constexpr float PHASE_CURRENT_HARD_CUTOFF_A = 1000.0f;
 
 // Released-pedal arming policy.
 constexpr float THROTTLE_ARM_MAX_PCT = 1.0f;

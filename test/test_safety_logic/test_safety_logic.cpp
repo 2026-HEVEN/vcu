@@ -332,35 +332,78 @@ void test_boot_invalid_cannot_bypass_release() {
     in.start_pressed = true;
     TEST_ASSERT_TRUE(safety_step(s,in) == SafetyState::Drive);
 }
-void test_fault_requires_two_frames_but_single_frame_blocks_both() {
-    FaultSampleState s;
-    fault_sample_update(true, 2, 2, s);
-    TEST_ASSERT_FALSE(s.confirmed);
+void test_single_fault_requires_two_clear_samples() {
+    FaultRecoveryState s;
+    fault_recovery_update(true, 2, s);
+    TEST_ASSERT_TRUE(s.blocked);
     auto g = mc_gates();
-    g.controller_fault_active = true;
-    auto blocked = mc_resolve(mc_snapshot(), g);
-    TEST_ASSERT_EQUAL_UINT16(BLOCK_FAULT, blocked.block_reasons);
-    mc_assert_both_blocked(blocked);
-    fault_sample_update(false, 2, 2, s);
-    TEST_ASSERT_FALSE(s.confirmed);
-    TEST_ASSERT_EQUAL_UINT(0, s.fault_samples);
-    g.controller_fault_active = false;
+    g.controller_fault_active = s.blocked;
+    mc_assert_both_blocked(mc_resolve(mc_snapshot(), g));
+    fault_recovery_update(false, 2, s);
+    TEST_ASSERT_TRUE(s.blocked);
+    g.controller_fault_active = s.blocked;
+    mc_assert_both_blocked(mc_resolve(mc_snapshot(), g));
+    fault_recovery_update(false, 2, s);
+    TEST_ASSERT_FALSE(s.blocked);
+    g.controller_fault_active = s.blocked;
     TEST_ASSERT_TRUE(mc_resolve(mc_snapshot(), g).normal_allow);
 }
-void test_confirmed_fault_needs_two_clear_frames() {
-    FaultSampleState s;
-    fault_sample_update(true, 2, 2, s);
-    fault_sample_update(true, 2, 2, s);
-    TEST_ASSERT_TRUE(s.confirmed);
-    fault_sample_update(false, 2, 2, s);
-    TEST_ASSERT_TRUE(s.confirmed);
-    TEST_ASSERT_EQUAL_UINT(1, s.clear_samples);
-    fault_sample_update(true, 2, 2, s);
-    TEST_ASSERT_TRUE(s.confirmed);
-    TEST_ASSERT_EQUAL_UINT(0, s.clear_samples);
-    fault_sample_update(false, 2, 2, s);
-    fault_sample_update(false, 2, 2, s);
-    TEST_ASSERT_FALSE(s.confirmed);
+void test_alternating_fault_cannot_resume_on_one_clear_sample() {
+    FaultRecoveryState s;
+    for (int i = 0; i < 10; ++i) {
+        fault_recovery_update(true, 2, s);
+        fault_recovery_update(false, 2, s);
+        TEST_ASSERT_TRUE(s.blocked);
+        TEST_ASSERT_EQUAL_UINT(1, s.clear_samples);
+    }
+    fault_recovery_update(false, 2, s);
+    TEST_ASSERT_FALSE(s.blocked);
+}
+void test_clear_samples_are_per_controller() {
+    FaultRecoveryState left, right;
+    fault_recovery_update(true, 2, left);
+    for (int i=0; i<20; ++i) fault_recovery_update(false, 2, right);
+    TEST_ASSERT_TRUE(left.blocked);
+    TEST_ASSERT_FALSE(right.blocked);
+    fault_recovery_update(false, 2, left);
+    fault_recovery_update(true, 2, right);
+    fault_recovery_update(false, 2, left);
+    TEST_ASSERT_FALSE(left.blocked);
+    TEST_ASSERT_TRUE(right.blocked);
+    fault_recovery_update(false, 2, right);
+    TEST_ASSERT_TRUE(right.blocked);
+    fault_recovery_update(false, 2, right);
+    TEST_ASSERT_FALSE(right.blocked);
+}
+void test_link_loss_discards_partial_recovery_without_clearing_fault() {
+    FaultRecoveryState s;
+    fault_recovery_update(true, 2, s);
+    fault_recovery_update(false, 2, s);
+    s.clear_samples = 0; // same invalidation policy as runtime
+    TEST_ASSERT_TRUE(s.blocked);
+    fault_recovery_update(false, 2, s);
+    TEST_ASSERT_TRUE(s.blocked);
+    fault_recovery_update(false, 2, s);
+    TEST_ASSERT_FALSE(s.blocked);
+}
+void test_fault_recovery_still_respects_common_gates() {
+    FaultRecoveryState f;
+    fault_recovery_update(true, 2, f);
+    fault_recovery_update(false, 2, f);
+    fault_recovery_update(false, 2, f);
+    auto s = mc_snapshot();
+    auto g = mc_gates();
+    g.controller_fault_active = f.blocked;
+    s.throttle_signal_valid = false;
+    mc_assert_both_blocked(mc_resolve(s, g));
+    s.throttle_signal_valid = true;
+    s.propulsion_direction_armed = false;
+    mc_assert_both_blocked(mc_resolve(s, g));
+    s.propulsion_direction_armed = true;
+    g.reconnect_inhibit = true;
+    mc_assert_both_blocked(mc_resolve(s, g));
+    g.reconnect_inhibit = false;
+    TEST_ASSERT_TRUE(mc_resolve(s, g).normal_allow);
 }
 void test_block_reasons_preserve_upstream_and_tx_gates() {
     auto s=mc_snapshot(); auto g=mc_gates();
@@ -373,8 +416,11 @@ void test_block_reasons_preserve_upstream_and_tx_gates() {
 int main(int, char **) {
     UNITY_BEGIN();
     RUN_TEST(test_boot_invalid_cannot_bypass_release);
-    RUN_TEST(test_fault_requires_two_frames_but_single_frame_blocks_both);
-    RUN_TEST(test_confirmed_fault_needs_two_clear_frames);
+    RUN_TEST(test_single_fault_requires_two_clear_samples);
+    RUN_TEST(test_clear_samples_are_per_controller);
+    RUN_TEST(test_link_loss_discards_partial_recovery_without_clearing_fault);
+    RUN_TEST(test_fault_recovery_still_respects_common_gates);
+    RUN_TEST(test_alternating_fault_cannot_resume_on_one_clear_sample);
     RUN_TEST(test_block_reasons_preserve_upstream_and_tx_gates);
     RUN_TEST(test_shutdown_forces_halt);
     RUN_TEST(test_idle_to_ready_on_handshake);

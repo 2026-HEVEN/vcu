@@ -68,15 +68,11 @@ constexpr float PADDOCK_CURRENT_ZERO_SPEED_PER_MOTOR_A = 400.0f;
 constexpr float PADDOCK_CURRENT_HIGH_SPEED_PER_MOTOR_A = 50.0f;
 constexpr float PADDOCK_CURRENT_LINEAR_END_SPEED_MPS = 80.0f / 3.6f;
 constexpr float PADDOCK_ENTRY_SPEED_MAX_MPS = 3.0f / 3.6f;
-// The Bexel pack's 157 A continuous rating is about 8.13 kW at 51.8 V.
-// Keep a small margin below that value; this is a soft command scaler, not a
-// substitute for hardware over-current protection.
-constexpr float PADDOCK_POWER_SOFT_LIMIT_W = 8000.0f;
-// Controller L+R bus-current feedback ran about 20--30% above the delayed BMS
-// value in the 2026-09-05 logs.  200 A controller-sum and 150 A BMS limits
-// represent approximately the same operating boundary.
-constexpr float PADDOCK_CONTROLLER_BUS_CURRENT_LIMIT_A = 200.0f;
-constexpr float PADDOCK_PACK_CURRENT_LIMIT_A = 150.0f;
+// Feedback-based electrical limiting is disabled for this test profile.
+// Zero disables these scalers; voltage/current feedback remains logged.
+constexpr float PADDOCK_POWER_SOFT_LIMIT_W = 0.0f;
+constexpr float PADDOCK_CONTROLLER_BUS_CURRENT_LIMIT_A = 0.0f;
+constexpr float PADDOCK_PACK_CURRENT_LIMIT_A = 0.0f;
 constexpr bool PADDOCK_REQUIRE_PACK_DATA = true;
 // Raw values below this floor are treated as a disconnected/failed signal,
 // not as a released pedal.

@@ -1,5 +1,6 @@
 #include <unity.h>
 #include "modules/drive_supervisor.h"
+#include "modules/realcar_calibration.h"
 
 static DriveSupervisorParams params() {
     return {500.0f, 0.5f, 8000.0f, 0.92f, 0.1266f,
@@ -295,9 +296,41 @@ void test_thermal_cutoff_also_blocks_regen(void) {
 }
 
 void setUp(void) { supervisor_state = DriveSupervisorState{}; }
+void test_current_profile_electrical_feedback_does_not_limit_drive(void) {
+    auto p = params();
+    using namespace realcar_cal::bringup;
+    p.drive_current_rise_time_s = DRIVE_CURRENT_RISE_TIME_S;
+    p.power_soft_limit_w = ENABLE_DRIVE_POWER_LIMIT ? DRIVE_POWER_SOFT_LIMIT_W : 0.0f;
+    p.paddock_power_soft_limit_w = PADDOCK_POWER_SOFT_LIMIT_W;
+    p.paddock_controller_bus_current_limit_a = PADDOCK_CONTROLLER_BUS_CURRENT_LIMIT_A;
+    p.paddock_pack_current_limit_a = PADDOCK_PACK_CURRENT_LIMIT_A;
+    p.paddock_current_zero_speed_per_motor_a = PADDOCK_CURRENT_ZERO_SPEED_PER_MOTOR_A;
+    p.paddock_current_high_speed_per_motor_a = PADDOCK_CURRENT_HIGH_SPEED_PER_MOTOR_A;
+    const bool modes[] = {false, true};
+    for (bool paddock : modes) {
+        auto in = nominal();
+        in.paddock_active = paddock;
+        in.propulsion_requested = true;
+        in.bus_voltage_left_v = 20.0f;
+        in.bus_voltage_right_v = 80.0f;
+        in.bus_current_left_a = 2000.0f;
+        in.bus_current_right_a = 2000.0f;
+        in.phase_current_left_a = 1500.0f;
+        in.phase_current_right_a = 1500.0f;
+        in.pack_current_a = 1000.0f;
+        auto out = compute(in, p);
+        TEST_ASSERT_EQUAL_FLOAT(100.0f, out.left_a);
+        TEST_ASSERT_EQUAL_FLOAT(100.0f, out.right_a);
+        TEST_ASSERT_FALSE(out.controller_blocked);
+        TEST_ASSERT_FALSE(out.power_limited);
+        TEST_ASSERT_FALSE(out.paddock_current_limited);
+        TEST_ASSERT_TRUE(out.measured_bus_power_w > 10000.0f);
+    }
+}
 void tearDown(void) {}
 int main(int, char **) {
     UNITY_BEGIN();
+    RUN_TEST(test_current_profile_electrical_feedback_does_not_limit_drive);
     RUN_TEST(test_stale_feedback_blocks_all_current);
     RUN_TEST(test_fault_blocks_all_current);
     RUN_TEST(test_power_limit_scales_both_motors);

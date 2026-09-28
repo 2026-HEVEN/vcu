@@ -32,7 +32,6 @@ namespace can_bus {
     // 이 경로가 유일한 관측 수단이다.
     void send_clamp_stats();
     void send_drive_diagnostics(); // 10Hz raw ADC + block + fault history
-    bool rearm_controller_fault(); // optional diagnostic command; RX auto-recovers when healthy
     bool handshaked();      // controller handshake completed
     bool deadman_ok();      // a fresh control command arrived within timeout
     void note_command();    // call when a new control command is produced

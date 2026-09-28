@@ -59,16 +59,14 @@ SafetyState safety_step(SafetyState cur, const SafetyInputs &in) {
     }
 }
 
-void fault_sample_update(bool active, unsigned confirm_frames,
-                         unsigned clear_frames, FaultSampleState &s) {
+void fault_recovery_update(bool active, unsigned clear_frames,
+                           FaultRecoveryState &s) {
     if (active) {
         s.clear_samples = 0;
-        if (s.fault_samples < confirm_frames) ++s.fault_samples;
-        if (s.fault_samples >= confirm_frames) s.confirmed = true;
-    } else {
-        s.fault_samples = 0;
+        s.blocked = true;
+    } else if (s.blocked) {
         if (s.clear_samples < clear_frames) ++s.clear_samples;
-        if (s.clear_samples >= clear_frames) s.confirmed = false;
+        if (s.clear_samples >= clear_frames) s.blocked = false;
     }
 }
 

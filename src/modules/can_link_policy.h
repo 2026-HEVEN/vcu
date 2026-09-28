@@ -23,8 +23,8 @@ bool controller_feedback_fresh(const FeedbackAges &a);
 // Drop the link and wait for a new 0x55 handshake.
 bool controller_feedback_lost(const FeedbackAges &a);
 
-// Both parts recent. Required wherever a decision reads FB2 fault/temperature
-// values (fault re-arm, component test), so an old "no fault" is never trusted.
+// Both parts recent. The serial component test requires this stricter gate;
+// normal fault recovery counts newly received clear FB2 samples instead.
 bool controller_feedback_both_recent(const FeedbackAges &a);
 
 // ---- Command phase guard --------------------------------------------------
