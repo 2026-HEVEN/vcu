@@ -1,6 +1,7 @@
 #pragma once
 #include "types.h"
 #include "modules/realcar_calibration.h"
+#include "modules/fixed_config.h"
 // [FILL-IN] 4륜 휠속도 → 차속 추정. 어느 바퀴를 쓸지는 이 모듈이 정한다.
 //
 // 왜 별도 모듈인가:
@@ -17,23 +18,38 @@ struct VehicleSpeedCalib {
     float tire_radius_m  = realcar_cal::provisional::WHEEL_SPEED_ROLLING_RADIUS_M;
     float track_m        = realcar_cal::provisional::FRONT_TRACK_M;
     float max_accel_mps2 = realcar_cal::provisional::VEHICLE_SPEED_MAX_ACCEL_MPS2;
+    // One 10 ms pulse bin is much coarser than the physically plausible
+    // speed change. Account for its step after the WSS low-pass filter.
+    float front_pulses_per_rev =
+        fixed_config::vehicle::WSS_PULSES_PER_WHEEL_REV_FL <
+        fixed_config::vehicle::WSS_PULSES_PER_WHEEL_REV_FR
+            ? fixed_config::vehicle::WSS_PULSES_PER_WHEEL_REV_FL
+            : fixed_config::vehicle::WSS_PULSES_PER_WHEEL_REV_FR;
+    float wss_filter_time_constant_s =
+        realcar_cal::provisional::WSS_FILTER_TIME_CONSTANT_S;
 };
 
 struct VehicleSpeedInput {
     Rpm   wheel_rpm[WHEEL_COUNT];   // FL, FR, RL, RR
+    bool  wheel_sample_valid[WHEEL_COUNT] = {true, true, true, true};
     float yaw_rate;                 // deg/s (전륜 한쪽만 살아있을 때 선회 보정에 사용)
     float dt;                       // s
 };
 
 // 이력(직전 추정 차속)은 전역변수가 아니라 이 struct에 담는다 (ImuFilterState와 동일 패턴).
 struct VehicleSpeedState {
-    float speed_mps  = 0.0f;
+    float speed_mps  = 0.0f;        // last accepted FRONT speed, never rear fallback
     bool  primed     = false;       // 첫 샘플 여부 (첫 tick은 급변 검사를 건너뛴다)
+    float invalid_age_s = 0.0f;
+    float reacquire_candidate_mps = 0.0f;
+    float reacquire_age_s = 0.0f;
+    bool  reacquire_candidate_valid = false;
 };
 
 struct VehicleSpeedOutput {
     float speed_mps;                // 추정 차속 [m/s]
-    bool  valid;                    // false = 전륜 신호를 못 믿음 → TV는 비활성화할 것
+    bool  valid;                    // brief held speed is valid; prolonged loss is not
+    bool  held = false;             // true = last accepted front speed, not new measurement
 };
 
 // 전륜(비구동륜) 기준으로 차속을 추정한다. 구동륜은 토크로 슬립하므로 쓰지 않는다.

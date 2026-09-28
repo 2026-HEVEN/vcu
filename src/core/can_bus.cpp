@@ -55,7 +55,11 @@ namespace {
     // values, so they must not accept the relaxed torque-gating freshness.
     volatile bool      g_feedback_both_recent_L = false;
     volatile bool      g_feedback_both_recent_R = false;
-    RearmDwell g_fault_rearm_dwell{}; // RX scheduler only
+    FaultSampleState g_fault_samples_L{}; // RX scheduler only
+    FaultSampleState g_fault_samples_R{};
+    volatile bool g_fault_recovery_ramp_pending = false;
+    volatile bool g_fault_recovery_ramp_active = false;
+    volatile uint32_t g_fault_recovery_ramp_start_ms = 0U;
     void latch_fault(uint8_t origin) {
         if (!state.controller_fault_latched) {
             state.fault_origin = 0;
@@ -75,26 +79,32 @@ namespace {
         state.fault_origin |= origin;
         state.controller_fault_latched = true;
         state.fault_rearm_ready = false;
-        g_fault_rearm_dwell.tracking = false;
+        g_fault_recovery_ramp_active = false;
+        g_fault_recovery_ramp_pending = false;
     }
     bool rearm_conditions_ok() {
         return g_handshaked_L && g_handshaked_R &&
             g_feedback_both_recent_L && g_feedback_both_recent_R &&
             !state.controller_fb2_L.any_fault() && !state.controller_fb2_R.any_fault() &&
+            g_fault_samples_L.clear_samples >= fixed_config::runtime::MOTOR_FAULT_CLEAR_FRAMES &&
+            g_fault_samples_R.clear_samples >= fixed_config::runtime::MOTOR_FAULT_CLEAR_FRAMES &&
             !state.controller_fb2_L.speed_mode && !state.controller_fb2_R.speed_mode &&
-            state.throttle_signal_valid && (float)state.throttle_pct == 0.0f &&
-            std::abs(state.controller_fb1_L.motor_speed_rpm) <= 50 &&
-            std::abs(state.controller_fb1_R.motor_speed_rpm) <= 50 &&
+            state.throttle_signal_valid &&
             std::isfinite(state.controller_fb1_L.phase_current_a) &&
             std::isfinite(state.controller_fb1_R.phase_current_a) &&
             std::fabs(state.controller_fb1_L.phase_current_a) <= fixed_config::runtime::PHASE_CURRENT_HARD_CUTOFF_A &&
             std::fabs(state.controller_fb1_R.phase_current_a) <= fixed_config::runtime::PHASE_CURRENT_HARD_CUTOFF_A &&
-            state.controller_fb2_L.controller_temp_c < realcar_cal::bringup::CONTROLLER_DERATE_START_C &&
-            state.controller_fb2_R.controller_temp_c < realcar_cal::bringup::CONTROLLER_DERATE_START_C &&
-            state.controller_fb2_L.motor_temp_c < realcar_cal::bringup::MOTOR_DERATE_START_C &&
-            state.controller_fb2_R.motor_temp_c < realcar_cal::bringup::MOTOR_DERATE_START_C &&
-            !state.component_test_active && !state.component_test_normal_inhibit &&
-            !state.time_sync_armed && !state.time_sync_active;
+            state.controller_fb2_L.controller_temp_c < realcar_cal::bringup::CONTROLLER_CUTOFF_C &&
+            state.controller_fb2_R.controller_temp_c < realcar_cal::bringup::CONTROLLER_CUTOFF_C &&
+            state.controller_fb2_L.motor_temp_c < realcar_cal::bringup::MOTOR_CUTOFF_C &&
+            state.controller_fb2_R.motor_temp_c < realcar_cal::bringup::MOTOR_CUTOFF_C;
+    }
+    void clear_fault_latch() {
+        state.controller_fault_latched = false;
+        state.fault_rearm_ready = false;
+        ++state.fault_rearm_count;
+        g_fault_recovery_ramp_pending = true;
+        g_fault_recovery_ramp_active = false;
     }
     portMUX_TYPE         g_link_diag_mux = portMUX_INITIALIZER_UNLOCKED;
     uint32_t             g_link_drops_L = 0U; // guarded by g_link_diag_mux
@@ -134,12 +144,14 @@ namespace {
             state.controller_fb1_last_ms_L = 0U;
             state.controller_fb2_last_ms_L = 0U;
             g_feedback_recovery_expected_L = true;
+            g_fault_samples_L = {};
         } else {
             state.controller_handshaked_R = false;
             state.controller_feedback_fresh_R = false;
             state.controller_fb1_last_ms_R = 0U;
             state.controller_fb2_last_ms_R = 0U;
             g_feedback_recovery_expected_R = true;
+            g_fault_samples_R = {};
         }
         state.controller_feedback_fresh = false;
         g_reconnect_inhibit = true;
@@ -246,6 +258,8 @@ namespace {
             gates.scheduler_alive = checked_at_ms - command_heartbeat_ms < DEADMAN_MS;
             gates.reconnect_inhibit = g_reconnect_inhibit;
             gates.component_test_inhibit = state.component_test_normal_inhibit;
+            gates.controller_fault_active = state.controller_fb2_L.any_fault() ||
+                state.controller_fb2_R.any_fault();
             gates.snapshot_fresh = motor_snapshot_fresh(snap, checked_at_ms,
                 fixed_config::runtime::MOTOR_COMMAND_SNAPSHOT_MAX_AGE_MS);
             gates.reconnect_ramp_scale = 1.0f;   // ramp applied after the test branch
@@ -281,6 +295,8 @@ namespace {
                         component_test_safety_allowed() &&
                         state.throttle_signal_valid &&
                         !state.controller_fault_latched &&
+                        !state.controller_fb2_L.any_fault() &&
+                        !state.controller_fb2_R.any_fault() &&
                         (float)state.throttle_pct <=
                             fixed_config::runtime::THROTTLE_ARM_MAX_PCT &&
                         !state.brake_active && state.gear == Gear::Drive;
@@ -342,6 +358,30 @@ namespace {
                         (float)elapsed_ms / (float)ramp_ms;
                     l *= ramp_scale;
                     r *= ramp_scale;
+                }
+            }
+            // Start on the first actual propulsion command, not when the
+            // fault clears with the pedal released. A held pedal resumes
+            // automatically, but never jumps straight to full current.
+            if (normal_allow && g_fault_recovery_ramp_pending &&
+                (std::fabs(l) > 0.01f || std::fabs(r) > 0.01f)) {
+                g_fault_recovery_ramp_pending = false;
+                g_fault_recovery_ramp_active = true;
+                g_fault_recovery_ramp_start_ms = now;
+            }
+            if (!normal_allow && g_fault_recovery_ramp_active) {
+                g_fault_recovery_ramp_active = false;
+                g_fault_recovery_ramp_pending = true;
+            }
+            if (normal_allow && g_fault_recovery_ramp_active) {
+                const uint32_t elapsed_ms = now - g_fault_recovery_ramp_start_ms;
+                const uint32_t ramp_ms = fixed_config::runtime::MOTOR_FAULT_RECOVERY_RAMP_MS;
+                if (elapsed_ms >= ramp_ms) {
+                    g_fault_recovery_ramp_active = false;
+                } else {
+                    const float scale = (float)elapsed_ms / (float)ramp_ms;
+                    l *= scale;
+                    r *= scale;
                 }
             }
 
@@ -460,11 +500,7 @@ MotorTxDiagnostics motor_tx_diagnostics() {
 bool rearm_controller_fault() {
     if (!state.controller_fault_latched || !state.fault_rearm_ready ||
         !rearm_conditions_ok()) return false;
-    safety_require_rearm();
-    state.controller_fault_latched = false;
-    state.fault_rearm_ready = false;
-    g_fault_rearm_dwell.tracking = false;
-    ++state.fault_rearm_count;
+    clear_fault_latch();
     return true;
 }
 
@@ -614,6 +650,7 @@ void send_sensor_telemetry() {
         state.throttle_signal_valid && !g_reconnect_inhibit &&
         !state.component_test_normal_inhibit && state.propulsion_direction_armed &&
         state.controller_feedback_fresh && !state.controller_fault_latched &&
+        !state.controller_fb2_L.any_fault() && !state.controller_fb2_R.any_fault() &&
         (state.gear == Gear::Drive || state.gear == Gear::Reverse);
     // 차단 사유를 여기서 재계산하지 않는다. 판정은 tv_gate_evaluate()가 이미
     // 했고, app_wiring이 state.tv_gate에 넣어둔 그 결과만 그대로 보고한다.
@@ -731,13 +768,29 @@ void poll_rx() {
         if (m.data_length_code == 8 && m.identifier == CAN_ID_FB2_L) {
             state.controller_fb2_L = decode_controller_feedback_part2(m.data);
             state.controller_fb2_last_ms_L = now;
-            if (state.controller_fb2_L.any_fault()) latch_fault(1U);
+            if (state.controller_fb2_L.any_fault()) {
+                g_fault_recovery_ramp_active = false;
+                g_fault_recovery_ramp_pending = true;
+            }
+            fault_sample_update(state.controller_fb2_L.any_fault(),
+                fixed_config::runtime::MOTOR_FAULT_CONFIRM_FRAMES,
+                fixed_config::runtime::MOTOR_FAULT_CLEAR_FRAMES, g_fault_samples_L);
+            if (state.controller_fb2_L.any_fault() && g_fault_samples_L.confirmed)
+                latch_fault(1U);
             continue;
         }
         if (m.data_length_code == 8 && m.identifier == CAN_ID_FB2_R) {
             state.controller_fb2_R = decode_controller_feedback_part2(m.data);
             state.controller_fb2_last_ms_R = now;
-            if (state.controller_fb2_R.any_fault()) latch_fault(2U);
+            if (state.controller_fb2_R.any_fault()) {
+                g_fault_recovery_ramp_active = false;
+                g_fault_recovery_ramp_pending = true;
+            }
+            fault_sample_update(state.controller_fb2_R.any_fault(),
+                fixed_config::runtime::MOTOR_FAULT_CONFIRM_FRAMES,
+                fixed_config::runtime::MOTOR_FAULT_CLEAR_FRAMES, g_fault_samples_R);
+            if (state.controller_fb2_R.any_fault() && g_fault_samples_R.confirmed)
+                latch_fault(2U);
             continue;
         }
         if (m.data_length_code == 8 && m.identifier == CAN_ID_CLUSTER_BMS_STATUS) {
@@ -784,8 +837,8 @@ void poll_rx() {
     // session was alive.  Accept that evidence only for a link which was
     // previously handshaked and then explicitly invalidated; initial startup
     // still requires the normal 0x55/0xAA exchange.  The global reconnect
-    // inhibit remains set until both sides are ready, after which the existing
-    // one-second torque ramp performs the controlled recovery.
+    // inhibit remains set until both sides are ready; a short torque ramp
+    // controls the recovery.
     if (!g_handshaked_L && g_feedback_recovery_expected_L &&
         state.controller_feedback_fresh_L) {
         portENTER_CRITICAL(&g_link_diag_mux);
@@ -876,8 +929,11 @@ void poll_rx() {
     g_handshaked = fixed_config::runtime::REQUIRE_BOTH_MOTOR_CONTROLLERS
         ? (g_handshaked_L && g_handshaked_R)
         : (g_handshaked_L || g_handshaked_R);
-    state.fault_rearm_ready = fault_rearm_dwell(
-        state.controller_fault_latched && rearm_conditions_ok(), millis(), g_fault_rearm_dwell);
+    state.fault_rearm_ready = state.controller_fault_latched && rearm_conditions_ok();
+    if (state.fault_rearm_ready) {
+        clear_fault_latch();
+        Serial.println("[FAULT] controller feedback healthy; torque auto-resume ramp armed");
+    }
 }
 
 bool handshaked() { return g_handshaked; }

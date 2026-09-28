@@ -16,12 +16,6 @@ namespace {
     bool g_previously_driven = false;
 }
 
-void safety_require_rearm() {
-    g_state = SafetyState::Ready;
-    g_throttle_release_ticks = 0;
-    g_previously_driven = false;
-}
-
 bool torque_allowed() { return g_state == SafetyState::Drive; }
 bool component_test_safety_allowed() { return g_state != SafetyState::Halt; }
 

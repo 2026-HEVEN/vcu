@@ -59,10 +59,17 @@ SafetyState safety_step(SafetyState cur, const SafetyInputs &in) {
     }
 }
 
-bool fault_rearm_dwell(bool healthy, uint32_t now, RearmDwell &s) {
-    if (!healthy) { s.tracking = false; return false; }
-    if (!s.tracking) { s.tracking = true; s.since_ms = now; }
-    return now - s.since_ms >= 1000U;
+void fault_sample_update(bool active, unsigned confirm_frames,
+                         unsigned clear_frames, FaultSampleState &s) {
+    if (active) {
+        s.clear_samples = 0;
+        if (s.fault_samples < confirm_frames) ++s.fault_samples;
+        if (s.fault_samples >= confirm_frames) s.confirmed = true;
+    } else {
+        s.fault_samples = 0;
+        if (s.clear_samples < clear_frames) ++s.clear_samples;
+        if (s.clear_samples >= clear_frames) s.confirmed = false;
+    }
 }
 
 namespace {
@@ -88,6 +95,7 @@ MotorFrameCommand motor_command_resolve(const MotorCommandSnapshot &snapshot,
     if (!gates.snapshot_fresh) out.block_reasons |= BLOCK_SNAPSHOT;
     if (gates.reconnect_inhibit) out.block_reasons |= BLOCK_RECONNECT;
     if (gates.component_test_inhibit) out.block_reasons |= BLOCK_TEST;
+    if (gates.controller_fault_active) out.block_reasons |= BLOCK_FAULT;
     if (!finite_command) out.block_reasons |= BLOCK_NONFINITE;
     out.normal_allow = out.block_reasons == 0;
     if (!out.normal_allow) return out;   // 기본값이 곧 좌우 동시 차단

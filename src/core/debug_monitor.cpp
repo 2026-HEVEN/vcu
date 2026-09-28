@@ -55,11 +55,11 @@ void request_motor_test(bool left, bool right, float current_a,
         return;
     }
     if (state.controller_fault_latched) {
-        reject_motor_test("controller fault latch set; diagnose then FAULT_REARM at rest");
+        reject_motor_test("controller fault active; waiting for healthy feedback and auto-recovery");
         return;
     }
     if (!component_test_safety_allowed()) {
-        reject_motor_test("safety state is HALT; power-cycle after diagnosis");
+        reject_motor_test("safety state is HALT; awaiting valid inputs/handshake");
         return;
     }
     if ((left && (!state.controller_handshaked_L ||
@@ -158,8 +158,8 @@ void accept_serial_command() {
     char trailing = '\0';
     if (std::strcmp(g_serial_line, "FAULT_REARM") == 0) {
         Serial.println(can_bus::rearm_controller_fault()
-            ? "[FAULT] rearmed; pedal-release arming required; history retained"
-            : "[FAULT] rejected: need latch + healthy fresh/stopped/released state for 1s; not queued");
+            ? "[FAULT] rearmed; automatic torque ramp armed; history retained"
+            : "[FAULT] not ready (active/stale fault or no latch); auto-recovery remains enabled");
     } else if (std::strcmp(g_serial_line, "SYNC_ARM") == 0) {
         g_sync_arm_request = true;
         Serial.println("[SYNC] arm requested");

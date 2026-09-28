@@ -61,9 +61,17 @@ static_assert(CMD_PHASE_SAFE_MIN_MS < CMD_PHASE_CENTER_MS &&
 static_assert(CMD_PHASE_SAFE_MAX_MS - CMD_PHASE_SAFE_MIN_MS >=
               (int)MOTOR_COMMAND_PERIOD_MS / 2,
               "safe band too narrow to fit both controllers");
-constexpr unsigned MOTOR_RECONNECT_RAMP_MS = 1000U;
+// Short controlled recovery: a held pedal must not apply full torque in one
+// CAN command immediately after either controller becomes available again.
+constexpr unsigned MOTOR_RECONNECT_RAMP_MS = 250U;
 static_assert(MOTOR_RECONNECT_RAMP_MS > 0U,
               "motor reconnect ramp must be nonzero");
+constexpr unsigned MOTOR_FAULT_RECOVERY_RAMP_MS = 250U;
+constexpr unsigned MOTOR_FAULT_CONFIRM_FRAMES = 2U;
+constexpr unsigned MOTOR_FAULT_CLEAR_FRAMES = 2U;
+static_assert(MOTOR_FAULT_RECOVERY_RAMP_MS > 0U &&
+              MOTOR_FAULT_CONFIRM_FRAMES > 0U && MOTOR_FAULT_CLEAR_FRAMES > 0U,
+              "fault recovery requires positive ramp and sample counts");
 
 constexpr unsigned MOTOR_COMMAND_SNAPSHOT_MAX_AGE_MS = 100U;
 static_assert(MOTOR_COMMAND_SNAPSHOT_MAX_AGE_MS > 0U,

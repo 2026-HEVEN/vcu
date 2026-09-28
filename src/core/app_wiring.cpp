@@ -197,16 +197,18 @@ static void wheel_speed_update() {
 }
 static void vehicle_speed_update() {
     VehicleSpeedInput in{};
-    for (int ch = 0; ch < WHEEL_COUNT; ++ch) in.wheel_rpm[ch] = state.wheel_speed[ch];
+    for (int ch = 0; ch < WHEEL_COUNT; ++ch) {
+        in.wheel_rpm[ch] = state.wheel_speed[ch];
+        in.wheel_sample_valid[ch] = state.wheel_telemetry.valid[ch];
+    }
     in.yaw_rate = state.yaw_rate;
     in.dt       = WHEEL_SPEED_DT_S;
     VehicleSpeedOutput o = vehicle_speed_compute(in, VSPEED_CAL, vspeed_state);
     state.vehicle_speed_mps   = o.speed_mps;
-    // A stale pair of front-wheel samples must not authorize TV, even if the
-    // speed estimator can still calculate from its previously held RPM values.
-    state.vehicle_speed_valid = o.valid &&
-        (state.wheel_telemetry.valid[WHEEL_FL] ||
-         state.wheel_telemetry.valid[WHEEL_FR]);
+    // A short held front estimate remains usable through one missed sample;
+    // vehicle_speed_compute expires it after 100 ms. Stale wheel RPM alone
+    // cannot keep this valid because sample validity is passed in above.
+    state.vehicle_speed_valid = o.valid;
 }
 static void gear_update_task() {
     // Read the raw ladder on every build so the wiring can be checked even
@@ -346,6 +348,7 @@ static void drive_supervisor_update() {
         requested_left_a, requested_right_a,
         state.controller_feedback_fresh,
         state.controller_fault_latched ||
+            state.controller_fb2_L.any_fault() || state.controller_fb2_R.any_fault() ||
             state.controller_fb2_L.speed_mode || state.controller_fb2_R.speed_mode ||
             !torque_allowed(),
         state.controller_fb1_L.bus_voltage_v, state.controller_fb1_R.bus_voltage_v,
@@ -390,7 +393,8 @@ static void drive_supervisor_update() {
     command_snapshot.gear = state.gear;
     command_snapshot.safety_allow = torque_allowed();
     if (!state.controller_feedback_fresh) command_snapshot.block_reasons |= BLOCK_FEEDBACK;
-    if (state.controller_fault_latched) command_snapshot.block_reasons |= BLOCK_FAULT;
+    if (state.controller_fault_latched || state.controller_fb2_L.any_fault() ||
+        state.controller_fb2_R.any_fault()) command_snapshot.block_reasons |= BLOCK_FAULT;
     if (state.controller_fb2_L.speed_mode || state.controller_fb2_R.speed_mode)
         command_snapshot.block_reasons |= BLOCK_SPEED_MODE;
     if (out.paddock_sensor_blocked) command_snapshot.block_reasons |= BLOCK_PADDOCK_SENSOR;

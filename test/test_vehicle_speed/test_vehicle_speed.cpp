@@ -1,6 +1,7 @@
 // 차속 추정 테스트
 #include <unity.h>
 #include "modules/vehicle_speed.h"
+#include "modules/wheel_speed.h"
 #include <cmath>
 
 static const VehicleSpeedCalib CAL{};   // 실차 시험 시작값은 realcar_calibration.h에서 관리
@@ -93,7 +94,7 @@ void test_single_front_wheel_dropout_is_yaw_corrected(void) {
 }
 
 void test_both_front_lost_is_invalid(void) {
-    // 전륜 둘 다 급변(락업/단선) → valid=false, 값은 후륜 폴백.
+    // 전륜 둘 다 급변(락업/단선) → 100 ms 유한 홀드 뒤 무효.
     VehicleSpeedState s{};
     prime(s, 10.0f);
     VehicleSpeedInput in{};
@@ -102,7 +103,8 @@ void test_both_front_lost_is_invalid(void) {
     in.wheel_rpm[WHEEL_RL] = Rpm(mps_to_rpm(9.0f));
     in.wheel_rpm[WHEEL_RR] = Rpm(mps_to_rpm(9.0f));
     in.dt = 0.01f;
-    VehicleSpeedOutput o = vehicle_speed_compute(in, CAL, s);
+    VehicleSpeedOutput o{};
+    for (int tick = 0; tick < 12; ++tick) o = vehicle_speed_compute(in, CAL, s);
     TEST_ASSERT_FALSE(o.valid);
     TEST_ASSERT_FLOAT_WITHIN(0.05f, 9.0f, o.speed_mps);
 }
@@ -115,7 +117,10 @@ void test_impossible_jump_is_rejected(void) {
     for (int i = 0; i < WHEEL_COUNT; ++i) in.wheel_rpm[i] = Rpm(mps_to_rpm(30.0f));
     in.dt = 0.01f;
     VehicleSpeedOutput o = vehicle_speed_compute(in, CAL, s);
-    TEST_ASSERT_FALSE(o.valid);          // 전륜 둘 다 기각
+    TEST_ASSERT_TRUE(o.held);            // 전륜 둘 다 기각, 짧게 직전 차속 유지
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 10.0f, o.speed_mps);
+    for (int tick = 0; tick < 11; ++tick) o = vehicle_speed_compute(in, CAL, s);
+    TEST_ASSERT_FALSE(o.valid);
     TEST_ASSERT_TRUE(o.speed_mps < 31.0f);
 }
 
@@ -154,6 +159,76 @@ void test_never_negative(void) {
     TEST_ASSERT_TRUE(o.speed_mps >= 0.0f);
 }
 
+void test_normal_24_ppr_bins_do_not_drop_speed_validity(void) {
+    // At 37 km/h the sensor produces alternating one/two-pulse 10 ms bins.
+    // The old 15 m/s2-only gate rejected some of those normal filtered steps.
+    VehicleSpeedState s{};
+    const float speed = 37.0f / 3.6f;
+    prime(s, speed);
+    WheelSpeedFilterState filters[2]{};
+    for (auto &filter : filters) {
+        filter.rpm = mps_to_rpm(speed);
+        filter.initialized = true;
+    }
+    const WssCalib wss{24.0f, 0.25f};
+    for (int tick = 0; tick < 100; ++tick) {
+        VehicleSpeedInput in{};
+        for (int ch = 0; ch < 2; ++ch) {
+            const uint32_t pulses = tick % 5 < 3 ? 2U : 1U;
+            in.wheel_rpm[ch] = wheel_speed_compute_filtered({pulses, 10U}, wss,
+                                                               filters[ch]);
+        }
+        in.wheel_rpm[WHEEL_RL] = Rpm(mps_to_rpm(speed));
+        in.wheel_rpm[WHEEL_RR] = Rpm(mps_to_rpm(speed));
+        in.dt = 0.01f;
+        const VehicleSpeedOutput o = vehicle_speed_compute(in, CAL, s);
+        TEST_ASSERT_TRUE(o.valid);
+        TEST_ASSERT_FALSE(o.held);
+    }
+}
+
+void test_brief_front_rejection_holds_last_good_speed_only(void) {
+    VehicleSpeedState s{};
+    prime(s, 10.0f);
+    VehicleSpeedInput in{};
+    in.dt = 0.01f;
+    in.wheel_rpm[WHEEL_FL] = Rpm(0.0f);
+    in.wheel_rpm[WHEEL_FR] = Rpm(0.0f);
+    in.wheel_rpm[WHEEL_RL] = Rpm(mps_to_rpm(9.0f));
+    in.wheel_rpm[WHEEL_RR] = Rpm(mps_to_rpm(9.0f));
+    VehicleSpeedOutput o = vehicle_speed_compute(in, CAL, s);
+    TEST_ASSERT_TRUE(o.valid);
+    TEST_ASSERT_TRUE(o.held);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 10.0f, o.speed_mps);
+    for (int tick = 0; tick < 11; ++tick) o = vehicle_speed_compute(in, CAL, s);
+    TEST_ASSERT_FALSE(o.valid);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 9.0f, o.speed_mps);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 10.0f, s.speed_mps);  // no rear poisoning
+}
+
+void test_stale_front_rpm_expires_and_coherent_fronts_reacquire(void) {
+    VehicleSpeedState s{};
+    prime(s, 10.0f);
+    VehicleSpeedInput in{};
+    in.dt = 0.01f;
+    for (int ch = 0; ch < WHEEL_COUNT; ++ch)
+        in.wheel_rpm[ch] = Rpm(mps_to_rpm(10.0f));
+    in.wheel_sample_valid[WHEEL_FL] = false;
+    in.wheel_sample_valid[WHEEL_FR] = false;
+    VehicleSpeedOutput o{};
+    for (int tick = 0; tick < 12; ++tick) o = vehicle_speed_compute(in, CAL, s);
+    TEST_ASSERT_FALSE(o.valid);  // stale held RPM cannot remain valid forever
+
+    in.wheel_sample_valid[WHEEL_FL] = true;
+    in.wheel_sample_valid[WHEEL_FR] = true;
+    for (int ch = 0; ch < WHEEL_COUNT; ++ch)
+        in.wheel_rpm[ch] = Rpm(mps_to_rpm(8.0f));
+    for (int tick = 0; tick < 22; ++tick) o = vehicle_speed_compute(in, CAL, s);
+    TEST_ASSERT_TRUE(o.valid);
+    TEST_ASSERT_FALSE(o.held);
+    TEST_ASSERT_FLOAT_WITHIN(0.05f, 8.0f, o.speed_mps);
+}
+
 void setUp(void) {}
 void tearDown(void) {}
 int main(int, char **) {
@@ -168,5 +243,8 @@ int main(int, char **) {
     RUN_TEST(test_gradual_acceleration_is_tracked);
     RUN_TEST(test_standstill);
     RUN_TEST(test_never_negative);
+    RUN_TEST(test_normal_24_ppr_bins_do_not_drop_speed_validity);
+    RUN_TEST(test_brief_front_rejection_holds_last_good_speed_only);
+    RUN_TEST(test_stale_front_rpm_expires_and_coherent_fronts_reacquire);
     return UNITY_END();
 }

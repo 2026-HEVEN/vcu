@@ -22,7 +22,6 @@ struct SafetyInputs {
 SafetyState safety_step(SafetyState cur, const SafetyInputs &in);
 
 bool torque_allowed();   // runtime helper, defined in core/safety.cpp
-void safety_require_rearm(); // scheduler-only; requires released pedal again
 // Bench component tests may run before the aggregate two-controller Drive
 // state, but not while the safety FSM is in Halt.
 bool component_test_safety_allowed();
@@ -53,6 +52,7 @@ struct MotorCommandGates {
     bool  scheduler_alive = false;
     bool  reconnect_inhibit = true;
     bool  component_test_inhibit = true;
+    bool  controller_fault_active = false;
     bool  snapshot_fresh = false;
     float reconnect_ramp_scale = 1.0f;
 };
@@ -78,9 +78,16 @@ enum MotorBlock : uint16_t {
     BLOCK_PADDOCK_SENSOR = 1U << 12
 };
 
-// Scheduler-owned stable dwell. A rejected reset is never queued for later.
-struct RearmDwell { bool tracking = false; uint32_t since_ms = 0; };
-bool fault_rearm_dwell(bool healthy, uint32_t now, RearmDwell &state);
+// One FB2 fault frame blocks torque immediately; only
+// repeated fault frames become a persistent VCU fault episode. Recovery needs
+// repeated clear frames, never merely a missing/stale FB2 message.
+struct FaultSampleState {
+    unsigned fault_samples = 0;
+    unsigned clear_samples = 0;
+    bool confirmed = false;
+};
+void fault_sample_update(bool active, unsigned confirm_frames,
+                         unsigned clear_frames, FaultSampleState &state);
 
 // 불허면 좌우 모두 0 A / run=false / 0 rpm. 한쪽만 차단하는 경로는 없다.
 MotorFrameCommand motor_command_resolve(const MotorCommandSnapshot &snapshot,

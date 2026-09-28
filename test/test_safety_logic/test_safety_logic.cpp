@@ -332,16 +332,35 @@ void test_boot_invalid_cannot_bypass_release() {
     in.start_pressed = true;
     TEST_ASSERT_TRUE(safety_step(s,in) == SafetyState::Drive);
 }
-void test_rearm_dwell_resets_and_wraps() {
-    RearmDwell s;
-    TEST_ASSERT_FALSE(fault_rearm_dwell(true,100,s));
-    TEST_ASSERT_FALSE(fault_rearm_dwell(true,1099,s));
-    TEST_ASSERT_TRUE(fault_rearm_dwell(true,1100,s));
-    TEST_ASSERT_FALSE(fault_rearm_dwell(false,1101,s));
-    TEST_ASSERT_FALSE(fault_rearm_dwell(true,2000,s));
-    TEST_ASSERT_FALSE(fault_rearm_dwell(false,2001,s));
-    TEST_ASSERT_FALSE(fault_rearm_dwell(true,UINT32_MAX-499U,s));
-    TEST_ASSERT_TRUE(fault_rearm_dwell(true,500,s));
+void test_fault_requires_two_frames_but_single_frame_blocks_both() {
+    FaultSampleState s;
+    fault_sample_update(true, 2, 2, s);
+    TEST_ASSERT_FALSE(s.confirmed);
+    auto g = mc_gates();
+    g.controller_fault_active = true;
+    auto blocked = mc_resolve(mc_snapshot(), g);
+    TEST_ASSERT_EQUAL_UINT16(BLOCK_FAULT, blocked.block_reasons);
+    mc_assert_both_blocked(blocked);
+    fault_sample_update(false, 2, 2, s);
+    TEST_ASSERT_FALSE(s.confirmed);
+    TEST_ASSERT_EQUAL_UINT(0, s.fault_samples);
+    g.controller_fault_active = false;
+    TEST_ASSERT_TRUE(mc_resolve(mc_snapshot(), g).normal_allow);
+}
+void test_confirmed_fault_needs_two_clear_frames() {
+    FaultSampleState s;
+    fault_sample_update(true, 2, 2, s);
+    fault_sample_update(true, 2, 2, s);
+    TEST_ASSERT_TRUE(s.confirmed);
+    fault_sample_update(false, 2, 2, s);
+    TEST_ASSERT_TRUE(s.confirmed);
+    TEST_ASSERT_EQUAL_UINT(1, s.clear_samples);
+    fault_sample_update(true, 2, 2, s);
+    TEST_ASSERT_TRUE(s.confirmed);
+    TEST_ASSERT_EQUAL_UINT(0, s.clear_samples);
+    fault_sample_update(false, 2, 2, s);
+    fault_sample_update(false, 2, 2, s);
+    TEST_ASSERT_FALSE(s.confirmed);
 }
 void test_block_reasons_preserve_upstream_and_tx_gates() {
     auto s=mc_snapshot(); auto g=mc_gates();
@@ -354,7 +373,8 @@ void test_block_reasons_preserve_upstream_and_tx_gates() {
 int main(int, char **) {
     UNITY_BEGIN();
     RUN_TEST(test_boot_invalid_cannot_bypass_release);
-    RUN_TEST(test_rearm_dwell_resets_and_wraps);
+    RUN_TEST(test_fault_requires_two_frames_but_single_frame_blocks_both);
+    RUN_TEST(test_confirmed_fault_needs_two_clear_frames);
     RUN_TEST(test_block_reasons_preserve_upstream_and_tx_gates);
     RUN_TEST(test_shutdown_forces_halt);
     RUN_TEST(test_idle_to_ready_on_handshake);
