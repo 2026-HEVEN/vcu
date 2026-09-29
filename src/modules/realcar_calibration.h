@@ -38,7 +38,7 @@ constexpr float REGEN_EFF_TOTAL_CURRENT_CAP_A = 30.0f;
 constexpr bool REGEN_FOUR_STAGE_ENABLED = true;
 // true: qualified throttle release; false: release AND installed brake ON.
 // Positive throttle always cancels regeneration in either mode.
-constexpr bool REGEN_ONE_PEDAL_ENABLED = true;
+constexpr bool REGEN_ONE_PEDAL_ENABLED = false;
 // Initial values assume the PCB scales 0/2.5/5 V to approximately
 // 0/half/full ESP32 ADC range. They are placeholders until measured.
 // Contiguous gear-ladder boundaries. The classifier interprets these as:
@@ -74,7 +74,7 @@ constexpr float DRIVETRAIN_EFFICIENCY = 0.92f;
 // EZkontrol target-speed field controls speed; current is the allowed ceiling.
 // Pedal maps to 0..5 km/h in either propulsion gear. Verify on raised wheels.
 constexpr float PADDOCK_MAX_SPEED_KPH = 5.0f;
-constexpr float PADDOCK_CURRENT_MAX_PER_MOTOR_A = 100.0f;
+constexpr float PADDOCK_CURRENT_MAX_PER_MOTOR_A = 300.0f;
 constexpr float PADDOCK_ENTRY_SPEED_MAX_MPS = 3.0f / 3.6f;
 // Feedback-based electrical limiting is disabled for this test profile.
 // Zero disables these scalers; voltage/current feedback remains logged.

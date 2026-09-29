@@ -310,7 +310,7 @@ void debug_update() {
                 (unsigned long)(tx.left.queued_valid ? tx_now-tx.left.last_queued_ms : UINT32_MAX),
                 (unsigned long)(tx.right.queued_valid ? tx_now-tx.right.last_queued_ms : UINT32_MAX));
             Serial.printf(
-                "STAT arm=%d dm=%d hs=%d/%d fb=%d/%d fault=%d gear=%u/%u raw=%u thr=%d/%d/%.1f brk=%d imu=%d sync=%d/%d test=%d/%u up_s=%lu hsDrop=%lu/%lu regenReq=%d regenDem=%d\n"
+                "STAT arm=%d dm=%d hs=%d/%d fb=%d/%d fault=%d gear=%u/%u raw=%u thr=%d/%d/%.1f brk=%d imu=%d sync=%d/%d test=%d/%u up_s=%lu hsDrop=%lu/%lu regenReq=%d regenLevel=%u regenDem=%d\n"
                 "MCU V=%.1f/%.1f Ibus=%+.1f/%+.1f Iph=%+.1f/%+.1f rpm=%d/%d tempC=%d/%d,%d/%d err=%02X%02X%02X/%02X%02X%02X\n"
                 "CAN state=%u age1=%u/%u age2=%u/%u q=%u peak=%u rxMiss=%u busErr=%u arbLost=%u txFail=%u | WSS=%.0f/%.0f/%.0f/%.0f pulse=%u/%u/%u/%u\n"
                 "IMU valid=%d yaw=%+.2f ax=%+.3f ay=%+.3f rxBytes=%u frames=%u csErr=%u\n",
@@ -327,7 +327,8 @@ void debug_update() {
                 state.component_test_active, test_remaining_ms,
                 (unsigned long)(now / 1000U),
                 (unsigned long)link_drops_l, (unsigned long)link_drops_r,
-                state.regen_auto_requested, state.longitudinal_regen_demand,
+                state.regen_auto_requested, (unsigned)state.regen_level_requested,
+                state.longitudinal_regen_demand,
                 state.controller_fb1_L.bus_voltage_v,
                 state.controller_fb1_R.bus_voltage_v,
                 state.controller_fb1_L.bus_current_a,
