@@ -376,6 +376,19 @@ void debug_update() {
                 state.predicted_command_power_w,
                 state.pack_data_valid, state.pack_voltage_v,
                 state.pack_current_a, state.pack_temperature_c);
+            // Freshness means recent CAN data, not metrological validation.
+            if (!state.em_record_seen) {
+                Serial.println("EM seen=0 valid=0 age=-1 HV=- I=- LV=- Pcalc=- CPU=-");
+            } else {
+                const uint32_t em_age = now - state.em_record_last_ms;
+                const bool em_fresh = em_age <= EM_RECORD_FRESH_MS;
+                Serial.printf("EM seen=1 valid=%d age=%lums %sHV=%.2fV I=%+.2fA LV=%.2fV Pcalc=%+.1fW CPU=%.2fC\n",
+                    em_fresh, (unsigned long)em_age, em_fresh ? "" : "STALE(last) ",
+                    state.em_record.hv_voltage_v, state.em_record.current_a,
+                    state.em_record.lv_voltage_v,
+                    state.em_record.hv_voltage_v * state.em_record.current_a,
+                    state.em_record.cpu_temperature_c);
+            }
             Serial.printf("CAR_CHECK txDrop=%u steerValid=%d imuValid=%d/%d wssValid=%d/%d/%d/%d\n",
                 state.sensor_telemetry_tx_drops, state.steering_telemetry.valid,
                 state.imu_telemetry.yaw_valid, state.imu_telemetry.accel_valid,

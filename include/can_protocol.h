@@ -20,6 +20,18 @@ constexpr uint8_t SA_CONTROLLER_L = 0xEF;
 constexpr uint8_t SA_CONTROLLER_R = 0xF0;
 constexpr uint8_t SA_ENERGY_METER = 0x17;
 
+// EM gateway contract matches Cluster dev (not the legacy meter SA above).
+// Extended, DLC=8: signed int16 LE HV/10 V, I/10 A, LV/100 V, CPU/100 C.
+constexpr uint32_t CAN_ID_EM_RECORD = 0x1CF5FFC1;
+constexpr uint32_t EM_RECORD_FRESH_MS = 500U;
+struct EnergyMeterRecord {
+    float hv_voltage_v = 0.0f;
+    float current_a = 0.0f;
+    float lv_voltage_v = 0.0f;
+    float cpu_temperature_c = 0.0f;
+};
+EnergyMeterRecord decode_em_record(const uint8_t data[8]);
+
 // --- Torque command IDs (29-bit extended) ---
 constexpr uint32_t CAN_ID_TORQUE_L = 0x0C01EFD0;
 constexpr uint32_t CAN_ID_TORQUE_R = 0x0C01F0D0;

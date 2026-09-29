@@ -660,6 +660,14 @@ void poll_rx() {
     twai_message_t m;
     while (twai_receive(&m, 0) == ESP_OK) {
         if (!m.extd) continue;
+        if (m.identifier == CAN_ID_EM_RECORD) {
+            if (!m.rtr && m.data_length_code == 8) {
+                state.em_record = decode_em_record(m.data);
+                state.em_record_last_ms = millis();
+                state.em_record_seen = true;
+            }
+            continue;
+        }
         const bool from_l = (m.identifier == CAN_ID_FB1_L);
         const bool from_r = (m.identifier == CAN_ID_FB1_R);
 

@@ -264,8 +264,25 @@ void test_regen_stage_wire_contract() {
     d[1]=0; TEST_ASSERT_EQUAL_UINT8(0,decode_cluster_command(d).regen_level);
     d[1]=2;d[3]=0xA4; TEST_ASSERT_FALSE(decode_cluster_command(d).regen_auto_enabled);
 }
+void test_em_record_cluster_contract() {
+    // 57.0V, -12.3A, 12.50V, 25.00C; signed LE on every field.
+    const uint8_t d[8] = {0x3A,0x02,0x85,0xFF,0xE2,0x04,0xC4,0x09};
+    const auto em = decode_em_record(d);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f,57.0f,em.hv_voltage_v);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f,-12.3f,em.current_a);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f,12.5f,em.lv_voltage_v);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f,25.0f,em.cpu_temperature_c);
+    const uint8_t bounds[8] = {0,0x80,0xFF,0x7F,0,0x80,0xFF,0xFF};
+    const auto b = decode_em_record(bounds);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f,-3276.8f,b.hv_voltage_v);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f,3276.7f,b.current_a);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f,-327.68f,b.lv_voltage_v);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f,-0.01f,b.cpu_temperature_c);
+    TEST_ASSERT_EQUAL_HEX32(0x1CF5FFC1,CAN_ID_EM_RECORD);
+}
 int main(int, char **) {
     UNITY_BEGIN();
+    RUN_TEST(test_em_record_cluster_contract);
     RUN_TEST(test_regen_stage_wire_contract);
     RUN_TEST(test_zero_amps_offset);
     RUN_TEST(test_positive_amps);

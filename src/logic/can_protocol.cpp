@@ -6,6 +6,15 @@
 #include "can_protocol.h"
 #include <cmath>
 
+EnergyMeterRecord decode_em_record(const uint8_t data[8]) {
+    const auto signed_le = [](const uint8_t *p) -> int32_t {
+        const uint32_t raw = uint32_t(p[0]) | (uint32_t(p[1]) << 8);
+        return raw >= 0x8000U ? int32_t(raw) - 65536 : int32_t(raw);
+    };
+    return {signed_le(data) * 0.1f, signed_le(data + 2) * 0.1f,
+            signed_le(data + 4) * 0.01f, signed_le(data + 6) * 0.01f};
+}
+
 uint16_t torque_to_raw(float amps) {
     return (uint16_t)((amps + 3200.0f) * 10.0f + 0.5f);
 }

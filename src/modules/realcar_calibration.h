@@ -29,9 +29,9 @@ constexpr int GEAR_DIRECTION_CHANGE_MAX_RPM = 50;
 constexpr int REGEN_MIN_FORWARD_RPM = 50;
 // SUM of both requested phase-current magnitudes, before TV/final correction.
 // Level 0 is always OFF. These are NOT battery charge-current limits.
-constexpr float REGEN_LEVEL1_TOTAL_CURRENT_A = 100.0f;
-constexpr float REGEN_LEVEL2_TOTAL_CURRENT_A = 200.0f;
-constexpr float REGEN_LEVEL3_TOTAL_CURRENT_A = 300.0f;
+constexpr float REGEN_LEVEL1_TOTAL_CURRENT_A = 250.0f;
+constexpr float REGEN_LEVEL2_TOTAL_CURRENT_A = 500.0f;
+constexpr float REGEN_LEVEL3_TOTAL_CURRENT_A = 1000.0f;
 // Preserve the existing Efficiency-mode regen cap (not Paddock).
 constexpr float REGEN_EFF_TOTAL_CURRENT_CAP_A = 30.0f;
 // true: use levels 1/2/3; false: any nonzero rotary position uses level 3.
@@ -124,7 +124,9 @@ constexpr float MAX_ROAD_WHEEL_STEER_RAD = 0.52f;
 // SteerRaw 계약에 맞춰 드라이버가 14-bit로 스케일한다. 직진/좌최대/우최대
 // raw를 측정한 뒤 center와 counts_per_unit을 교체한다.
 constexpr unsigned STEERING_CENTER_COUNTS = 6800U;  // straight ahead: raw12 1700 << 2
-constexpr float STEERING_COUNTS_PER_UNIT = 4096.0f;
+// raw12 center=1700, left=176 (~30deg), right=2974 (~25deg).
+// Driver expands raw12 by 4; scale fits measured road-wheel travel.
+constexpr float STEERING_COUNTS_PER_UNIT = 6060.0f;
 constexpr bool STEERING_INVERT = true;
 }  // namespace provisional
 

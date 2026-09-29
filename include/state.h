@@ -57,6 +57,10 @@ struct VehicleState {
     float     pack_current_a = 0.0f;
     int       pack_temperature_c = -40;
     uint32_t  bms_last_rx_ms = 0;
+    // Diagnostic only: never used to permit/limit drive or regen.
+    EnergyMeterRecord em_record{};
+    bool em_record_seen = false;
+    uint32_t em_record_last_ms = 0;
     uint16_t  gear_raw_adc = 0;
     Gear      gear_sensed = Gear::Neutral; // diagnostic; never grants authority
     Gear      gear = Gear::Neutral;
