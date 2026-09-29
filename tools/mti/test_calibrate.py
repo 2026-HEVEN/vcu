@@ -1,10 +1,35 @@
 import struct
+import io
+from contextlib import redirect_stdout
 import unittest
+from unittest.mock import patch
 from types import SimpleNamespace
-from calibrate import Parser, decode, packet, validate, select_port
+from calibrate import Parser, decode, packet, validate, select_port, confirm
 
 
 class ProtocolTests(unittest.TestCase):
+    def test_prompt_has_newline_before_input(self):
+        output = io.StringIO()
+        def answer():
+            self.assertEqual(output.getvalue(), 'Confirm (q = cancel):\n')
+            return 'zero'
+        with redirect_stdout(output), patch('builtins.input', side_effect=answer):
+            confirm('Confirm', 'ZERO')
+
+    def test_confirmation_case_and_retry(self):
+        for value in ('zero', 'ZERO', ' Zero '):
+            with patch('builtins.input', return_value=value):
+                confirm('Confirm', 'ZERO')
+        with patch('builtins.input', side_effect=['', 'wrong', 'zero']):
+            confirm('Confirm', 'ZERO')
+
+    def test_confirmation_cancel_and_eof(self):
+        for values in (['q'], ['', '', '']):
+            with patch('builtins.input', side_effect=values), self.assertRaises(ValueError):
+                confirm('Confirm', 'ZERO')
+        with patch('builtins.input', side_effect=EOFError), self.assertRaises(ValueError):
+            confirm('Confirm', 'ZERO')
+
     def test_port_selection(self):
         usb = SimpleNamespace(device='COM13', description='CP210x', vid=0x10C4, pid=0xEA60)
         bt = SimpleNamespace(device='COM3', description='Bluetooth', vid=None, pid=None)

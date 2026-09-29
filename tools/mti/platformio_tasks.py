@@ -7,7 +7,7 @@ env.BuildSources("$BUILD_DIR/mti", "$PROJECT_DIR/tools/mti", src_filter="+<bridg
 
 def action(mode):
     def run(source, target, env):
-        cmd = [env.subst("$PYTHONEXE"),
+        cmd = [env.subst("$PYTHONEXE"), "-u",
                os.path.join(env.subst("$PROJECT_DIR"), "tools", "mti", "calibrate.py"), mode]
         port = env.GetProjectOption("upload_port", None)
         if port:

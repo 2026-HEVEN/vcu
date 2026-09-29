@@ -7,6 +7,24 @@ import struct
 import time
 
 
+def confirm(prompt, expected):
+    """Case-insensitive confirmation with visible, flushed prompts."""
+    for _ in range(3):
+        # PlatformIO forwards child output by readline(): flush alone does not
+        # release a partial line. End the prompt with a newline BEFORE input().
+        print(prompt + " (q = cancel):", flush=True)
+        try:
+            answer = input().strip()
+        except EOFError:
+            raise ValueError("No interactive input. Run this script in a PlatformIO terminal.") from None
+        if answer.casefold() == expected.casefold():
+            return
+        if answer.casefold() in ("q", "quit", "cancel"):
+            raise ValueError("Cancelled")
+        print("Not confirmed. Type " + expected + " and press Enter.", flush=True)
+    raise ValueError("Confirmation not received; cancelled")
+
+
 def select_port(ports, explicit=None):
     """Select one USB serial port without opening/probing unrelated devices."""
     if explicit:
@@ -159,8 +177,7 @@ def main():
     if args.mode == "zero":
         print("Vehicle level and stationary; sensor fixed; HV/motor power OFF.")
         print("This stores current roll/pitch alignment in the MTi, not a factory or heading reset.")
-        if input("Type ZERO to confirm these conditions: ").strip() != "ZERO":
-            raise ValueError("Cancelled; no serial commands sent")
+        confirm("Type ZERO to confirm these conditions", "ZERO")
     ser = serial.Serial(port=None, baudrate=115200, timeout=0.05, write_timeout=1)
     ser.dtr = ser.rts = False
     ser.port = args.port
@@ -175,8 +192,8 @@ def main():
         if len(did) != 4:
             raise RuntimeError("Unexpected device ID response")
         print("MTi device ID:", did.hex().upper())
-        if args.mode == "zero" and input("Type this device ID to apply: ").strip().upper() != did.hex().upper():
-            raise ValueError("Device confirmation cancelled")
+        if args.mode == "zero":
+            confirm("Type this device ID to apply", did.hex().upper())
         conn.command(0x10)
         entered_config = False
         before = conn.sample("before")

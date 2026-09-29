@@ -19,7 +19,8 @@ firmware, and does not reset heading or compensate IMU position relative to CG.
    Selection does not prove ESP32/bridge identity: the sensor ACK/ID is checked next.
    For zero, vehicle must be
    level, stationary and sensor firmly mounted. Enter `ZERO`, then displayed
-   sensor ID. Keep vehicle still throughout. ACK, sample validity and motion
+   sensor ID. Confirmation is case-insensitive (`zero` also works); blank/typo
+   inputs can be retried up to three times, `q` cancels. Keep vehicle still throughout. ACK, sample validity and motion
    checks must pass before storing. Missing ACK stops; no blind retries.
 5. Power-cycle the MTi and run `mti_check` again; near-zero roll/pitch and X/Y
    acceleration confirm persistence. Check does enter config/measurement, but
