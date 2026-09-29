@@ -45,6 +45,12 @@ constexpr bool REGEN_HARDWARE_VALIDATED = true;
 // checking controller, motor, battery/BMS and energy-meter data.
 constexpr float DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A = 500.0f;
 constexpr float DRIVE_PHASE_CURRENT_EFF_PER_MOTOR_A = 100.0f;
+// Right controller appears to under-read its phase current by about 12%
+// (2026-09-29 wheels-up blips: 13-20% more rpm/s per reported A than left,
+// and about 25% more motor heat at equal reported current). The controller's
+// gear current % is ignored in CAN mode, so the correction is applied here to
+// the final right command (drive and regen). Set 1.0 to disable.
+constexpr float RIGHT_MOTOR_CURRENT_SCALE = 0.88f;
 // Apply the same launch slew limit in Normal and Paddock modes. At the 500 A
 // per-motor ceiling this gives 1000 A/s and reaches full demand in 0.5 s.
 // Only rising propulsion magnitude is limited; release and protection cuts

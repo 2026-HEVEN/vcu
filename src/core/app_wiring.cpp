@@ -394,7 +394,8 @@ static void drive_supervisor_update() {
     command_snapshot.seq = motor_command_seq;
     command_snapshot.published_ms = millis();
     command_snapshot.left_a = out.left_a;
-    command_snapshot.right_a = out.right_a;
+    command_snapshot.right_a =
+        out.right_a * realcar_cal::bringup::RIGHT_MOTOR_CURRENT_SCALE;
     command_snapshot.propulsion_rpm_limit = propulsion_rpm_limit;
     command_snapshot.gear = state.gear;
     command_snapshot.safety_allow = torque_allowed();
