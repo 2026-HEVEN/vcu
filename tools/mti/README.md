@@ -13,7 +13,11 @@ firmware, and does not reset heading or compensate IMU position relative to CG.
 3. Run custom target `mti_check` or `mti_zero` in Project Tasks. If the extension
    does not refresh, use **PlatformIO: Refresh Project Tasks** / reload window.
    CLI in PlatformIO terminal: `pio run -e mti_bridge -t mti_zero`.
-4. Select the actual COM port (not hardcoded COM13). For zero, vehicle must be
+4. The sole USB serial port is selected automatically (Bluetooth excluded).
+   With multiple USB boards, disconnect the others or specify `--port` using the
+   direct Python command; the PlatformIO target also respects `upload_port`.
+   Selection does not prove ESP32/bridge identity: the sensor ACK/ID is checked next.
+   For zero, vehicle must be
    level, stationary and sensor firmly mounted. Enter `ZERO`, then displayed
    sensor ID. Keep vehicle still throughout. ACK, sample validity and motion
    checks must pass before storing. Missing ACK stops; no blind retries.

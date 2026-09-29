@@ -7,6 +7,29 @@ import struct
 import time
 
 
+def select_port(ports, explicit=None):
+    """Select one USB serial port without opening/probing unrelated devices."""
+    if explicit:
+        return explicit
+    candidates = []
+    for p in ports:
+        identity = " ".join(str(getattr(p, k, "") or "")
+                            for k in ("description", "hwid", "manufacturer")).lower()
+        if "bluetooth" in identity or "bthenum" in identity:
+            continue
+        if getattr(p, "vid", None) is not None and getattr(p, "pid", None) is not None:
+            candidates.append(p)
+    if len(candidates) == 1:
+        p = candidates[0]
+        print("Auto-selected USB serial:", p.device, p.description, flush=True)
+        return p.device
+    if not candidates:
+        raise ValueError("No USB serial device found. Connect ESP32 or specify --port.")
+    names = ", ".join(p.device + " (" + p.description + ")" for p in candidates)
+    raise ValueError("Multiple USB serial devices: " + names +
+                     ". Disconnect other boards or specify --port / upload_port; not guessing.")
+
+
 def packet(mid, payload=b""):
     body = bytes((0xFF, mid, len(payload))) + payload
     return b"\xfa" + body + bytes((-sum(body) & 255,))
@@ -129,15 +152,10 @@ def main():
     from serial.tools import list_ports
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("mode", choices=("check", "zero"))
-    ap.add_argument("--port", help="Explicit ESP32 port (e.g. COM13); prompts if omitted")
+    ap.add_argument("--port", help="Explicit ESP32 port; otherwise auto-select the sole USB serial device")
     args = ap.parse_args()
     print("Requires mti_bridge firmware, RX19/TX21, 115200. Close all serial monitors/MT Manager.")
-    if not args.port:
-        for p in list_ports.comports():
-            print(p.device, p.description)
-        args.port = input("ESP32 port: ").strip()
-    if not args.port:
-        raise ValueError("No port selected")
+    args.port = select_port(list_ports.comports(), args.port)
     if args.mode == "zero":
         print("Vehicle level and stationary; sensor fixed; HV/motor power OFF.")
         print("This stores current roll/pitch alignment in the MTi, not a factory or heading reset.")

@@ -1,9 +1,20 @@
 import struct
 import unittest
-from calibrate import Parser, decode, packet, validate
+from types import SimpleNamespace
+from calibrate import Parser, decode, packet, validate, select_port
 
 
 class ProtocolTests(unittest.TestCase):
+    def test_port_selection(self):
+        usb = SimpleNamespace(device='COM13', description='CP210x', vid=0x10C4, pid=0xEA60)
+        bt = SimpleNamespace(device='COM3', description='Bluetooth', vid=None, pid=None)
+        self.assertEqual(select_port([bt, usb]), 'COM13')
+        self.assertEqual(select_port([], 'COM99'), 'COM99')
+        with self.assertRaises(ValueError):
+            select_port([bt])
+        with self.assertRaises(ValueError):
+            select_port([usb, SimpleNamespace(device='COM14', description='CH340', vid=0x1A86, pid=0x7523)])
+
     def test_wire_commands(self):
         self.assertEqual(packet(0xA4, b'\0\3').hex(), 'faffa402000358')
         self.assertEqual(packet(0xA4, b'\0\0').hex(), 'faffa40200005b')
