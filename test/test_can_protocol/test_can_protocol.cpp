@@ -253,8 +253,20 @@ void test_log_clamp_saturates_counters(void) {
 
 void setUp(void) {}
 void tearDown(void) {}
+void test_regen_stage_wire_contract() {
+    uint8_t d[8]={}; d[1]=2;
+    TEST_ASSERT_EQUAL_UINT8(3,decode_cluster_command(d).regen_level);
+    for (unsigned i=0;i<4;++i) {
+        d[3]=0xA0|i;
+        TEST_ASSERT_EQUAL_UINT8(i,decode_cluster_command(d).regen_level);
+        TEST_ASSERT_EQUAL(i!=0,decode_cluster_command(d).regen_auto_enabled);
+    }
+    d[1]=0; TEST_ASSERT_EQUAL_UINT8(0,decode_cluster_command(d).regen_level);
+    d[1]=2;d[3]=0xA4; TEST_ASSERT_FALSE(decode_cluster_command(d).regen_auto_enabled);
+}
 int main(int, char **) {
     UNITY_BEGIN();
+    RUN_TEST(test_regen_stage_wire_contract);
     RUN_TEST(test_zero_amps_offset);
     RUN_TEST(test_positive_amps);
     RUN_TEST(test_negative_regen);

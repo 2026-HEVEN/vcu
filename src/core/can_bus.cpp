@@ -708,6 +708,7 @@ void poll_rx() {
             // meaning is the torque-vectoring enable request.
             state.tv_enable_requested = cmd.tv_enabled;
             state.regen_auto_requested = cmd.regen_auto_enabled;
+            state.regen_level_requested = cmd.regen_level;
             state.paddock_requested = cmd.paddock_request;
             state.debug_requested = cmd.debug_enabled;
             state.cluster_cmd_last_rx_ms = millis();
@@ -867,6 +868,7 @@ void poll_rx() {
         state.cluster_cmd_alive = false;
         state.tv_enable_requested = false;
         state.regen_auto_requested = false;
+        state.regen_level_requested = 0;
         state.debug_requested = false;
         state.paddock_requested = false;
     }

@@ -27,10 +27,18 @@ constexpr int GEAR_DIRECTION_CHANGE_MAX_RPM = 50;
 // Forward motor RPM on BOTH sides required for throttle-off regen. Below this
 // speed, return to zero-current coasting rather than commanding 0 rpm torque.
 constexpr int REGEN_MIN_FORWARD_RPM = 50;
-// SUM of both motor phase-current magnitudes. TV OFF => 10 A / 15 A each.
-// Retained test strength; not increased without pack charge-current validation.
-constexpr float REGEN_TOTAL_CURRENT_NORMAL_A = 300.0f;
-constexpr float REGEN_TOTAL_CURRENT_EFF_A = 30.0f;
+// SUM of both requested phase-current magnitudes, before TV/final correction.
+// Level 0 is always OFF. These are NOT battery charge-current limits.
+constexpr float REGEN_LEVEL1_TOTAL_CURRENT_A = 100.0f;
+constexpr float REGEN_LEVEL2_TOTAL_CURRENT_A = 200.0f;
+constexpr float REGEN_LEVEL3_TOTAL_CURRENT_A = 300.0f;
+// Preserve the existing Efficiency-mode regen cap (not Paddock).
+constexpr float REGEN_EFF_TOTAL_CURRENT_CAP_A = 30.0f;
+// true: use levels 1/2/3; false: any nonzero rotary position uses level 3.
+constexpr bool REGEN_FOUR_STAGE_ENABLED = true;
+// true: qualified throttle release; false: release AND installed brake ON.
+// Positive throttle always cancels regeneration in either mode.
+constexpr bool REGEN_ONE_PEDAL_ENABLED = true;
 // Initial values assume the PCB scales 0/2.5/5 V to approximately
 // 0/half/full ESP32 ADC range. They are placeholders until measured.
 // Contiguous gear-ladder boundaries. The classifier interprets these as:

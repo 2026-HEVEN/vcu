@@ -45,6 +45,11 @@ ClusterCommandRequest decode_cluster_command(const uint8_t data[8]) {
     ClusterCommandRequest cmd;
     cmd.tv_enabled = (data[1] & 0x01) != 0;
     cmd.regen_auto_enabled = (data[1] & 0x02) != 0;
+    if (cmd.regen_auto_enabled) {
+        if (data[3] == 0) cmd.regen_level = 3;
+        else if ((data[3] & 0xFC) == 0xA0) cmd.regen_level = data[3] & 3;
+    }
+    cmd.regen_auto_enabled = cmd.regen_level != 0;
     cmd.debug_enabled = (data[1] & 0x08) != 0;
     cmd.paddock_request = (data[2] & 0x01) != 0;
     return cmd;

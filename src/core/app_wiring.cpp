@@ -243,7 +243,11 @@ static void longitudinal_update() {
         released_for_regen && state.regen_auto_requested &&
             realcar_cal::bringup::REGEN_HARDWARE_VALIDATED &&
             state.gear == Gear::Drive && state.pack_data_valid &&
-            forward_for_regen });
+            forward_for_regen,
+        state.regen_level_requested,
+        realcar_cal::bringup::BRAKE_SENSOR_INSTALLED && state.brake_active,
+        realcar_cal::bringup::REGEN_ONE_PEDAL_ENABLED,
+        realcar_cal::bringup::REGEN_FOUR_STAGE_ENABLED });
     state.longitudinal_regen_demand = state.total_torque < 0.0f;
     const bool throttle_released =
         (float)state.throttle_pct <= fixed_config::runtime::THROTTLE_ARM_MAX_PCT;
@@ -410,7 +414,9 @@ static void drive_supervisor_update() {
         state.propulsion_direction_armed;
     command_snapshot.regen_allowed = realcar_cal::bringup::REGEN_HARDWARE_VALIDATED &&
         state.regen_auto_requested && state.pack_data_valid &&
-        state.throttle_signal_valid && (float)state.throttle_pct == 0.0f;
+        state.throttle_signal_valid && (float)state.throttle_pct == 0.0f &&
+        (realcar_cal::bringup::REGEN_ONE_PEDAL_ENABLED ||
+         (realcar_cal::bringup::BRAKE_SENSOR_INSTALLED && state.brake_active));
     // Installed motor polarity confirmed from the 2026-09-05 and 2026-09-21
     // vehicle logs: forward rotation is left +RPM and right -RPM.  Reuse the
     // dedicated regen threshold so zero-speed noise cannot enable regen.

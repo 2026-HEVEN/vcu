@@ -8,6 +8,10 @@ struct LongInput {
     float pack_soc;       // 0..1
     DriveMode mode;
     bool regen_auto_enabled;
+    unsigned regen_level = 3; // legacy ON defaults to level 3
+    bool brake_active = false;
+    bool one_pedal = true;
+    bool four_stage = true;
 };
 
 float longitudinal_compute(const LongInput &in);   // + = drive, - = regen

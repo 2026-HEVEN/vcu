@@ -79,11 +79,14 @@ struct ClusterCommandRequest {
     bool regen_auto_enabled = false;
     bool debug_enabled = false;
     bool paddock_request = false;
+    uint8_t regen_level = 0;
 };
 
 // Cluster -> VCU command frame (0x1801D0C0):
 // byte1 bit0=TC-labelled TV enable, bit1=Regen Auto, bit2=reserved, bit3=Debug,
 // byte2 bit0=Paddock. Debug is kept as a request bit even if VCU ignores it.
+// byte3: 0xA0..0xA3 = explicit level 0..3. Legacy zero means ON -> level 3.
+// Master byte1 bit1 must also be set. Other byte3 values fail closed.
 ClusterCommandRequest decode_cluster_command(const uint8_t data[8]);
 
 struct ControllerFeedbackPart1 {

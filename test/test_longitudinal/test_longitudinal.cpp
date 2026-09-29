@@ -17,7 +17,8 @@ void test_full_throttle_requests_configured_current_for_both_motors(void) {
 
 void test_throttle_off_regens_without_brake_input(void) {
     TEST_ASSERT_EQUAL_FLOAT(
-        -20.0f, longitudinal_compute({0.0f, 0.5f, DriveMode::Normal, true}));
+        -realcar_cal::bringup::REGEN_LEVEL3_TOTAL_CURRENT_A,
+        longitudinal_compute({0.0f, 0.5f, DriveMode::Normal, true}));
     TEST_ASSERT_EQUAL_FLOAT(
         -30.0f, longitudinal_compute({0.0f, 0.5f, DriveMode::Efficiency, true}));
 }
@@ -25,7 +26,8 @@ void test_throttle_off_regens_without_brake_input(void) {
 void test_regen_taper_midpoint(void) {
     const float current = longitudinal_compute(
         {0.0f, 0.925f, DriveMode::Normal, true});
-    TEST_ASSERT_FLOAT_WITHIN(0.5f, -10.0f, current);
+    TEST_ASSERT_FLOAT_WITHIN(0.5f,
+        -0.5f * realcar_cal::bringup::REGEN_LEVEL3_TOTAL_CURRENT_A, current);
 }
 
 void test_regen_cutoff_high_soc(void) {
@@ -71,8 +73,29 @@ void test_efficiency_limits_drive(void) {
     TEST_ASSERT_TRUE(efficiency < normal);
 }
 
+void test_stages_and_trigger_modes() {
+    const float currents[] = {0, realcar_cal::bringup::REGEN_LEVEL1_TOTAL_CURRENT_A,
+        realcar_cal::bringup::REGEN_LEVEL2_TOTAL_CURRENT_A,
+        realcar_cal::bringup::REGEN_LEVEL3_TOTAL_CURRENT_A};
+    for (unsigned level=0; level<4; ++level) {
+        TEST_ASSERT_FLOAT_WITHIN(.01f, -currents[level],
+            longitudinal_compute({0,.5f,DriveMode::Normal,true,level,false,true}));
+        TEST_ASSERT_EQUAL_FLOAT(0,
+            longitudinal_compute({0,.5f,DriveMode::Normal,true,level,false,false}));
+        TEST_ASSERT_FLOAT_WITHIN(.01f, -currents[level],
+            longitudinal_compute({0,.5f,DriveMode::Normal,true,level,true,false}));
+        TEST_ASSERT_TRUE(longitudinal_compute({1,.5f,DriveMode::Normal,true,level,true,false})>0);
+        TEST_ASSERT_EQUAL_FLOAT(0,longitudinal_compute({0,.96f,DriveMode::Normal,true,level,true,false}));
+        TEST_ASSERT_EQUAL_FLOAT(0,longitudinal_compute({0,.5f,DriveMode::Normal,false,level,true,false}));
+        TEST_ASSERT_FLOAT_WITHIN(.01f,level ? -currents[3] : 0,
+            longitudinal_compute({0,.5f,DriveMode::Normal,true,level,false,true,false}));
+    }
+    TEST_ASSERT_EQUAL_FLOAT(0,longitudinal_compute({0,.5f,DriveMode::Normal,true,4,true,true}));
+}
+
 int main(int, char **) {
     UNITY_BEGIN();
+    RUN_TEST(test_stages_and_trigger_modes);
     RUN_TEST(test_full_throttle_requests_configured_current_for_both_motors);
     RUN_TEST(test_throttle_off_regens_without_brake_input);
     RUN_TEST(test_regen_taper_midpoint);

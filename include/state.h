@@ -98,6 +98,7 @@ struct VehicleState {
     // wheel-slip traction-control algorithm.
     bool      tv_enable_requested = false;
     bool      regen_auto_requested = false;
+    uint8_t   regen_level_requested = 0;
     bool      paddock_requested = false;
     bool      paddock_active = false;
     bool      paddock_sensor_blocked = false;
