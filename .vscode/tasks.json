@@ -1,0 +1,9 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {"label": "MTi 1 - Upload bridge (replaces VCU)", "type": "shell", "command": "platformio", "args": ["run", "-e", "mti_bridge", "-t", "upload"], "options": {"cwd": "${workspaceFolder}"}, "problemMatcher": []},
+    {"label": "MTi 2 - Check measurements", "type": "shell", "command": "platformio", "args": ["run", "-e", "mti_bridge", "-t", "mti_check"], "options": {"cwd": "${workspaceFolder}"}, "problemMatcher": []},
+    {"label": "MTi 3 - Inclination zero and store", "type": "shell", "command": "platformio", "args": ["run", "-e", "mti_bridge", "-t", "mti_zero"], "options": {"cwd": "${workspaceFolder}"}, "problemMatcher": []},
+    {"label": "MTi 4 - Restore VCU firmware", "type": "shell", "command": "platformio", "args": ["run", "-e", "esp32dev", "-t", "upload"], "options": {"cwd": "${workspaceFolder}"}, "problemMatcher": []}
+  ]
+}
