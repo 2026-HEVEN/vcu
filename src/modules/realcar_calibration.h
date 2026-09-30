@@ -133,7 +133,11 @@ constexpr float WSS_FILTER_TIME_CONSTANT_S = 0.25f;
 
 // 조향 Unit(+/-1)과 실제 평균 전륜 조향각의 초기 매핑.
 // 직진/좌최대/우최대 실측 전에는 TV 게인을 0으로 유지한다.
-constexpr float MAX_ROAD_WHEEL_STEER_RAD = 0.52f;
+// 10-01 로그 세 개(반시계 트랙, 원선회, 슬라럼)에서 기구학 모델 대비 실측 요가
+// 일관되게 약 0.79배였다(유효 휠베이스 약 2.0 m). 조향계 유격·컴플라이언스·
+// 앞바퀴 슬립을 포함한 실효 조향각으로 0.40 rad(약 23도)를 쓴다.
+// 기하학적 풀락 바퀴각(좌 약 30도, 우 약 25도)과는 다른 값이다.
+constexpr float MAX_ROAD_WHEEL_STEER_RAD = 0.40f;
 
 // 최신 하네스: D25의 12-bit ADC 슬라이드 포텐셔미터. GPIO-fixed의 기존
 // SteerRaw 계약에 맞춰 드라이버가 14-bit로 스케일한다. 직진/좌최대/우최대
