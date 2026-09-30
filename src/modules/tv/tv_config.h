@@ -62,7 +62,9 @@ struct TVParams {
     float kd             = 0.0f;
     float yaw_deadband_degps = 0.5f;
     float integral_max       = 100.0f; // integral-state hard limit [deg]
-    float yaw_moment_max = 40.0f;   // Mz 출력 상한 [N·m]
+    // Mz 출력 상한 [N·m]. 10-01 슬라럼에서 40이면 TV ON 구간 80%가 포화(차등 ±18.6 A)라
+    // ON/OFF 응답 차이가 없었다. 100 = 차등 약 ±47 A. 과회전 확인 후 150 검토.
+    float yaw_moment_max = 100.0f;
 };
 
 // 팀 공용 인스턴스. 위 기본값을 바꾸면 전체 파이프라인에 반영됩니다.
