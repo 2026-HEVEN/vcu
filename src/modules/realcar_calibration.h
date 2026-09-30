@@ -29,8 +29,8 @@ constexpr int GEAR_DIRECTION_CHANGE_MAX_RPM = 50;
 constexpr int REGEN_MIN_FORWARD_RPM = 50;
 // SUM of both requested phase-current magnitudes, before TV/final correction.
 // Level 0 is always OFF. These are NOT battery charge-current limits.
-constexpr float REGEN_LEVEL1_TOTAL_CURRENT_A = 250.0f;
-constexpr float REGEN_LEVEL2_TOTAL_CURRENT_A = 500.0f;
+constexpr float REGEN_LEVEL1_TOTAL_CURRENT_A = 300.0f;
+constexpr float REGEN_LEVEL2_TOTAL_CURRENT_A = 600.0f;
 constexpr float REGEN_LEVEL3_TOTAL_CURRENT_A = 1000.0f;
 // Preserve the existing Efficiency-mode regen cap (not Paddock).
 constexpr float REGEN_EFF_TOTAL_CURRENT_CAP_A = 30.0f;
@@ -63,7 +63,7 @@ constexpr float RIGHT_MOTOR_CURRENT_SCALE = 0.88f;
 // per-motor ceiling this gives 1000 A/s and reaches full demand in 0.5 s.
 // Only rising propulsion magnitude is limited; release and protection cuts
 // remain immediate.
-constexpr float DRIVE_CURRENT_RISE_TIME_S = 0.0f;
+constexpr float DRIVE_CURRENT_RISE_TIME_S = 0.5f;
 // Keep the model-based normal-drive limiter disabled until the official
 // Energy Meter path has been driven, time-aligned, and validated. The 8 kW
 // value is retained only as the next test calibration; false means no normal

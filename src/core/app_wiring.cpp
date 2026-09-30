@@ -106,18 +106,32 @@ namespace {
 }
 
 static void throttle_update() {
+    constexpr unsigned INVALID_SAMPLE_LIMIT = 3U;
+    static unsigned consecutive_invalid_samples = 0U;
+    static bool valid_sample_seen = false;
     state.throttle_raw_adc = analogRead(board_pins::THROTTLE_ADC);
     if (state.throttle_raw_adc < state.throttle_window_min)
         state.throttle_window_min = (uint16_t)state.throttle_raw_adc;
-    state.throttle_signal_valid =
+    const bool raw_valid =
         state.throttle_raw_adc >=
             (int)realcar_cal::bringup::THROTTLE_SIGNAL_VALID_MIN_ADC;
-    if (!state.throttle_signal_valid) {
+    if (raw_valid) {
+        consecutive_invalid_samples = 0U;
+        valid_sample_seen = true;
+        state.throttle_signal_valid = true;
+        state.throttle_pct = throttle_compute({ state.throttle_raw_adc });
+    } else {
+        // Keep raw diagnostics even when a single bad sample is filtered out.
         state.throttle_last_invalid_raw = (uint16_t)state.throttle_raw_adc;
         if (state.throttle_invalid_samples != UINT16_MAX) ++state.throttle_invalid_samples;
+        if (consecutive_invalid_samples < INVALID_SAMPLE_LIMIT)
+            ++consecutive_invalid_samples;
+        // At 100 Hz, hold the last valid pedal value for at most two samples.
+        // Never grant validity at startup before a valid sample has arrived.
+        state.throttle_signal_valid = valid_sample_seen &&
+            consecutive_invalid_samples < INVALID_SAMPLE_LIMIT;
+        if (!state.throttle_signal_valid) state.throttle_pct = Percent(0.0f);
     }
-    state.throttle_pct = state.throttle_signal_valid
-        ? throttle_compute({ state.throttle_raw_adc }) : Percent(0.0f);
 }
 static void brake_update() {
     // PCB V3 routes the 12 V brake ON/OFF signal through a divider to an ADC1
@@ -265,14 +279,17 @@ static void longitudinal_update() {
         state.total_torque, state.gear, direction.propulsion_enabled);
 }
 static void torque_vectoring_update() {
-    // 게이트 조건을 여기서 미리 접지 않는다. 원본 값과 유효성 플래그를 그대로
-    // 넘기고, 판정은 tv_gate_evaluate()가 단독으로 한다.
+    // TV is available only in Drive, outside Paddock. Do not gate on current
+    // sign: negative-current regenerative TV in Drive remains unchanged.
+    // Sensor validity is passed through unchanged to tv_gate_evaluate().
+    // Keep the original dashboard request in state for CAN diagnostics.
     const TVInput tv_in{
         Ampere{state.total_torque}, DegPerSec{state.yaw_rate},
         state.steering_angle,
         Mps{state.vehicle_speed_mps},
         GForce{state.accel_x}, GForce{state.accel_y}, Seconds{TV_DT_S},
-        state.tv_enable_requested && !state.paddock_active,
+        state.tv_enable_requested && !state.paddock_active &&
+            state.gear == Gear::Drive,
         state.vehicle_speed_valid, state.imu_valid
     };
     TVOutput o = tv_compute(tv_in, tv_yaw_state);
