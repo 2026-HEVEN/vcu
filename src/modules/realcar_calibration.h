@@ -138,11 +138,12 @@ constexpr float MAX_ROAD_WHEEL_STEER_RAD = 0.52f;
 // 최신 하네스: D25의 12-bit ADC 슬라이드 포텐셔미터. GPIO-fixed의 기존
 // SteerRaw 계약에 맞춰 드라이버가 14-bit로 스케일한다. 직진/좌최대/우최대
 // raw를 측정한 뒤 center와 counts_per_unit을 교체한다.
-// 2026-10-01 주행 로그(04-07-13)의 직진 구간(|yaw|<3 deg/s, |ay|<0.08 g, n=138)에서
-// 조향이 +0.077 unit으로 읽혔다. INVERT=true이므로 센터를 0.077*6060 = 467카운트
-// 내려 raw12 1700 -> 1583으로 옮긴다. 아래 풀락 raw 기준 좌/우 범위가
-// 1.006/0.84에서 0.93/0.92로 대칭이 되는 것도 이 보정과 맞는다.
-constexpr unsigned STEERING_CENTER_COUNTS = 6332U;  // straight ahead: raw12 1583 << 2
+// 2026-10-01 로그 두 개로 역산한 센터가 직전 코너 방향에 따라 다르다
+// (백래시 약 +/-0.065 unit, raw12 +/-40):
+//   04-07 반시계 트랙(좌회전 위주) 직진: raw12 1583
+//   04-58 우회전 원선회 뒤 직진:         raw12 1665
+// 두 값의 중간으로 둔다. 링키지 유격을 줄이면 다시 잰다.
+constexpr unsigned STEERING_CENTER_COUNTS = 6496U;  // straight ahead: raw12 1624 << 2
 // raw12 left=176 (~30deg), right=2974 (~25deg), 측정 당시 center는 1700으로 기록됨.
 // Driver expands raw12 by 4; scale fits measured road-wheel travel.
 constexpr float STEERING_COUNTS_PER_UNIT = 6060.0f;

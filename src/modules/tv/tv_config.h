@@ -35,7 +35,10 @@ struct TVParams {
         realcar_cal::bringup::DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A;
 
     // --- 노면 / 타이어 ---
-    float mu             = 1.0f;     // 노면 마찰계수 (지금은 상수; 추후 추정 확장 여지)
+    // 노면 마찰계수 (지금은 상수). 목표 요 클램프 mu*g/v에도 쓰인다.
+    // 10-01 원선회에서 TV OFF로 1.03~1.07 g가 나왔다. 1.0이면 한계 선회에서
+    // 목표가 실측과 같아져 TV 차등이 약 2 A뿐이라 1.1로 올린다.
+    float mu             = 1.1f;
     // true: traction 한계(Stage 4)가 좌우 명령 자체를 자른다(= 총 구동력 삭감).
     // false: traction 한계는 차등(diff) 크기에만 쓰고, 총량은 모터 상한까지 50:50과 같다.
     // 10-01 원선회 로그에서 true일 때 ay 0.6 g에서 안쪽 후륜 한계 약 139 A로
