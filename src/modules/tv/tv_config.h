@@ -37,8 +37,9 @@ struct TVParams {
     // --- 노면 / 타이어 ---
     // 노면 마찰계수 (지금은 상수). 목표 요 클램프 mu*g/v에도 쓰인다.
     // 10-01 원선회에서 TV OFF로 1.03~1.07 g가 나왔다. 1.0이면 한계 선회에서
-    // 목표가 실측과 같아져 TV 차등이 약 2 A뿐이라 1.1로 올린다.
-    float mu             = 1.1f;
+    // 목표가 실측과 같아져 TV 차등이 약 2 A뿐이었다(1.1에서도 오차 5 deg/s).
+    // 1.3: 한계 선회에서 목표가 실측보다 높게 나와 제어기가 차를 더 돌리게 한다.
+    float mu             = 1.3f;
     // true: traction 한계(Stage 4)가 좌우 명령 자체를 자른다(= 총 구동력 삭감).
     // false: traction 한계는 차등(diff) 크기에만 쓰고, 총량은 모터 상한까지 50:50과 같다.
     // 10-01 원선회 로그에서 true일 때 ay 0.6 g에서 안쪽 후륜 한계 약 139 A로
@@ -63,8 +64,12 @@ struct TVParams {
     float yaw_deadband_degps = 0.5f;
     float integral_max       = 100.0f; // integral-state hard limit [deg]
     // Mz 출력 상한 [N·m]. 10-01 슬라럼에서 40이면 TV ON 구간 80%가 포화(차등 ±18.6 A)라
-    // ON/OFF 응답 차이가 없었다. 100 = 차등 약 ±47 A. 과회전 확인 후 150 검토.
-    float yaw_moment_max = 100.0f;
+    // ON/OFF 응답 차이가 없었다. 100 = 차등 약 ±47 A, 150 = 약 ±70 A.
+    float yaw_moment_max = 150.0f;
+    // 구동 중 안쪽 바퀴에 허용하는 회생(음) 상전류 상한 [A]. 0이면 부호 교차 금지.
+    // 실제 허용량은 min(이 값, 총 요청/2)라 스로틀 0에서는 교차가 생기지 않는다.
+    // 최종 게이트(app_wiring regen_allowed)는 TV 활성 + 좌우 부호 반대일 때만 통과시킨다.
+    float inner_regen_max_a = 40.0f;
 };
 
 // 팀 공용 인스턴스. 위 기본값을 바꾸면 전체 파이프라인에 반영됩니다.

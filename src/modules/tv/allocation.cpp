@@ -33,9 +33,15 @@ TVAllocOutput tv_alloc_compute(Ampere total_current_q, NewtonMetre yaw_moment_q,
     float diff = yaw_moment_nm * p.tire_radius_m /
                  (p.track_m * p.motor_kt_nm_per_a * p.gear_ratio);
 
+    const float total_half = 0.5f * std::fabs(total_current_a);
+    // 구동 중 안쪽 바퀴 회생 허용량. 총 요청의 절반을 넘지 않게 해서 저스로틀에서
+    // 차등만으로 큰 좌우 반대 토크가 생기지 않게 한다. 회생 요청(total<0)은 교차 없음.
+    const float cross = total_current_a > 0.0f
+        ? clampf(p.inner_regen_max_a, 0.0f, total_half) : 0.0f;
+
     float lo_l, hi_l, lo_r, hi_r;
     if (total_current_a > 0.0f) {
-        lo_l = lo_r = 0.0f;
+        lo_l = lo_r = -cross;
         hi_l = cap_l; hi_r = cap_r;
         diff = clampf(diff, -0.5f * max_l, 0.5f * max_r);
     } else {
@@ -55,8 +61,7 @@ TVAllocOutput tv_alloc_compute(Ampere total_current_q, NewtonMetre yaw_moment_q,
     // current_l+current_r never exceeds total_current_a in magnitude: TV
     // authority degrades gracefully at low throttle instead of inventing
     // propulsion/regen current from nothing.
-    const float total_half = 0.5f * std::fabs(total_current_a);
-    diff = clampf(diff, -total_half, total_half);
+    diff = clampf(diff, -(total_half + cross), total_half + cross);
 
     const float base_lo = (lo_l + diff) > (lo_r - diff)
         ? (lo_l + diff) : (lo_r - diff);

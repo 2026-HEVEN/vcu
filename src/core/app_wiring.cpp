@@ -437,6 +437,17 @@ static void drive_supervisor_update() {
         state.throttle_signal_valid && (float)state.throttle_pct == 0.0f &&
         (realcar_cal::bringup::REGEN_ONE_PEDAL_ENABLED ||
          (realcar_cal::bringup::BRAKE_SENSOR_INSTALLED && state.brake_active));
+    // TV 안쪽 바퀴 회생: 스로틀을 밟은 상태에서 TV가 좌우 부호를 갈라놓은 경우만.
+    // 크기는 allocation의 inner_regen_max_a(스로틀 비례)로 이미 묶여 있다.
+    // forward_rotation(양쪽 전진 회전) 조건은 motor_direction_command가 그대로 요구한다.
+    const bool tv_inner_regen =
+        realcar_cal::bringup::REGEN_HARDWARE_VALIDATED &&
+        state.tv_pipeline_active && state.pack_data_valid &&
+        state.throttle_signal_valid && (float)state.throttle_pct > 0.0f &&
+        state.gear == Gear::Drive && !state.paddock_active &&
+        ((float)state.requested_torque_L < 0.0f) !=
+            ((float)state.requested_torque_R < 0.0f);
+    command_snapshot.regen_allowed = command_snapshot.regen_allowed || tv_inner_regen;
     // Installed motor polarity confirmed from the 2026-09-05 and 2026-09-21
     // vehicle logs: forward rotation is left +RPM and right -RPM.  Reuse the
     // dedicated regen threshold so zero-speed noise cannot enable regen.

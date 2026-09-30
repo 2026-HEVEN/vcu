@@ -21,7 +21,9 @@ void test_positive_yaw_increases_right_current() {
 }
 
 void test_drive_never_crosses_into_regen() {
-    const TVAllocOutput o = alloc_f(5.0f, 1000.0f, unlimited(), TV_PARAMS);
+    TVParams p = TV_PARAMS;
+    p.inner_regen_max_a = 0.0f;
+    const TVAllocOutput o = alloc_f(5.0f, 1000.0f, unlimited(), p);
     TEST_ASSERT_TRUE((float)o.torque_L >= 0.0f);
     TEST_ASSERT_TRUE((float)o.torque_R >= 0.0f);
 }
@@ -130,6 +132,24 @@ void test_traction_limit_still_bounds_differential_by_default() {
     TEST_ASSERT_FLOAT_WITHIN(0.05f, 600.0f, (float)o.torque_L + (float)o.torque_R);
 }
 
+// 안쪽 바퀴 회생: 교차량은 min(inner_regen_max_a, 총/2)이고 합계는 유지된다.
+void test_inner_wheel_regen_is_bounded_and_preserves_total() {
+    const TVAllocOutput o = alloc_f(200.0f, 1000.0f, unlimited(), TV_PARAMS);
+    TEST_ASSERT_TRUE((float)o.torque_L < 0.0f);
+    TEST_ASSERT_FLOAT_WITHIN(0.05f, -TV_PARAMS.inner_regen_max_a, (float)o.torque_L);
+    TEST_ASSERT_FLOAT_WITHIN(0.05f, 200.0f, (float)o.torque_L + (float)o.torque_R);
+}
+void test_inner_wheel_regen_scales_down_with_small_throttle() {
+    const TVAllocOutput o = alloc_f(20.0f, -1000.0f, unlimited(), TV_PARAMS);
+    TEST_ASSERT_FLOAT_WITHIN(0.05f, -10.0f, (float)o.torque_R);
+    TEST_ASSERT_FLOAT_WITHIN(0.05f, 20.0f, (float)o.torque_L + (float)o.torque_R);
+}
+void test_regen_request_never_crosses_into_drive_with_inner_regen() {
+    const TVAllocOutput o = alloc_f(-200.0f, 1000.0f, unlimited(), TV_PARAMS);
+    TEST_ASSERT_TRUE((float)o.torque_L <= 0.0f);
+    TEST_ASSERT_TRUE((float)o.torque_R <= 0.0f);
+}
+
 void setUp() {}
 void tearDown() {}
 int main(int, char **) {
@@ -150,5 +170,8 @@ int main(int, char **) {
     RUN_TEST(test_ample_total_still_gets_full_differential);
     RUN_TEST(test_traction_limit_does_not_cut_total_by_default);
     RUN_TEST(test_traction_limit_still_bounds_differential_by_default);
+    RUN_TEST(test_inner_wheel_regen_is_bounded_and_preserves_total);
+    RUN_TEST(test_inner_wheel_regen_scales_down_with_small_throttle);
+    RUN_TEST(test_regen_request_never_crosses_into_drive_with_inner_regen);
     return UNITY_END();
 }

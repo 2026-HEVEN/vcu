@@ -30,13 +30,6 @@ float positive_limit_scale(float measured, float limit) {
     return clamp01(limit / measured);
 }
 
-float rpm_phase_cap(int rpm, const DriveSupervisorParams &params) {
-    const float w_per_a = params.rpm_cap_w_per_a_offset +
-        params.rpm_cap_w_per_a_per_rpm * std::fabs((float)rpm);
-    if (w_per_a <= 0.0f) return 1.0e9f;
-    return params.rpm_cap_power_per_motor_w / w_per_a;
-}
-
 void reset_rise_limit(DriveSupervisorState &state) {
     state.previous_left_a = 0.0f;
     state.previous_right_a = 0.0f;
@@ -139,19 +132,27 @@ DriveSupervisorOutput drive_supervisor_compute(
     }
 
     // Cap propulsion before the launch slew limiter so the ramp never aims
-    // above the ceiling. One common scale keeps the TV left/right split.
-    // Regen (pedal released) is not capped; it charges the pack.
+    // above the ceiling. The budget is shared: sum of both motors' modelled
+    // input power <= 2 * rpm_cap_power_per_motor_w (the 10 kW rule is on the
+    // pack total). A per-motor cap with a common scale shrank the TV split at
+    // full throttle because the outer motor always hit its own cap first.
+    // Only propulsion-direction current counts; TV inner-wheel regen and
+    // pedal-release regen are not capped.
     float rpm_cap_scale = 1.0f;
     if (in.propulsion_requested && params.rpm_cap_power_per_motor_w > 0.0f) {
-        const float cap_left = rpm_phase_cap(in.motor_rpm_left, params);
-        const float cap_right = rpm_phase_cap(in.motor_rpm_right, params);
-        const float mag_left = std::fabs(out.left_a);
-        const float mag_right = std::fabs(out.right_a);
-        if (mag_left > cap_left)
-            rpm_cap_scale = std::fmin(rpm_cap_scale, cap_left / mag_left);
-        if (mag_right > cap_right)
-            rpm_cap_scale = std::fmin(rpm_cap_scale, cap_right / mag_right);
-        if (rpm_cap_scale < 1.0f) {
+        const float sum = out.left_a + out.right_a;
+        const auto modelled_power = [&](float current_a, int rpm) {
+            if (current_a * sum <= 0.0f) return 0.0f;
+            const float w_per_a = params.rpm_cap_w_per_a_offset +
+                params.rpm_cap_w_per_a_per_rpm * std::fabs((float)rpm);
+            return std::fabs(current_a) * (w_per_a > 0.0f ? w_per_a : 0.0f);
+        };
+        const float power =
+            modelled_power(out.left_a, in.motor_rpm_left) +
+            modelled_power(out.right_a, in.motor_rpm_right);
+        const float budget = 2.0f * params.rpm_cap_power_per_motor_w;
+        if (power > budget) {
+            rpm_cap_scale = budget / power;
             scale_all(out.left_a, rpm_cap_scale);
             scale_all(out.right_a, rpm_cap_scale);
             out.rpm_cap_limited = true;
