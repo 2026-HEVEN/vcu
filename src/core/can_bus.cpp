@@ -48,7 +48,15 @@ namespace {
     volatile bool      g_feedback_recovery_expected_R = false;
     uint32_t            g_handshake_reply_ms_L = 0U;
     uint32_t            g_handshake_reply_ms_R = 0U;
-    bool                g_bus_recovery_pending = false;
+    // Bus-off is handled by reinstalling the driver, not twai_initiate_recovery():
+    // in ESP-IDF 4.4.7 that call zeroes tx_msg_count while a frame can still sit
+    // in the TX buffer, and the later TX interrupt trips
+    // assert(tx_msg_count >= 0) in twai.c:184 (bench 2026-09-30: 2 of 5 cluster
+    // reboots panicked the VCU). While g_twai_offline is set every transmit
+    // returns at once, so no task is inside the driver when it is torn down.
+    volatile bool       g_twai_offline = false;
+    uint32_t            g_twai_offline_ms = 0U;
+    constexpr uint32_t  TWAI_REINSTALL_SETTLE_MS = 20U; // > every transmit wait (5 ms)
     uint8_t            g_life = 0;
     uint8_t            g_status_life = 0;
     // Reset cause of this boot. The count survives every reset except power
@@ -186,6 +194,7 @@ namespace {
         m.extd = 1;
         m.data_length_code = 8;
         for (int i = 0; i < 8; ++i) m.data[i] = data[i];
+        if (g_twai_offline) return false;
         return twai_transmit(&m, wait_ticks) == ESP_OK;
     }
 
@@ -199,6 +208,7 @@ namespace {
         twai_message_t m = {};
         m.identifier = id; m.extd = 1; m.data_length_code = 8;
         for (int i = 0; i < 8; ++i) m.data[i] = data[i];
+        if (g_twai_offline) return false;
         return twai_transmit(&m, pdMS_TO_TICKS(5)) == ESP_OK;
     }
 
@@ -469,17 +479,23 @@ namespace {
 
 namespace can_bus {
 
+namespace {
+    esp_err_t install_twai() {
+        twai_general_config_t g = TWAI_GENERAL_CONFIG_DEFAULT(
+            static_cast<gpio_num_t>(board_pins::CAN_TX),
+            static_cast<gpio_num_t>(board_pins::CAN_RX),
+            TWAI_MODE_NORMAL);
+        g.rx_queue_len = fixed_config::runtime::CAN_RX_QUEUE_LENGTH;
+        g.tx_queue_len = 16; // six display frames + two motor frames can coincide
+        twai_timing_config_t  t = TWAI_TIMING_CONFIG_250KBITS();
+        twai_filter_config_t  f = TWAI_FILTER_CONFIG_ACCEPT_ALL();
+        const esp_err_t err = twai_driver_install(&g, &t, &f);
+        return err == ESP_OK ? twai_start() : err;
+    }
+}
+
 void begin() {
-    twai_general_config_t g = TWAI_GENERAL_CONFIG_DEFAULT(
-        static_cast<gpio_num_t>(board_pins::CAN_TX),
-        static_cast<gpio_num_t>(board_pins::CAN_RX),
-        TWAI_MODE_NORMAL);
-    g.rx_queue_len = fixed_config::runtime::CAN_RX_QUEUE_LENGTH;
-    g.tx_queue_len = 16; // six display frames + two motor frames can coincide
-    twai_timing_config_t  t = TWAI_TIMING_CONFIG_250KBITS();
-    twai_filter_config_t  f = TWAI_FILTER_CONFIG_ACCEPT_ALL();
-    twai_driver_install(&g, &t, &f);
-    twai_start();
+    install_twai();
     note_reset();
 }
 
@@ -875,31 +891,30 @@ void poll_rx() {
         state.can_rx_queued_count = can_status.msgs_to_rx;
         state.can_state = static_cast<uint8_t>(can_status.state);
 
-        // ESP-IDF returns TWAI to STOPPED after bus-off recovery, so restart
-        // it explicitly. Protocol handshakes are invalidated first to prevent
-        // stale torque commands from being emitted as the peripheral returns.
-        if (can_status.state == TWAI_STATE_BUS_OFF &&
-            !g_bus_recovery_pending) {
+        // Bus-off: stop transmitting, let any in-flight transmit time out,
+        // then reinstall the driver (see g_twai_offline). Protocol handshakes
+        // are invalidated first so no stale torque command is sent when the
+        // peripheral returns; a fresh install also discards queued frames.
+        if (can_status.state == TWAI_STATE_BUS_OFF && !g_twai_offline) {
+            g_twai_offline = true;
+            g_twai_offline_ms = now;
             invalidate_all_controller_links("TWAI bus-off");
-            const esp_err_t recovery_result = twai_initiate_recovery();
-            if (recovery_result == ESP_OK) {
-                g_bus_recovery_pending = true;
-                Serial.println("[CAN] TWAI bus-off recovery started");
-            } else {
-                Serial.printf("[CAN] TWAI recovery start failed: %d\n",
-                              static_cast<int>(recovery_result));
-            }
-        } else if (can_status.state == TWAI_STATE_STOPPED &&
-                   g_bus_recovery_pending) {
-            const esp_err_t restart_result = twai_start();
-            if (restart_result == ESP_OK) {
-                g_bus_recovery_pending = false;
-                Serial.println(
-                    "[CAN] TWAI restarted; awaiting controller handshakes");
-            } else {
-                Serial.printf("[CAN] TWAI restart failed: %d\n",
-                              static_cast<int>(restart_result));
-            }
+            Serial.println("[CAN] TWAI bus-off, reinstalling driver");
+        }
+    }
+    if (g_twai_offline && now - g_twai_offline_ms >= TWAI_REINSTALL_SETTLE_MS) {
+        const esp_err_t uninstall_result = twai_driver_uninstall();
+        const esp_err_t install_result = install_twai();
+        if (install_result == ESP_OK) {
+            g_twai_offline = false;
+            Serial.println(
+                "[CAN] TWAI reinstalled; awaiting controller handshakes");
+        } else {
+            // Retry after another settle period rather than spin.
+            g_twai_offline_ms = now;
+            Serial.printf("[CAN] TWAI reinstall failed: uninstall %d install %d\n",
+                          static_cast<int>(uninstall_result),
+                          static_cast<int>(install_result));
         }
     }
 
