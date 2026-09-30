@@ -211,6 +211,18 @@ void encode_vcu_log_tv_load(float fz_l_n, float fz_r_n,
     out[7] = life;
 }
 
+void encode_reset_report(uint8_t reason, uint8_t rom_reason, uint32_t uptime_ms,
+                         uint32_t resets_since_power_on, uint8_t life,
+                         uint8_t out[8]) {
+    out[0] = reason;
+    out[1] = rom_reason;
+    put_u16le(out + 2, (uint16_t)(uptime_ms & 0xFFFFu));
+    put_u16le(out + 4, (uint16_t)(uptime_ms >> 16));
+    out[6] = resets_since_power_on > 255u ? (uint8_t)255u
+                                          : (uint8_t)resets_since_power_on;
+    out[7] = life;
+}
+
 void encode_vcu_log_clamp(uint32_t high_count, uint32_t low_count,
                           float high_peak_a, float low_peak_a, uint8_t out[8]) {
     // uint32 -> uint16 포화. 감싸돌면 로그의 증분이 음수가 되어 분석이 깨진다.

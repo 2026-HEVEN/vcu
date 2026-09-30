@@ -90,6 +90,7 @@
 | **VCU → logger** | **TV 요 제어** | **`0x1C03C0D0`** | — | **20ms** | **7** |
 | **VCU → logger** | **TV 하중/한계** | **`0x1C04C0D0`** | — | **20ms** | **7** |
 | **VCU → logger** | **Amp 포화 통계** | **`0x1C05C0D0`** | — | **1s** | **7** |
+| VCU/Cluster/EM-GW → logger | 리셋 원인 보고 | `0x1CFDFF00 \| SA` | — | 1s | 7 |
 
 > ID에서 PS(목적지)·SA(송신)만 컨트롤러별로 바뀜. 위 표의 ID는 `PF<<16 | PS<<8 | SA`로 조립됨(+ Priority).
 
@@ -421,3 +422,15 @@ Monolith 데이터로거가 수신 프레임 **전체**를 타임스탬프와 �
 - `0x1C08C0D0`: Byte0~2 가장 최근 오류 구간의 최초 왼쪽 error1/2/3, Byte3~5 오른쪽, Byte6 발생측(bit0 L, bit1 R). Byte7 bit0은 현재 오류 차단/정상 2회 대기, bit1(옛 rearmReady)은0. Byte6 bit2/3의 과거 1000A 래치 경로는 제거되어 새 펌웨어에서는 설정하지 않는다.
 - 오류 발생측의 새 Part II 정상 피드백 2회로 해당 측 차단을 해제한다. 통신 소실은 정상 표본으로 세지 않는다. 기록 Byte0~6은 복구 후에도 유지되며 구동 허용 판정에는 쓰지 않는다.
 - 펌웨어 버전에 따라 같은 Byte7 bit0이 과거 래치/새 자동 복구 상태를 뜻한다. 프레임 자체에 버전 표시는 없으므로 업로드 버전과 함께 해석한다.
+
+### 노드 리셋 원인 보고 `0x1CFDFF00 | SA` · 1s (2026-09-30)
+
+VCU `0x1CFDFFD0`, Cluster `0x1CFDFFC0`, EM Gateway `0x1CFDFFC1`. Extended, DLC 8, Priority 7. 부팅 원인을 1초마다 반복 송신한다. 로거가 같은 순간 재부팅해도 다음 1초 안에 기록된다. monolith 로거는 CAN 대신 자기 SD에 시스템 이벤트 `RST:<원인>/<ROM 코드>`로 남긴다.
+
+| 바이트 | 항목 | 비고 |
+|---|---|---|
+| 0 | `esp_reset_reason()` | 1 POWERON, 3 SW, 4 PANIC, 5 INT_WDT, 6 TASK_WDT, 7 WDT, 9 BROWNOUT |
+| 1 | ROM 리셋 원인 (CPU0) | `esp_rom_get_reset_reason(0)`, 원인 세분(예: 15 RTCWDT_BROWN_OUT) |
+| 2~5 | 부팅 후 경과 ms | uint32 LE |
+| 6 | 전원 유지 중 리셋 횟수 | RTC no-init 메모리, POWERON이면 0, 255에서 포화 |
+| 7 | life | 송신마다 +1 |

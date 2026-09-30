@@ -82,6 +82,16 @@ constexpr uint32_t CAN_ID_VCU_LOG_THROTTLE = 0x1C06C0D0;
 constexpr uint32_t CAN_ID_VCU_LOG_BLOCK = 0x1C07C0D0;
 constexpr uint32_t CAN_ID_VCU_LOG_FAULT = 0x1C08C0D0;
 
+// Node reset report, same layout on every ESP32 node (0x1CFDFF00 | SA), 1 s.
+// Repeated so a logger that rebooted at the same moment still records it.
+// b0 esp_reset_reason  b1 ROM reset reason (CPU0)  b2-5 uptime ms LE
+// b6 resets since power-on (saturating)  b7 life
+constexpr uint32_t CAN_ID_RESET_REPORT_BASE = 0x1CFDFF00;
+constexpr uint32_t CAN_ID_VCU_RESET_REPORT  = CAN_ID_RESET_REPORT_BASE | SA_VCU;
+void encode_reset_report(uint8_t reason, uint8_t rom_reason, uint32_t uptime_ms,
+                         uint32_t resets_since_power_on, uint8_t life,
+                         uint8_t out[8]);
+
 // Cluster -> logger BMS summary. VCU may observe this for diagnostics only;
 // the BLE path is not an authoritative safety input.
 constexpr uint32_t CAN_ID_CLUSTER_BMS_STATUS = 0x18F3FFC0;
