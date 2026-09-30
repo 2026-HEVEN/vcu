@@ -292,6 +292,100 @@ void test_normal_drive_does_not_require_pack(void) {
     TEST_ASSERT_EQUAL_FLOAT(100.0f, out.right_a);
 }
 
+static DriveSupervisorParams rpm_cap_params() {
+    auto p = params();
+    p.drive_current_rise_time_s = 0.0f;
+    p.power_soft_limit_w = 0.0f;
+    p.rpm_cap_power_per_motor_w = 4600.0f;
+    p.rpm_cap_w_per_a_offset = 4.676f;
+    p.rpm_cap_w_per_a_per_rpm = 7.68e-3f;
+    return p;
+}
+
+void test_rpm_cap_limits_phase_current_at_speed(void) {
+    auto in = nominal();
+    in.propulsion_requested = true;
+    in.requested_left_a = in.requested_right_a = 480.0f;
+    in.motor_rpm_left = 1800;
+    in.motor_rpm_right = -1800;  // right motor spins negative
+    auto out = compute(in, rpm_cap_params());
+    const float cap = 4600.0f / (4.676f + 7.68e-3f * 1800.0f);
+    TEST_ASSERT_FLOAT_WITHIN(0.1f, cap, out.left_a);
+    TEST_ASSERT_FLOAT_WITHIN(0.1f, cap, out.right_a);
+    TEST_ASSERT_TRUE(out.rpm_cap_limited);
+}
+
+void test_rpm_cap_leaves_launch_current_alone(void) {
+    auto in = nominal();
+    in.propulsion_requested = true;
+    in.requested_left_a = in.requested_right_a = 480.0f;
+    in.motor_rpm_left = in.motor_rpm_right = 300;
+    auto out = compute(in, rpm_cap_params());
+    TEST_ASSERT_EQUAL_FLOAT(480.0f, out.left_a);
+    TEST_ASSERT_EQUAL_FLOAT(480.0f, out.right_a);
+    TEST_ASSERT_FALSE(out.rpm_cap_limited);
+}
+
+void test_rpm_cap_keeps_torque_vectoring_split(void) {
+    auto in = nominal();
+    in.propulsion_requested = true;
+    in.requested_left_a = 400.0f;
+    in.requested_right_a = 200.0f;
+    in.motor_rpm_left = in.motor_rpm_right = 1800;
+    auto out = compute(in, rpm_cap_params());
+    TEST_ASSERT_TRUE(out.rpm_cap_limited);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 2.0f, out.left_a / out.right_a);
+}
+
+void test_rpm_cap_applies_in_reverse(void) {
+    auto in = nominal();
+    in.propulsion_requested = true;
+    in.requested_left_a = in.requested_right_a = -480.0f;
+    in.motor_rpm_left = in.motor_rpm_right = -1800;
+    auto out = compute(in, rpm_cap_params());
+    TEST_ASSERT_TRUE(out.rpm_cap_limited);
+    TEST_ASSERT_TRUE(out.left_a < 0.0f && out.left_a > -260.0f);
+}
+
+void test_rpm_cap_does_not_touch_regen(void) {
+    auto in = nominal();
+    in.propulsion_requested = false;
+    in.requested_left_a = in.requested_right_a = -480.0f;
+    in.motor_rpm_left = in.motor_rpm_right = 1800;
+    auto out = compute(in, rpm_cap_params());
+    TEST_ASSERT_FALSE(out.rpm_cap_limited);
+    TEST_ASSERT_EQUAL_FLOAT(-480.0f, out.left_a);
+}
+
+void test_rpm_cap_zero_target_disables(void) {
+    auto p = rpm_cap_params();
+    p.rpm_cap_power_per_motor_w = 0.0f;
+    auto in = nominal();
+    in.propulsion_requested = true;
+    in.requested_left_a = in.requested_right_a = 480.0f;
+    in.motor_rpm_left = in.motor_rpm_right = 1800;
+    auto out = compute(in, p);
+    TEST_ASSERT_FALSE(out.rpm_cap_limited);
+    TEST_ASSERT_EQUAL_FLOAT(480.0f, out.left_a);
+}
+
+void test_rpm_cap_ramp_aims_at_cap(void) {
+    auto p = rpm_cap_params();
+    p.drive_current_rise_time_s = 0.5f;
+    auto in = nominal();
+    in.propulsion_requested = true;
+    in.control_dt_s = 0.01f;
+    in.requested_left_a = in.requested_right_a = 480.0f;
+    in.motor_rpm_left = in.motor_rpm_right = 1800;
+    const float cap = 4600.0f / (4.676f + 7.68e-3f * 1800.0f);
+    DriveSupervisorOutput out{};
+    for (int i = 0; i < 100; ++i) {
+        out = compute(in, p);
+        TEST_ASSERT_TRUE(out.left_a <= cap + 0.01f);
+    }
+    TEST_ASSERT_FLOAT_WITHIN(0.1f, cap, out.left_a);
+}
+
 void setUp(void) { supervisor_state = DriveSupervisorState{}; }
 void test_current_profile_electrical_feedback_does_not_limit_drive(void) {
     auto p = params();
@@ -341,5 +435,12 @@ int main(int, char **) {
     RUN_TEST(test_normal_drive_does_not_require_pack);
     RUN_TEST(test_paddock_pack_current_and_power_guards_scale_drive);
     RUN_TEST(test_temperature_does_not_limit_drive_or_regen);
+    RUN_TEST(test_rpm_cap_limits_phase_current_at_speed);
+    RUN_TEST(test_rpm_cap_leaves_launch_current_alone);
+    RUN_TEST(test_rpm_cap_keeps_torque_vectoring_split);
+    RUN_TEST(test_rpm_cap_applies_in_reverse);
+    RUN_TEST(test_rpm_cap_does_not_touch_regen);
+    RUN_TEST(test_rpm_cap_zero_target_disables);
+    RUN_TEST(test_rpm_cap_ramp_aims_at_cap);
     return UNITY_END();
 }

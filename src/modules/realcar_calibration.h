@@ -68,6 +68,21 @@ constexpr float DRIVE_CURRENT_RISE_TIME_S = 0.5f;
 // Energy Meter path has been driven, time-aligned, and validated. The 8 kW
 // value is retained only as the next test calibration; false means no normal
 // drive power scaling is applied.
+// rpm-scheduled phase-current ceiling (10 kW rule: 500 ms moving-average
+// input power). Per-motor DC input power = phase current * (OFFSET +
+// PER_RPM * |rpm|) [W/A], fitted on the 2026-10-01 logs in the 200-320 A
+// phase-current range (upper 90 % envelope; median offset is 3.127).
+// Flux weakening is off, so the model does not depend on pack voltage:
+// lower SOC only lowers the reachable rpm, never raises power.
+// The controller's own bus-current loop overshot 90 A to 156 A for
+// 0.1-0.7 s on every launch, so this caps the command before that.
+// 4600 W/motor replays to <= 9.0 kW 500 ms average on both logs.
+// Cap per motor: ~330 A at 1200 rpm, ~285 A at 1500 rpm, ~250 A at 1800 rpm.
+// 0 disables. Keep the controller Max bus current above ~100 A so its loop
+// stays a backstop and does not bind below this cap at low pack voltage.
+constexpr float RPM_CAP_POWER_PER_MOTOR_W = 4600.0f;
+constexpr float RPM_CAP_W_PER_A_OFFSET = 4.676f;
+constexpr float RPM_CAP_W_PER_A_PER_RPM = 7.68e-3f;
 constexpr bool ENABLE_DRIVE_POWER_LIMIT = false;
 constexpr float DRIVE_POWER_SOFT_LIMIT_W = 8000.0f;
 constexpr float DRIVETRAIN_EFFICIENCY = 0.92f;
