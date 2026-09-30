@@ -33,7 +33,9 @@ void test_regen_never_crosses_into_drive() {
 }
 
 void test_asymmetric_limits_are_respected() {
-    const TVAllocOutput o = alloc_f(40.0f, 10.0f, {Ampere{10.0f}, Ampere{20.0f}}, TV_PARAMS);
+    TVParams p = TV_PARAMS;
+    p.traction_limits_total = true;
+    const TVAllocOutput o = alloc_f(40.0f, 10.0f, {Ampere{10.0f}, Ampere{20.0f}}, p);
     TEST_ASSERT_TRUE((float)o.torque_L <= 10.0f);
     TEST_ASSERT_TRUE((float)o.torque_R <= 20.0f);
 }
@@ -113,6 +115,21 @@ void test_ample_total_still_gets_full_differential() {
     TEST_ASSERT_FLOAT_WITHIN(0.05f, 50.0f, (float)o.torque_L + (float)o.torque_R);
 }
 
+// 10-01 원선회: 안쪽 후륜 traction 한계(약 130 A)가 총 요청 969 A를 291 A로
+// 잘라 TV ON이 OFF보다 느렸다. 기본값(false)에서는 총량은 50:50과 같고
+// traction 한계는 차등 크기만 제한해야 한다.
+void test_traction_limit_does_not_cut_total_by_default() {
+    const TVAllocOutput o = alloc_f(600.0f, -40.0f, {Ampere{369.0f}, Ampere{130.0f}}, TV_PARAMS);
+    TEST_ASSERT_FLOAT_WITHIN(0.05f, 600.0f, (float)o.torque_L + (float)o.torque_R);
+    TEST_ASSERT_TRUE((float)o.torque_L > (float)o.torque_R);
+}
+void test_traction_limit_still_bounds_differential_by_default() {
+    const TVAllocOutput o = alloc_f(600.0f, -1000.0f, {Ampere{369.0f}, Ampere{130.0f}}, TV_PARAMS);
+    const float diff = ((float)o.torque_L - (float)o.torque_R) * 0.5f;
+    TEST_ASSERT_TRUE(diff <= 0.5f * 369.0f + 0.05f);
+    TEST_ASSERT_FLOAT_WITHIN(0.05f, 600.0f, (float)o.torque_L + (float)o.torque_R);
+}
+
 void setUp() {}
 void tearDown() {}
 int main(int, char **) {
@@ -131,5 +148,7 @@ int main(int, char **) {
     RUN_TEST(test_regen_small_total_with_large_yaw_does_not_manufacture_current);
     RUN_TEST(test_sum_never_exceeds_total_across_a_sweep);
     RUN_TEST(test_ample_total_still_gets_full_differential);
+    RUN_TEST(test_traction_limit_does_not_cut_total_by_default);
+    RUN_TEST(test_traction_limit_still_bounds_differential_by_default);
     return UNITY_END();
 }

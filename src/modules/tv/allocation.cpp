@@ -23,6 +23,10 @@ TVAllocOutput tv_alloc_compute(Ampere total_current_q, NewtonMetre yaw_moment_q,
 
     const float max_l = clampf(limit_l_in, 0.0f, p.motor_current_max_a);
     const float max_r = clampf(limit_r_in, 0.0f, p.motor_current_max_a);
+    // 바퀴별 명령 상한. traction_limits_total=false면 traction 한계는 아래
+    // diff 클램프에만 쓰이고, 명령 자체는 모터 상한까지 허용한다.
+    const float cap_l = p.traction_limits_total ? max_l : p.motor_current_max_a;
+    const float cap_r = p.traction_limits_total ? max_r : p.motor_current_max_a;
 
     // With I_L=base-diff and I_R=base+diff:
     // Mz=(F_R-F_L)*track/2 = diff*Kt*gear*track/tire_radius.
@@ -32,11 +36,11 @@ TVAllocOutput tv_alloc_compute(Ampere total_current_q, NewtonMetre yaw_moment_q,
     float lo_l, hi_l, lo_r, hi_r;
     if (total_current_a > 0.0f) {
         lo_l = lo_r = 0.0f;
-        hi_l = max_l; hi_r = max_r;
+        hi_l = cap_l; hi_r = cap_r;
         diff = clampf(diff, -0.5f * max_l, 0.5f * max_r);
     } else {
-        lo_l = -max_l; hi_l = 0.0f;
-        lo_r = -max_r; hi_r = 0.0f;
+        lo_l = -cap_l; hi_l = 0.0f;
+        lo_r = -cap_r; hi_r = 0.0f;
         diff = clampf(diff, -0.5f * max_r, 0.5f * max_l);
     }
 

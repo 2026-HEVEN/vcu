@@ -5,10 +5,12 @@
 void test_measured_road_wheel_calibration() {
     using namespace realcar_cal::provisional;
     const SteerCalib c{STEERING_CENTER_COUNTS, STEERING_COUNTS_PER_UNIT, STEERING_INVERT};
-    TEST_ASSERT_FLOAT_WITHIN(0.0001f, 0.0f, (float)steering_compute({1700U * 4U}, c));
-    TEST_ASSERT_FLOAT_WITHIN(0.0001f, 1.0f, (float)steering_compute({176U * 4U}, c));
-    TEST_ASSERT_FLOAT_WITHIN(0.0001f, -5096.0f/6060.0f, (float)steering_compute({2974U * 4U}, c));
-    TEST_ASSERT_FLOAT_WITHIN(0.0001f, 4096.0f/6060.0f, (float)steering_compute({676U * 4U}, c));
+    TEST_ASSERT_FLOAT_WITHIN(0.0001f, 0.0f, (float)steering_compute({1583U * 4U}, c));
+    TEST_ASSERT_FLOAT_WITHIN(0.0001f, 5628.0f/6060.0f, (float)steering_compute({176U * 4U}, c));
+    TEST_ASSERT_FLOAT_WITHIN(0.0001f, -5564.0f/6060.0f, (float)steering_compute({2974U * 4U}, c));
+    TEST_ASSERT_FLOAT_WITHIN(0.0001f, 3628.0f/6060.0f, (float)steering_compute({676U * 4U}, c));
+    // 10-01 로그에서 직진인데 +0.077로 읽히던 옛 센터(raw12 1700)는 이제 오프셋만큼 음수다.
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, -0.0772f, (float)steering_compute({1700U * 4U}, c));
 }
 
 // center=8192, 4096 counts == 1.0 unit.

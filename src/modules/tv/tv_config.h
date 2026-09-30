@@ -36,10 +36,19 @@ struct TVParams {
 
     // --- 노면 / 타이어 ---
     float mu             = 1.0f;     // 노면 마찰계수 (지금은 상수; 추후 추정 확장 여지)
+    // true: traction 한계(Stage 4)가 좌우 명령 자체를 자른다(= 총 구동력 삭감).
+    // false: traction 한계는 차등(diff) 크기에만 쓰고, 총량은 모터 상한까지 50:50과 같다.
+    // 10-01 원선회 로그에서 true일 때 ay 0.6 g에서 안쪽 후륜 한계 약 139 A로
+    // 총 요청이 969 -> 291 A로 잘려 차속이 29 -> 18 km/h로 묶였다(모델상 1.0 g에서 0 A).
+    // 마찰원 모델(mu, LLTD, CG 높이)을 실측으로 맞추기 전까지 false로 둔다.
+    bool  traction_limits_total = false;
 
     // --- 레퍼런스 모델 (reference stage) ---
     float max_steer_rad  = realcar_cal::provisional::MAX_ROAD_WHEEL_STEER_RAD;
-    float understeer_grad= 0.0f;     // 언더스티어 구배 K_us (0=중립)
+    // 언더스티어 구배 K_us [s^2]. 분모가 L + K_us*v^2 형태다.
+    // 10-01 로그(센터 오프셋 제거 후) 선형 영역 적합값 약 0.0034 -> 0.003으로 시작.
+    // 0이면 50 km/h에서 목표가 실측의 약 1.5배로 나와 Mz가 상시 포화된다.
+    float understeer_grad= 0.003f;
     float desired_yaw_max= 60.0f;    // 목표 yaw rate 상한 (deg/s)
     float tv_min_speed_mps= 1.0f;    // 이 속도 미만에서는 TV 차등 금지
 
