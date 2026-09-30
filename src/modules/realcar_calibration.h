@@ -35,10 +35,10 @@ constexpr float REGEN_LEVEL3_TOTAL_CURRENT_A = 1000.0f;
 // Preserve the existing Efficiency-mode regen cap (not Paddock).
 constexpr float REGEN_EFF_TOTAL_CURRENT_CAP_A = 30.0f;
 // true: use levels 1/2/3; false: any nonzero rotary position uses level 3.
-constexpr bool REGEN_FOUR_STAGE_ENABLED = true;
+constexpr bool REGEN_FOUR_STAGE_ENABLED = false;
 // true: qualified throttle release; false: release AND installed brake ON.
 // Positive throttle always cancels regeneration in either mode.
-constexpr bool REGEN_ONE_PEDAL_ENABLED = false;
+constexpr bool REGEN_ONE_PEDAL_ENABLED = true;
 // Initial values assume the PCB scales 0/2.5/5 V to approximately
 // 0/half/full ESP32 ADC range. They are placeholders until measured.
 // Contiguous gear-ladder boundaries. The classifier interprets these as:
@@ -63,7 +63,7 @@ constexpr float RIGHT_MOTOR_CURRENT_SCALE = 0.88f;
 // per-motor ceiling this gives 1000 A/s and reaches full demand in 0.5 s.
 // Only rising propulsion magnitude is limited; release and protection cuts
 // remain immediate.
-constexpr float DRIVE_CURRENT_RISE_TIME_S = 0.5f;
+constexpr float DRIVE_CURRENT_RISE_TIME_S = 1.0f;
 // Keep the model-based normal-drive limiter disabled until the official
 // Energy Meter path has been driven, time-aligned, and validated. The 8 kW
 // value is retained only as the next test calibration; false means no normal
@@ -74,7 +74,7 @@ constexpr float DRIVETRAIN_EFFICIENCY = 0.92f;
 // EZkontrol target-speed field controls speed; current is the allowed ceiling.
 // Pedal maps to 0..5 km/h in either propulsion gear. Verify on raised wheels.
 constexpr float PADDOCK_MAX_SPEED_KPH = 5.0f;
-constexpr float PADDOCK_CURRENT_MAX_PER_MOTOR_A = 300.0f;
+constexpr float PADDOCK_CURRENT_MAX_PER_MOTOR_A = 500.0f;
 constexpr float PADDOCK_ENTRY_SPEED_MAX_MPS = 3.0f / 3.6f;
 // Feedback-based electrical limiting is disabled for this test profile.
 // Zero disables these scalers; voltage/current feedback remains logged.
