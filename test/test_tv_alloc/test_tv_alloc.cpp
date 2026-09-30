@@ -136,7 +136,8 @@ void test_traction_limit_still_bounds_differential_by_default() {
 void test_inner_wheel_regen_is_bounded_and_preserves_total() {
     const TVAllocOutput o = alloc_f(200.0f, 1000.0f, unlimited(), TV_PARAMS);
     TEST_ASSERT_TRUE((float)o.torque_L < 0.0f);
-    TEST_ASSERT_FLOAT_WITHIN(0.05f, -TV_PARAMS.inner_regen_max_a, (float)o.torque_L);
+    const float cross = TV_PARAMS.inner_regen_max_a < 100.0f ? TV_PARAMS.inner_regen_max_a : 100.0f;
+    TEST_ASSERT_FLOAT_WITHIN(0.05f, -cross, (float)o.torque_L);
     TEST_ASSERT_FLOAT_WITHIN(0.05f, 200.0f, (float)o.torque_L + (float)o.torque_R);
 }
 void test_inner_wheel_regen_scales_down_with_small_throttle() {

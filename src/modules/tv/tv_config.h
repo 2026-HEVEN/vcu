@@ -58,18 +58,18 @@ struct TVParams {
 
     // --- yaw 제어기 (yaw_control stage) PID ---
     // 0/0/0은 master OFF다. 잭업·직선 검증 전에는 바꾸지 않는다.
-    float kp             = 10.0f;
+    float kp             = 20.0f;
     float ki             = 0.0f;
     float kd             = 0.0f;
     float yaw_deadband_degps = 0.5f;
     float integral_max       = 100.0f; // integral-state hard limit [deg]
     // Mz 출력 상한 [N·m]. 10-01 슬라럼에서 40이면 TV ON 구간 80%가 포화(차등 ±18.6 A)라
-    // ON/OFF 응답 차이가 없었다. 100 = 차등 약 ±47 A, 150 = 약 ±70 A.
-    float yaw_moment_max = 150.0f;
+    // ON/OFF 응답 차이가 없었다. 100 = 차등 약 ±47 A, 300 = 약 ±140 A.
+    float yaw_moment_max = 300.0f;  // 텔레메트리 int16 0.01 N·m 상한(327)보다 작게
     // 구동 중 안쪽 바퀴에 허용하는 회생(음) 상전류 상한 [A]. 0이면 부호 교차 금지.
     // 실제 허용량은 min(이 값, 총 요청/2)라 스로틀 0에서는 교차가 생기지 않는다.
     // 최종 게이트(app_wiring regen_allowed)는 TV 활성 + 좌우 부호 반대일 때만 통과시킨다.
-    float inner_regen_max_a = 40.0f;
+    float inner_regen_max_a = 120.0f;
 };
 
 // 팀 공용 인스턴스. 위 기본값을 바꾸면 전체 파이프라인에 반영됩니다.
