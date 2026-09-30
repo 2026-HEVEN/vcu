@@ -10,6 +10,13 @@ struct DriveSupervisorParams {
     float paddock_power_soft_limit_w;
     float paddock_controller_bus_current_limit_a;
     float paddock_pack_current_limit_a;
+    // rpm-scheduled phase-current ceiling. The controller's bus-current loop
+    // only reacts after the DC current overshoots, so the command is capped
+    // up front: cap = power_target / (w_per_a_offset + w_per_a_per_rpm * |rpm|),
+    // where W/A models measured DC input power per phase amp. Zero disables.
+    float rpm_cap_power_per_motor_w;
+    float rpm_cap_w_per_a_offset;
+    float rpm_cap_w_per_a_per_rpm;
 };
 
 struct DriveSupervisorInput {
@@ -53,6 +60,7 @@ struct DriveSupervisorOutput {
     bool paddock_sensor_blocked = false;
     bool paddock_current_limited = false;
     bool drive_slew_limited = false;
+    bool rpm_cap_limited = false;
 };
 
 struct DriveSupervisorState {

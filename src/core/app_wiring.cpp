@@ -91,6 +91,9 @@ namespace {
         realcar_cal::bringup::PADDOCK_POWER_SOFT_LIMIT_W,
         realcar_cal::bringup::PADDOCK_CONTROLLER_BUS_CURRENT_LIMIT_A,
         realcar_cal::bringup::PADDOCK_PACK_CURRENT_LIMIT_A,
+        realcar_cal::bringup::RPM_CAP_POWER_PER_MOTOR_W,
+        realcar_cal::bringup::RPM_CAP_W_PER_A_OFFSET,
+        realcar_cal::bringup::RPM_CAP_W_PER_A_PER_RPM,
     };
     const TimeSyncPulseParams TIME_SYNC_PARAMS {
         fixed_config::bench::ENABLE_TIME_SYNC_PULSE,
