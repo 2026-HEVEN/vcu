@@ -49,7 +49,7 @@ struct TVParams {
     // 10-01 로그(센터 오프셋 제거 후) 선형 영역 적합값 약 0.0034 -> 0.003으로 시작.
     // 0이면 50 km/h에서 목표가 실측의 약 1.5배로 나와 Mz가 상시 포화된다.
     float understeer_grad= 0.003f;
-    float desired_yaw_max= 60.0f;    // 목표 yaw rate 상한 (deg/s)
+    float desired_yaw_max= 100.0f;   // 목표 yaw rate 상한 (deg/s). 원선회 실측 약 72 deg/s라 60이면 목표가 실측보다 낮아진다.
     float tv_min_speed_mps= 1.0f;    // 이 속도 미만에서는 TV 차등 금지
 
     // --- yaw 제어기 (yaw_control stage) PID ---
