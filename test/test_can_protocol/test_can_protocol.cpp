@@ -251,6 +251,21 @@ void test_log_clamp_saturates_counters(void) {
     TEST_ASSERT_EQUAL_UINT16(65535, (uint16_t)(d[2] | (d[3] << 8)));
 }
 
+void test_encode_reset_report(void) {
+    // 모든 ESP32 노드 공통 배치. 업타임은 LE 32비트, 리셋 횟수는 255에서 포화.
+    uint8_t d[8];
+    encode_reset_report(9u, 15u, 0x12345678u, 3u, 42u, d);
+    TEST_ASSERT_EQUAL_UINT8(9, d[0]);
+    TEST_ASSERT_EQUAL_UINT8(15, d[1]);
+    TEST_ASSERT_EQUAL_UINT32(0x12345678u,
+        (uint32_t)d[2] | ((uint32_t)d[3] << 8) | ((uint32_t)d[4] << 16) | ((uint32_t)d[5] << 24));
+    TEST_ASSERT_EQUAL_UINT8(3, d[6]);
+    TEST_ASSERT_EQUAL_UINT8(42, d[7]);
+    encode_reset_report(1u, 1u, 0u, 1000u, 0u, d);
+    TEST_ASSERT_EQUAL_UINT8(255, d[6]);
+    TEST_ASSERT_EQUAL_UINT32(0x1CFDFFD0u, CAN_ID_VCU_RESET_REPORT);
+}
+
 void setUp(void) {}
 void tearDown(void) {}
 void test_regen_stage_wire_contract() {
@@ -311,5 +326,6 @@ int main(int, char **) {
     RUN_TEST(test_log_drive_clamps_out_of_range);
     RUN_TEST(test_encode_log_clamp);
     RUN_TEST(test_log_clamp_saturates_counters);
+    RUN_TEST(test_encode_reset_report);
     return UNITY_END();
 }

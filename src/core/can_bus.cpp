@@ -8,6 +8,8 @@
 #include <cstring>
 #include <cmath>
 #include "driver/twai.h"
+#include "esp_rom_sys.h"
+#include "esp_system.h"
 #include "can_protocol.h"
 #include "state.h"
 #include "safety_logic.h"   // torque_allowed()
@@ -49,6 +51,27 @@ namespace {
     bool                g_bus_recovery_pending = false;
     uint8_t            g_life = 0;
     uint8_t            g_status_life = 0;
+    // Reset cause of this boot. The count survives every reset except power
+    // loss (RTC no-init memory), so it separates brownout/crash loops from a
+    // fresh key-on.
+    constexpr uint32_t RESET_MAGIC = 0x52535431u; // "RST1"
+    RTC_NOINIT_ATTR uint32_t g_reset_magic;
+    RTC_NOINIT_ATTR uint32_t g_reset_count;
+    uint8_t            g_reset_reason = 0;
+    uint8_t            g_reset_rom_reason = 0;
+    void note_reset() {
+        g_reset_reason = static_cast<uint8_t>(esp_reset_reason());
+        g_reset_rom_reason = static_cast<uint8_t>(esp_rom_get_reset_reason(0));
+        if (g_reset_reason == ESP_RST_POWERON || g_reset_magic != RESET_MAGIC) {
+            g_reset_magic = RESET_MAGIC;
+            g_reset_count = 0U;
+        } else {
+            ++g_reset_count;
+        }
+        Serial.printf("[BOOT] reset reason=%u rom=%u count=%lu\n",
+                      g_reset_reason, g_reset_rom_reason,
+                      static_cast<unsigned long>(g_reset_count));
+    }
     MotorTxDiagnostics g_tx_work{}; // life task owns counters and history
     // Strict freshness (FB1 AND FB2 within 250 ms), written by poll_rx.
     // Used only by the serial component test. Normal driving and fault
@@ -457,6 +480,7 @@ void begin() {
     twai_filter_config_t  f = TWAI_FILTER_CONFIG_ACCEPT_ALL();
     twai_driver_install(&g, &t, &f);
     twai_start();
+    note_reset();
 }
 
 void publish_motor_command(const MotorCommandSnapshot &snapshot) {
@@ -569,6 +593,15 @@ void send_clamp_stats() {
                          s.high_worst.raw, s.low_worst.raw, data);
     // 여기서도 대기시간 0. 진단이 제어를 막아서는 안 된다.
     if (!transmit_ext(CAN_ID_VCU_LOG_CLAMP, data, 0))
+        ++state.sensor_telemetry_tx_drops;
+}
+
+void send_reset_report() {
+    static uint8_t life = 0;
+    uint8_t data[8];
+    encode_reset_report(g_reset_reason, g_reset_rom_reason, millis(),
+                        g_reset_count, life++, data);
+    if (!transmit_ext(CAN_ID_VCU_RESET_REPORT, data, 0))
         ++state.sensor_telemetry_tx_drops;
 }
 
