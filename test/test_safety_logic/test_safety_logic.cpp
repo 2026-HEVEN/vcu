@@ -12,6 +12,7 @@ void test_idle_to_ready_on_handshake(void) {
 }
 void test_ready_to_drive_on_start(void) {
     SafetyInputs in{ true, true, true, true, true };
+    in.neutral_start_ready = true;
     TEST_ASSERT_TRUE(SafetyState::Drive == safety_step(SafetyState::Ready, in));
 }
 void test_deadman_loss_halts(void) {
@@ -39,6 +40,7 @@ void test_halt_recovers_without_lv_reboot_with_pedal_held(void) {
 }
 void test_ready_does_not_arm_without_handshake_or_heartbeat(void) {
     SafetyInputs in{ true, false, true, true, true };
+    in.neutral_start_ready = true;
     TEST_ASSERT_TRUE(SafetyState::Ready == safety_step(SafetyState::Ready, in));
     in.handshaked = true;
     in.deadman_ok = false;
@@ -330,7 +332,24 @@ void test_boot_invalid_cannot_bypass_release() {
     in.throttle_valid = true;
     TEST_ASSERT_TRUE(safety_step(s,in) == SafetyState::Halt);
     in.start_pressed = true;
+    TEST_ASSERT_TRUE(safety_step(s,in) == SafetyState::Halt);
+    in.neutral_start_ready = true;
     TEST_ASSERT_TRUE(safety_step(s,in) == SafetyState::Drive);
+}
+void test_neutral_required_only_for_initial_start() {
+    SafetyInputs in{true,true,true,true,true};
+    // D/R/P or unconfirmed boot N must not arm, even with healthy links.
+    TEST_ASSERT_TRUE(safety_step(SafetyState::Ready,in) == SafetyState::Ready);
+    TEST_ASSERT_TRUE(safety_step(SafetyState::Halt,in) == SafetyState::Halt);
+    in.neutral_start_ready = true;
+    TEST_ASSERT_TRUE(safety_step(SafetyState::Ready,in) == SafetyState::Drive);
+    in.neutral_start_ready = false; // select D/R after arming
+    in.previously_driven = true;
+    in.start_pressed = false; // pedal may remain held during existing recovery
+    TEST_ASSERT_TRUE(safety_step(SafetyState::Drive,in) == SafetyState::Drive);
+    TEST_ASSERT_TRUE(safety_step(SafetyState::Halt,in) == SafetyState::Drive);
+    in.deadman_ok = false;
+    TEST_ASSERT_TRUE(safety_step(SafetyState::Halt,in) == SafetyState::Halt);
 }
 void test_single_fault_requires_two_clear_samples() {
     FaultRecoveryState s;
@@ -415,6 +434,7 @@ void test_block_reasons_preserve_upstream_and_tx_gates() {
 }
 int main(int, char **) {
     UNITY_BEGIN();
+    RUN_TEST(test_neutral_required_only_for_initial_start);
     RUN_TEST(test_boot_invalid_cannot_bypass_release);
     RUN_TEST(test_single_fault_requires_two_clear_samples);
     RUN_TEST(test_clear_samples_are_per_controller);

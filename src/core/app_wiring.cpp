@@ -224,6 +224,10 @@ static void gear_update_task() {
     state.gear_sensed = gear_update(state.gear_raw_adc, GEAR_CAL,
                                     realcar_cal::bringup::GEAR_STABLE_SAMPLES,
                                     gear_filter_state);
+    state.neutral_start_ready = realcar_cal::bringup::GEAR_SELECTOR_INSTALLED &&
+        gear_filter_state.candidate == Gear::Neutral &&
+        gear_filter_state.candidate_samples >= realcar_cal::bringup::GEAR_STABLE_SAMPLES &&
+        state.gear_sensed == Gear::Neutral;
     if (!realcar_cal::bringup::GEAR_SELECTOR_INSTALLED) {
         // Legacy fallback for a build without a connected selector.
         state.gear = Gear::Drive;

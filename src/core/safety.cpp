@@ -40,6 +40,7 @@ void safety_update() {
         throttle_released_long_enough,
         state.throttle_signal_valid,
         g_previously_driven,
+        state.neutral_start_ready,
     };
     g_state = safety_step(g_state, in);
     if (g_state == SafetyState::Drive) g_previously_driven = true;

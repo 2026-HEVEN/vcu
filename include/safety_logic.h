@@ -17,6 +17,7 @@ struct SafetyInputs {
     bool start_pressed;  // valid throttle released for the required samples
     bool throttle_valid; // false = disconnected/failed throttle signal
     bool previously_driven = false; // never bypass initial release via Halt
+    bool neutral_start_ready = false; // only required before first Drive after VCU boot
 };
 
 SafetyState safety_step(SafetyState cur, const SafetyInputs &in);

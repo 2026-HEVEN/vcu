@@ -46,13 +46,13 @@ SafetyState safety_step(SafetyState cur, const SafetyInputs &in) {
         case SafetyState::Idle:
             return in.handshaked ? SafetyState::Ready : SafetyState::Idle;
         case SafetyState::Ready:
-            return in.start_pressed && in.handshaked && in.deadman_ok
+            return in.start_pressed && in.neutral_start_ready && in.handshaked && in.deadman_ok
                 ? SafetyState::Drive : SafetyState::Ready;
         case SafetyState::Drive:
             return in.deadman_ok ? SafetyState::Drive : SafetyState::Halt;
         case SafetyState::Halt:
             return in.handshaked && in.deadman_ok &&
-                (in.previously_driven || in.start_pressed)
+                (in.previously_driven || (in.start_pressed && in.neutral_start_ready))
                 ? SafetyState::Drive : SafetyState::Halt;
         default:
             return SafetyState::Halt;

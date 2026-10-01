@@ -63,6 +63,7 @@ struct VehicleState {
     uint32_t em_record_last_ms = 0;
     uint16_t  gear_raw_adc = 0;
     Gear      gear_sensed = Gear::Neutral; // diagnostic; never grants authority
+    bool      neutral_start_ready = false; // actual selector confirmed N, not boot default
     Gear      gear = Gear::Neutral;
     bool      propulsion_direction_armed = false;
     // controller feedback (from CAN)
