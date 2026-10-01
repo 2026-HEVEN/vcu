@@ -93,8 +93,28 @@ void test_stages_and_trigger_modes() {
     TEST_ASSERT_EQUAL_FLOAT(0,longitudinal_compute({0,.5f,DriveMode::Normal,true,4,true,true}));
 }
 
+void test_regen_voltage_cutoff() {
+    TEST_ASSERT_TRUE(regen_voltage_ok(57.7f,true,57.7f,true));
+    TEST_ASSERT_FALSE(regen_voltage_ok(57.8f,true,55.f,true));
+    TEST_ASSERT_FALSE(regen_voltage_ok(55.f,true,57.8f,true));
+    TEST_ASSERT_FALSE(regen_voltage_ok(59.f,true,55.f,true));
+    TEST_ASSERT_TRUE(regen_voltage_ok(59.f,false,55.f,true));
+    TEST_ASSERT_TRUE(regen_voltage_ok(55.f,true,59.f,false));
+    TEST_ASSERT_FALSE(regen_voltage_ok(55.f,false,55.f,false));
+    TEST_ASSERT_FALSE(regen_voltage_ok(NAN,true,55.f,true));
+    TEST_ASSERT_FALSE(regen_voltage_ok(55.f,true,INFINITY,true));
+    TEST_ASSERT_FALSE(regen_voltage_ok(0.f,true,55.f,true));
+    TEST_ASSERT_TRUE(regen_voltage_ok(57.7f,true,55.f,true));
+    for (unsigned level=1; level<=3; ++level) {
+        const bool allowed = regen_voltage_ok(58.f,true,55.f,true);
+        TEST_ASSERT_EQUAL_FLOAT(0, longitudinal_compute({0,.5f,DriveMode::Normal,allowed,level,true,true}));
+        TEST_ASSERT_TRUE(longitudinal_compute({50,.5f,DriveMode::Normal,allowed,level,true,true})>0);
+    }
+}
+
 int main(int, char **) {
     UNITY_BEGIN();
+    RUN_TEST(test_regen_voltage_cutoff);
     RUN_TEST(test_stages_and_trigger_modes);
     RUN_TEST(test_full_throttle_requests_configured_current_for_both_motors);
     RUN_TEST(test_throttle_off_regens_without_brake_input);

@@ -15,6 +15,9 @@ struct LongInput {
 };
 
 float longitudinal_compute(const LongInput &in);   // + = drive, - = regen
+// Any available source at/above cutoff blocks regen; no valid source blocks it.
+// Stateless: automatically permits regen below cutoff (other gates still apply).
+bool regen_voltage_ok(float em_v, bool em_fresh, float pack_v, bool pack_valid);
 
 struct RegenReleaseState { unsigned zero_samples = 0; };
 // Called every 10 ms: qualify regen after 100 ms continuously at calibrated 0%.

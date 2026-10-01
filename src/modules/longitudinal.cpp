@@ -3,6 +3,15 @@
 #include "modules/realcar_calibration.h"
 #include <cmath>
 
+bool regen_voltage_ok(float em_v, bool em_fresh, float pack_v, bool pack_valid) {
+    const auto below = [](float v) {
+        return std::isfinite(v) && v > 0.0f &&
+            v < realcar_cal::bringup::REGEN_VOLTAGE_CUTOFF_V;
+    };
+    return (em_fresh || pack_valid) &&
+        (!em_fresh || below(em_v)) && (!pack_valid || below(pack_v));
+}
+
 bool regen_release_update(float throttle_pct, bool valid, RegenReleaseState &state) {
     constexpr unsigned RELEASE_SAMPLES = 10;
     if (!valid || !std::isfinite(throttle_pct) || throttle_pct != 0.0f) {

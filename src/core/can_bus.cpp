@@ -923,10 +923,15 @@ void poll_rx() {
     if (!fresh(state.cluster_cmd_last_rx_ms, cluster_stale_ms)) {
         state.cluster_cmd_alive = false;
         state.tv_enable_requested = false;
-        state.regen_auto_requested = false;
-        state.regen_level_requested = 0;
         state.debug_requested = false;
         state.paddock_requested = false;
+    }
+    // Preserve only regen intent through a short dropout. An explicit OFF
+    // frame still replaces the request immediately in the RX handler.
+    if (!fresh(state.cluster_cmd_last_rx_ms,
+               realcar_cal::bringup::REGEN_REQUEST_STALE_MS)) {
+        state.regen_auto_requested = false;
+        state.regen_level_requested = 0;
     }
     if (!fresh(state.bms_last_rx_ms, 5000U)) state.pack_data_valid = false;
     g_handshaked = fixed_config::runtime::REQUIRE_BOTH_MOTOR_CONTROLLERS

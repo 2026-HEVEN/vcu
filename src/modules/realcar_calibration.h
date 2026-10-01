@@ -35,10 +35,18 @@ constexpr float REGEN_LEVEL3_TOTAL_CURRENT_A = 1000.0f;
 // Preserve the existing Efficiency-mode regen cap (not Paddock).
 constexpr float REGEN_EFF_TOTAL_CURRENT_CAP_A = 30.0f;
 // true: use levels 1/2/3; false: any nonzero rotary position uses level 3.
-constexpr bool REGEN_FOUR_STAGE_ENABLED = false;
+constexpr bool REGEN_FOUR_STAGE_ENABLED = true;
 // true: qualified throttle release; false: release AND installed brake ON.
 // Positive throttle always cancels regeneration in either mode.
 constexpr bool REGEN_ONE_PEDAL_ENABLED = true;
+// Total age since last valid cluster command, not an additional grace period.
+constexpr unsigned REGEN_REQUEST_STALE_MS = 1000U;
+// Provisional mechanical-power ceiling: |I| <= P/(Kt*|omega|).
+// Not measured battery charging power; validate Kt/current units and pack limits.
+// Zero disables this independent regen ceiling.
+constexpr float REGEN_MECHANICAL_POWER_PER_MOTOR_W = 4000.0f;
+// Regen only: >= this pack/HV voltage disables negative-current commands.
+constexpr float REGEN_VOLTAGE_CUTOFF_V = 57.8f;
 // Initial values assume the PCB scales 0/2.5/5 V to approximately
 // 0/half/full ESP32 ADC range. They are placeholders until measured.
 // Contiguous gear-ladder boundaries. The classifier interprets these as:

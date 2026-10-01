@@ -390,7 +390,8 @@ void setUp(void) { supervisor_state = DriveSupervisorState{}; }
 void test_current_profile_electrical_feedback_does_not_limit_drive(void) {
     auto p = params();
     using namespace realcar_cal::bringup;
-    p.drive_current_rise_time_s = DRIVE_CURRENT_RISE_TIME_S;
+    // This test isolates electrical-feedback limits, not the launch ramp.
+    p.drive_current_rise_time_s = 0.0f;
     p.power_soft_limit_w = ENABLE_DRIVE_POWER_LIMIT ? DRIVE_POWER_SOFT_LIMIT_W : 0.0f;
     p.paddock_power_soft_limit_w = PADDOCK_POWER_SOFT_LIMIT_W;
     p.paddock_controller_bus_current_limit_a = PADDOCK_CONTROLLER_BUS_CURRENT_LIMIT_A;
@@ -417,9 +418,41 @@ void test_current_profile_electrical_feedback_does_not_limit_drive(void) {
         TEST_ASSERT_TRUE(out.measured_bus_power_w > 10000.0f);
     }
 }
+void test_regen_rpm_power_cap(void) {
+    auto p = params();
+    p.power_soft_limit_w = 0.0f;
+    p.regen_mechanical_power_per_motor_w = 4000.0f;
+    auto in = nominal();
+    in.requested_left_a = -500.0f;
+    in.requested_right_a = -500.0f;
+    in.motor_rpm_left = 2000;
+    in.motor_rpm_right = -2000;
+    auto out = compute(in, p);
+    const float cap = 4000.0f / (0.1266f * 2000.0f * 0.104719755f);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, -cap, out.left_a);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, -cap, out.right_a);
+    TEST_ASSERT_TRUE(out.power_limited);
+    in.motor_rpm_left = 100;
+    in.motor_rpm_right = -100;
+    out = compute(in, p);
+    TEST_ASSERT_EQUAL_FLOAT(-500.0f, out.left_a);
+    in.motor_rpm_right = 0;
+    out = compute(in, p);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, out.left_a);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, out.right_a);
+    in.propulsion_requested = true;
+    p.drive_current_rise_time_s = 0.0f;
+    out = compute(in, p);
+    TEST_ASSERT_EQUAL_FLOAT(-500.0f, out.left_a);
+    in.propulsion_requested = false;
+    in.controller_fault = true;
+    out = compute(in, p);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, out.left_a);
+}
 void tearDown(void) {}
 int main(int, char **) {
     UNITY_BEGIN();
+    RUN_TEST(test_regen_rpm_power_cap);
     RUN_TEST(test_current_profile_electrical_feedback_does_not_limit_drive);
     RUN_TEST(test_stale_feedback_blocks_all_current);
     RUN_TEST(test_fault_blocks_all_current);

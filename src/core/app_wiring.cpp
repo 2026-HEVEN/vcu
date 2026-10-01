@@ -94,6 +94,7 @@ namespace {
         realcar_cal::bringup::RPM_CAP_POWER_PER_MOTOR_W,
         realcar_cal::bringup::RPM_CAP_W_PER_A_OFFSET,
         realcar_cal::bringup::RPM_CAP_W_PER_A_PER_RPM,
+        realcar_cal::bringup::REGEN_MECHANICAL_POWER_PER_MOTOR_W,
     };
     const TimeSyncPulseParams TIME_SYNC_PARAMS {
         fixed_config::bench::ENABLE_TIME_SYNC_PULSE,
@@ -246,6 +247,13 @@ static void paddock_update() {
         state.paddock_active = true;
     }
 }
+static bool regen_pack_voltage_ok() {
+    return regen_voltage_ok(state.em_record.hv_voltage_v,
+        state.em_record_seen &&
+            (uint32_t)(millis() - state.em_record_last_ms) <= EM_RECORD_FRESH_MS,
+        state.pack_voltage_v, state.pack_data_valid);
+}
+
 static void longitudinal_update() {
     static RegenReleaseState release_state{};
     const bool released_for_regen = regen_release_update(
@@ -260,7 +268,7 @@ static void longitudinal_update() {
         released_for_regen && state.regen_auto_requested &&
             realcar_cal::bringup::REGEN_HARDWARE_VALIDATED &&
             state.gear == Gear::Drive && state.pack_data_valid &&
-            forward_for_regen,
+            forward_for_regen && regen_pack_voltage_ok(),
         state.regen_level_requested,
         realcar_cal::bringup::BRAKE_SENSOR_INSTALLED && state.brake_active,
         realcar_cal::bringup::REGEN_ONE_PEDAL_ENABLED,
@@ -433,7 +441,7 @@ static void drive_supervisor_update() {
     command_snapshot.propulsion_direction_armed =
         state.propulsion_direction_armed;
     command_snapshot.regen_allowed = realcar_cal::bringup::REGEN_HARDWARE_VALIDATED &&
-        state.regen_auto_requested && state.pack_data_valid &&
+        state.regen_auto_requested && state.pack_data_valid && regen_pack_voltage_ok() &&
         state.throttle_signal_valid && (float)state.throttle_pct == 0.0f &&
         (realcar_cal::bringup::REGEN_ONE_PEDAL_ENABLED ||
          (realcar_cal::bringup::BRAKE_SENSOR_INSTALLED && state.brake_active));

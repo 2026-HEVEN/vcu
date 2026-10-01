@@ -17,6 +17,7 @@ struct DriveSupervisorParams {
     float rpm_cap_power_per_motor_w;
     float rpm_cap_w_per_a_offset;
     float rpm_cap_w_per_a_per_rpm;
+    float regen_mechanical_power_per_motor_w = 0.0f;
 };
 
 struct DriveSupervisorInput {

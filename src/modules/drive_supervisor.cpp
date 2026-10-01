@@ -159,7 +159,28 @@ DriveSupervisorOutput drive_supervisor_compute(
         }
     }
 
+    // Separate from the motoring DC-input fit. Apply only to negative regen
+    // commands, never reverse propulsion. Upstream RPM/BMS/fault gates remain.
+    float regen_scale = 1.0f;
     constexpr float TWO_PI_OVER_60 = 0.104719755f;
+    if (!in.propulsion_requested && params.regen_mechanical_power_per_motor_w > 0.0f) {
+        const auto required_scale = [&](float command, int rpm) {
+            if (command >= 0.0f) return 1.0f;
+            if (!std::isfinite(command) || !std::isfinite(params.motor_kt_nm_per_a) ||
+                params.motor_kt_nm_per_a <= 0.0f || rpm == 0) return 0.0f;
+            const float mechanical_power = std::fabs(command) *
+                params.motor_kt_nm_per_a * std::fabs((float)rpm) * TWO_PI_OVER_60;
+            return positive_limit_scale(mechanical_power,
+                params.regen_mechanical_power_per_motor_w);
+        };
+        regen_scale = std::fmin(required_scale(out.left_a, in.motor_rpm_left),
+                                required_scale(out.right_a, in.motor_rpm_right));
+        if (regen_scale < 1.0f) {
+            scale_all(out.left_a, regen_scale);
+            scale_all(out.right_a, regen_scale);
+            out.power_limited = true;
+        }
+    }
     const float efficiency = params.drivetrain_efficiency > 0.05f
         ? params.drivetrain_efficiency : 1.0f;
     const auto estimate_input_power = [&](float left_current_a,
@@ -245,6 +266,6 @@ DriveSupervisorOutput drive_supervisor_compute(
     }
 
     out.applied_scale =
-        paddock_scale * rpm_cap_scale * power_scale * slew_scale;
+        paddock_scale * rpm_cap_scale * regen_scale * power_scale * slew_scale;
     return out;
 }
