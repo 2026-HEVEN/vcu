@@ -94,10 +94,16 @@ constexpr float RPM_CAP_W_PER_A_PER_RPM = 7.68e-3f;
 constexpr bool ENABLE_DRIVE_POWER_LIMIT = false;
 constexpr float DRIVE_POWER_SOFT_LIMIT_W = 8000.0f;
 constexpr float DRIVETRAIN_EFFICIENCY = 0.92f;
-// EZkontrol target-speed field controls speed; current is the allowed ceiling.
-// Pedal maps to 0..5 km/h in either propulsion gear. Verify on raised wheels.
-constexpr float PADDOCK_MAX_SPEED_KPH = 5.0f;
-constexpr float PADDOCK_CURRENT_MAX_PER_MOTOR_A = 500.0f;
+// The Cluster's Paddock switch now selects Efficiency mode (EV energy-
+// efficiency competition, docs/EFFICIENCY_MODE.md). EZkontrol target-speed
+// field carries the fixed cap; the pedal scales the current ceiling.
+// The rules require a 25 km/h lap average, so the cap sits above it: launches
+// and corners pull the average below the cap. Tune with track lap times.
+constexpr float PADDOCK_MAX_SPEED_KPH = 30.0f;
+constexpr float PADDOCK_REVERSE_MAX_SPEED_KPH = 5.0f;
+// Full-pedal ceiling per motor. Untested starting value: lower current costs
+// less I^2R loss but a slower launch.
+constexpr float PADDOCK_CURRENT_MAX_PER_MOTOR_A = 150.0f;
 constexpr float PADDOCK_ENTRY_SPEED_MAX_MPS = 3.0f / 3.6f;
 // Feedback-based electrical limiting is disabled for this test profile.
 // Zero disables these scalers; voltage/current feedback remains logged.

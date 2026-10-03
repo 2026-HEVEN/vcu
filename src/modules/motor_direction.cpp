@@ -1,6 +1,11 @@
 #include "modules/motor_direction.h"
+#include "modules/realcar_calibration.h"
 #include <cmath>
 
+// Efficiency mode (the Cluster's Paddock switch). The pedal scales the current
+// ceiling; the target-speed field always carries the fixed cap. Below the cap
+// the speed loop saturates at the ceiling and behaves like torque control, and
+// a partial lift never lowers the target into an active speed-loop brake.
 MotorDirectionCommand paddock_motor_request(float throttle_pct, Gear gear,
     float max_speed_kph, float current_limit_a, float rolling_radius_m,
     float gear_ratio) {
@@ -10,13 +15,19 @@ MotorDirectionCommand paddock_motor_request(float throttle_pct, Gear gear,
         max_speed_kph <= 0.0f || current_limit_a <= 0.0f ||
         rolling_radius_m <= 0.0f || gear_ratio <= 0.0f ||
         (gear != Gear::Drive && gear != Gear::Reverse)) return {0, 0, false};
-    const float rpm = (max_speed_kph / 3.6f) * 60.0f * gear_ratio /
-        (6.283185307f * rolling_radius_m) * std::fmin(throttle_pct, 100.0f) / 100.0f;
-    // Floor rather than round up; do not issue nonzero current at 0 RPM.
+    const float cap_kph = gear == Gear::Reverse
+        ? std::fmin(max_speed_kph, realcar_cal::bringup::PADDOCK_REVERSE_MAX_SPEED_KPH)
+        : max_speed_kph;
+    const float rpm = (cap_kph / 3.6f) * 60.0f * gear_ratio /
+        (6.283185307f * rolling_radius_m);
+    // Floor rather than round up so the cap is never exceeded by rounding.
     const int target = static_cast<int>(std::fmin(rpm, 32000.0f));
-    if (target < 1) return {0, 0, false};
+    const float current = current_limit_a * std::fmin(throttle_pct, 100.0f) / 100.0f;
+    // Pedal noise near 0 % must not leave the controller a target with a
+    // trickle current; below 1 A this is treated as a released pedal.
+    if (target < 1 || current < 1.0f) return {0, 0, false};
     const int sign = gear == Gear::Drive ? 1 : -1;
-    return {sign * current_limit_a, sign * target, true};
+    return {sign * current, sign * target, true};
 }
 
 float directional_current(float demand_a, Gear gear, bool direction_armed) {

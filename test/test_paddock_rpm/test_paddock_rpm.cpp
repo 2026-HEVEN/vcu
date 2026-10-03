@@ -29,20 +29,34 @@ static MotorCommandGates gates() {
     g.reconnect_inhibit = g.component_test_inhibit = false;
     return g;
 }
-void test_pedal_maps_to_five_kph_in_both_gears() {
+static float rpm_to_kph(int rpm) {
+    return std::abs(rpm) * 6.283185307f *
+        realcar_cal::provisional::WHEEL_SPEED_ROLLING_RADIUS_M * 3.6f /
+        (60.0f * fixed_config::vehicle::GEAR_RATIO);
+}
+void test_pedal_scales_current_and_target_is_fixed_cap() {
+    const float max_a = realcar_cal::bringup::PADDOCK_CURRENT_MAX_PER_MOTOR_A;
     for (Gear gear : {Gear::Drive, Gear::Reverse}) {
         const int sign = gear == Gear::Drive ? 1 : -1;
-        for (float pedal : {25.0f, 50.0f, 100.0f, 150.0f}) {
+        const float cap = gear == Gear::Drive
+            ? realcar_cal::bringup::PADDOCK_MAX_SPEED_KPH
+            : realcar_cal::bringup::PADDOCK_REVERSE_MAX_SPEED_KPH;
+        const int cap_rpm = request(100, gear).target_rpm;
+        for (float pedal : {1.0f, 25.0f, 50.0f, 100.0f, 150.0f}) {
             const auto r = request(pedal, gear);
-            TEST_ASSERT_EQUAL_FLOAT(sign * 100.0f, r.current_a);
-            const float kph = std::abs(r.target_rpm) * 6.283185307f *
-                realcar_cal::provisional::WHEEL_SPEED_ROLLING_RADIUS_M * 3.6f /
-                (60.0f * fixed_config::vehicle::GEAR_RATIO);
-            TEST_ASSERT_FLOAT_WITHIN(0.03f, std::fmin(pedal, 100.0f) * 0.05f, kph);
-            TEST_ASSERT_TRUE(kph <= 5.0f);
+            TEST_ASSERT_FLOAT_WITHIN(1e-3f,
+                sign * max_a * std::fmin(pedal, 100.0f) / 100.0f, r.current_a);
+            // A partial pedal never lowers the target below the cap.
+            TEST_ASSERT_EQUAL_INT(cap_rpm, r.target_rpm);
             TEST_ASSERT_TRUE(r.target_rpm * sign > 0);
+            TEST_ASSERT_FLOAT_WITHIN(0.03f, cap, rpm_to_kph(r.target_rpm));
+            TEST_ASSERT_TRUE(rpm_to_kph(r.target_rpm) <= cap);
         }
     }
+}
+void test_drive_cap_is_30_kph_and_reverse_is_5_kph() {
+    TEST_ASSERT_EQUAL_INT(1240, request(100, Gear::Drive).target_rpm);
+    TEST_ASSERT_EQUAL_INT(-206, request(100, Gear::Reverse).target_rpm);
 }
 void test_release_invalid_and_neutral_have_no_hold_current() {
     for (float pedal : {0.0f, -1.0f, 0.01f, NAN}) {
@@ -58,9 +72,10 @@ void test_snapshot_can_bytes_and_recovery_ramp() {
         g.reconnect_ramp_scale = 0.5f;
         const auto c = motor_command_resolve(snapshot(100, gear), g);
         const int sign = gear == Gear::Drive ? 1 : -1;
-        TEST_ASSERT_EQUAL_FLOAT(sign * 50, c.left_a);
+        TEST_ASSERT_EQUAL_FLOAT(sign * 0.5f *
+            realcar_cal::bringup::PADDOCK_CURRENT_MAX_PER_MOTOR_A, c.left_a);
         TEST_ASSERT_EQUAL_FLOAT(c.left_a, c.right_a);
-        TEST_ASSERT_EQUAL_INT(sign * 206, c.target_rpm_L);
+        TEST_ASSERT_EQUAL_INT(request(100, gear).target_rpm, c.target_rpm_L);
         TEST_ASSERT_EQUAL_INT(c.target_rpm_L, c.target_rpm_R);
         uint8_t data[8];
         encode_motor_control(c.left_a, c.target_rpm_L, c.run_L, 9, data);
@@ -102,7 +117,8 @@ void setUp() {}
 void tearDown() {}
 int main(int, char**) {
     UNITY_BEGIN();
-    RUN_TEST(test_pedal_maps_to_five_kph_in_both_gears);
+    RUN_TEST(test_pedal_scales_current_and_target_is_fixed_cap);
+    RUN_TEST(test_drive_cap_is_30_kph_and_reverse_is_5_kph);
     RUN_TEST(test_release_invalid_and_neutral_have_no_hold_current);
     RUN_TEST(test_snapshot_can_bytes_and_recovery_ramp);
     RUN_TEST(test_fault_and_stale_still_block_both);
