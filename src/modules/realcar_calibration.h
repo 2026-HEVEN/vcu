@@ -68,7 +68,7 @@ constexpr float DRIVE_PHASE_CURRENT_EFF_PER_MOTOR_A = 100.0f;
 // the final right command (drive and regen). Set 1.0 to disable.
 constexpr float RIGHT_MOTOR_CURRENT_SCALE = 0.88f;
 // Apply the same launch slew limit in Normal and Paddock modes. At the 500 A
-// per-motor ceiling this gives 1000 A/s and reaches full demand in 0.5 s.
+// per-motor ceiling and 1 s setting this gives 500 A/s.
 // Only rising propulsion magnitude is limited; release and protection cuts
 // remain immediate.
 constexpr float DRIVE_CURRENT_RISE_TIME_S = 1.0f;
@@ -95,10 +95,11 @@ constexpr bool ENABLE_DRIVE_POWER_LIMIT = false;
 constexpr float DRIVE_POWER_SOFT_LIMIT_W = 8000.0f;
 constexpr float DRIVETRAIN_EFFICIENCY = 0.92f;
 // EZkontrol target-speed field controls speed; current is the allowed ceiling.
-// Pedal maps to 0..5 km/h in either propulsion gear. Verify on raised wheels.
-constexpr float PADDOCK_MAX_SPEED_KPH = 5.0f;
+// Economy profile: forward pedal 0..100% -> 0..35 km/h, linearly.
+// These are speed targets, not a time ramp. The current rise limiter remains active.
+constexpr float PADDOCK_MAX_SPEED_KPH = 35.0f;
+constexpr float PADDOCK_REVERSE_MAX_SPEED_KPH = 5.0f;
 constexpr float PADDOCK_CURRENT_MAX_PER_MOTOR_A = 500.0f;
-constexpr float PADDOCK_ENTRY_SPEED_MAX_MPS = 3.0f / 3.6f;
 // Feedback-based electrical limiting is disabled for this test profile.
 // Zero disables these scalers; voltage/current feedback remains logged.
 constexpr float PADDOCK_POWER_SOFT_LIMIT_W = 0.0f;

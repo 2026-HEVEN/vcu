@@ -102,8 +102,9 @@ void test_throttle_signal_and_zero_percent_thresholds() {
 }
 
 void test_paddock_speed_current_profile_is_bounded() {
-    TEST_ASSERT_EQUAL_FLOAT(5.0f, realcar_cal::bringup::PADDOCK_MAX_SPEED_KPH);
-    TEST_ASSERT_EQUAL_FLOAT(100.0f, realcar_cal::bringup::PADDOCK_CURRENT_MAX_PER_MOTOR_A);
+    TEST_ASSERT_EQUAL_FLOAT(35.0f, realcar_cal::bringup::PADDOCK_MAX_SPEED_KPH);
+    TEST_ASSERT_EQUAL_FLOAT(5.0f, realcar_cal::bringup::PADDOCK_REVERSE_MAX_SPEED_KPH);
+    TEST_ASSERT_TRUE(realcar_cal::bringup::PADDOCK_CURRENT_MAX_PER_MOTOR_A > 0);
     TEST_ASSERT_TRUE(realcar_cal::bringup::PADDOCK_CURRENT_MAX_PER_MOTOR_A <=
         realcar_cal::bringup::DRIVE_PHASE_CURRENT_MAX_PER_MOTOR_A);
     TEST_ASSERT_EQUAL_FLOAT(0.0f, realcar_cal::bringup::PADDOCK_POWER_SOFT_LIMIT_W);

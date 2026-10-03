@@ -241,15 +241,10 @@ static void paddock_update() {
         // disappears. At boot the default remains inactive.
         return;
     }
-    if (!state.paddock_requested) {
-        state.paddock_active = false;
-        return;
-    }
-    if (!state.paddock_active &&
-        state.vehicle_speed_mps <= realcar_cal::bringup::PADDOCK_ENTRY_SPEED_MAX_MPS &&
-        (float)state.throttle_pct <= fixed_config::runtime::THROTTLE_ARM_MAX_PCT) {
-        state.paddock_active = true;
-    }
+    // Economy mode may be toggled while moving or holding the pedal.
+    // Fresh HMI requests take effect on this control tick; downstream current
+    // rise limits and power limits still apply. Stale HMI retains the mode above.
+    state.paddock_active = state.paddock_requested;
 }
 static bool regen_pack_voltage_ok() {
     return regen_voltage_ok(state.em_record.hv_voltage_v,

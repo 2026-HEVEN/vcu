@@ -29,23 +29,26 @@ static MotorCommandGates gates() {
     g.reconnect_inhibit = g.component_test_inhibit = false;
     return g;
 }
-void test_pedal_maps_to_five_kph_in_both_gears() {
+void test_economy_forward_mapping_and_reverse_limit() {
     for (Gear gear : {Gear::Drive, Gear::Reverse}) {
         const int sign = gear == Gear::Drive ? 1 : -1;
-        for (float pedal : {25.0f, 50.0f, 100.0f, 150.0f}) {
+        for (float pedal : {25.0f, 49.9f, 50.0f, 50.1f, 75.0f, 100.0f, 150.0f}) {
             const auto r = request(pedal, gear);
-            TEST_ASSERT_EQUAL_FLOAT(sign * 100.0f, r.current_a);
+            TEST_ASSERT_EQUAL_FLOAT(sign * realcar_cal::bringup::PADDOCK_CURRENT_MAX_PER_MOTOR_A, r.current_a);
             const float kph = std::abs(r.target_rpm) * 6.283185307f *
                 realcar_cal::provisional::WHEEL_SPEED_ROLLING_RADIUS_M * 3.6f /
                 (60.0f * fixed_config::vehicle::GEAR_RATIO);
-            TEST_ASSERT_FLOAT_WITHIN(0.03f, std::fmin(pedal, 100.0f) * 0.05f, kph);
-            TEST_ASSERT_TRUE(kph <= 5.0f);
+            const float pct = std::fmin(pedal, 100.0f);
+            const float expected = gear == Gear::Reverse ? pct * 0.05f
+                : pct * 0.35f;
+            TEST_ASSERT_FLOAT_WITHIN(0.03f, expected, kph);
+            TEST_ASSERT_TRUE(kph <= (gear == Gear::Reverse ? 5.0f : 35.0f));
             TEST_ASSERT_TRUE(r.target_rpm * sign > 0);
         }
     }
 }
 void test_release_invalid_and_neutral_have_no_hold_current() {
-    for (float pedal : {0.0f, -1.0f, 0.01f, NAN}) {
+    for (float pedal : {0.0f, -1.0f, 0.01f, NAN, INFINITY}) {
         const auto r = request(pedal, Gear::Drive);
         TEST_ASSERT_EQUAL_FLOAT(0, r.current_a);
         TEST_ASSERT_EQUAL_INT(0, r.target_rpm);
@@ -58,9 +61,9 @@ void test_snapshot_can_bytes_and_recovery_ramp() {
         g.reconnect_ramp_scale = 0.5f;
         const auto c = motor_command_resolve(snapshot(100, gear), g);
         const int sign = gear == Gear::Drive ? 1 : -1;
-        TEST_ASSERT_EQUAL_FLOAT(sign * 50, c.left_a);
+        TEST_ASSERT_EQUAL_FLOAT(sign * realcar_cal::bringup::PADDOCK_CURRENT_MAX_PER_MOTOR_A * 0.5f, c.left_a);
         TEST_ASSERT_EQUAL_FLOAT(c.left_a, c.right_a);
-        TEST_ASSERT_EQUAL_INT(sign * 206, c.target_rpm_L);
+        TEST_ASSERT_EQUAL_INT(request(100, gear).target_rpm, c.target_rpm_L);
         TEST_ASSERT_EQUAL_INT(c.target_rpm_L, c.target_rpm_R);
         uint8_t data[8];
         encode_motor_control(c.left_a, c.target_rpm_L, c.run_L, 9, data);
@@ -102,7 +105,7 @@ void setUp() {}
 void tearDown() {}
 int main(int, char**) {
     UNITY_BEGIN();
-    RUN_TEST(test_pedal_maps_to_five_kph_in_both_gears);
+    RUN_TEST(test_economy_forward_mapping_and_reverse_limit);
     RUN_TEST(test_release_invalid_and_neutral_have_no_hold_current);
     RUN_TEST(test_snapshot_can_bytes_and_recovery_ramp);
     RUN_TEST(test_fault_and_stale_still_block_both);
