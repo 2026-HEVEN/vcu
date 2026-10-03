@@ -113,8 +113,8 @@ namespace provisional {
 // Initial Hall-throttle calibration. These values are deliberately
 // conservative and MUST be replaced with the actual released/full ADC
 // readings from the 5 Hz serial diagnostics before a driven test.
-constexpr float THROTTLE_RAW_MIN = 400.0f;
-constexpr float THROTTLE_RAW_MAX = 2600.0f;
+constexpr float THROTTLE_RAW_MIN = 450.0f;
+constexpr float THROTTLE_RAW_MAX = 2550.0f;
 
 // 초기값: 구름둘레 1.50 m / 2pi. 운전자 탑승·실사용 공기압 상태에서
 // 누적 WSS 펄스와 실주행 거리로 다시 식별한다.
