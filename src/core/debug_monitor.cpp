@@ -378,6 +378,9 @@ void debug_update() {
                 state.pack_data_valid, state.pack_voltage_v,
                 state.pack_current_a, state.pack_temperature_c);
             // Freshness means recent CAN data, not metrological validation.
+            Serial.printf("VCU_LV valid=%d ADC=%umV LV=%.2fV\n",
+                state.lv_supply.valid, unsigned(state.lv_supply.adc_mv),
+                state.lv_supply.centivolts / 100.0f);
             if (!state.em_record_seen) {
                 Serial.println("EM seen=0 valid=0 age=-1 HV=- I=- LV=- Pcalc=- CPU=-");
             } else {

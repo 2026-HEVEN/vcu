@@ -628,6 +628,13 @@ void send_vehicle_speed() {
     transmit_ext(CAN_ID_VCU_VEHICLE_SPEED, data);
 }
 
+void send_lv_supply() {
+    uint8_t data[8];
+    lv_monitor::encode(state.lv_supply, data);
+    if (!transmit_ext(lv_monitor::CAN_ID, data, 0))
+        ++state.sensor_telemetry_tx_drops;
+}
+
 void send_cluster_status() {
     uint8_t data[8];
     const bool hv_active = state.controller_feedback_fresh &&

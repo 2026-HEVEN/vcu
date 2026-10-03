@@ -9,6 +9,7 @@
 // [LOCKED] TWAI (ESP32 built-in CAN) driver + 50ms life-signal task.
 
 namespace can_bus {
+    void send_lv_supply();
     void begin();           // install + start TWAI at 250 kbps
     void start_life_task(); // spawn high-priority 50ms TX task (life + torque frames)
     // Publish one control tick's final left/right command as a single unit.

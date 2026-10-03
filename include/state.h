@@ -5,6 +5,7 @@
 // ============================================================
 #pragma once
 #include "types.h"
+#include "lv_monitor_protocol.h"
 #include "can_protocol.h"
 #include "car_check_protocol.h"
 #include "modules/gear.h"
@@ -14,6 +15,7 @@
 // Module files (src/modules/*) must never include state.h.
 
 struct VehicleState {
+    lv_monitor::Sample lv_supply;
     // inputs
     int       throttle_raw_adc = 0; // diagnostics/calibration; 0..4095
     uint16_t  throttle_window_min = 4095;

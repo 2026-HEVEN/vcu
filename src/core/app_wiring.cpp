@@ -487,6 +487,13 @@ static void drive_supervisor_update() {
     can_bus::note_command();
 }
 static void can_rx_update()  { can_bus::poll_rx(); }
+static void lv_supply_update() {
+    static uint8_t sequence = 0;
+    // Calibrated millivolts, not raw ADC * 3.3 / 4095.
+    state.lv_supply = lv_monitor::from_adc(
+        analogReadMilliVolts(board_pins::LV_VOLTAGE_ADC), sequence++);
+    can_bus::send_lv_supply();
+}
 static void vehicle_speed_can_tx_update() { can_bus::send_vehicle_speed(); }
 static void log_can_tx_update() { can_bus::send_log_frames(); }
 static void clamp_stats_can_tx_update() { can_bus::send_clamp_stats(); }
@@ -515,6 +522,7 @@ Task g_tasks[] = {
     // not the previous tick's. Do not reorder these two.
     { safety_task,             10, 0 },
     { drive_supervisor_update, 10, 0 },
+    { lv_supply_update,       100, 0 },   // after control; 10 Hz, diagnostic only
     { vehicle_speed_can_tx_update, 50, 0 }, // 20 Hz VCU -> Cluster/TMA-1 single speed telemetry
     { log_can_tx_update,       10, 0 },   // 100 Hz VCU -> Monolith 고속 로깅 (Prio 7)
     { clamp_stats_can_tx_update, 1000, 0 }, // 1 Hz Amp 포화 통계 (Prio 7)
@@ -528,6 +536,8 @@ const int G_TASK_COUNT = sizeof(g_tasks) / sizeof(g_tasks[0]);
 
 void modules_init() {
     analogReadResolution(12);
+    pinMode(board_pins::LV_VOLTAGE_ADC, INPUT);
+    analogSetPinAttenuation(board_pins::LV_VOLTAGE_ADC, ADC_11db);
     pinMode(board_pins::THROTTLE_ADC, INPUT);
     if (realcar_cal::bringup::BRAKE_SENSOR_INSTALLED) {
         pinMode(board_pins::BRAKE_ONOFF_ADC, INPUT);
